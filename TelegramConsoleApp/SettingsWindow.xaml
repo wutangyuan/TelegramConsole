@@ -1,7 +1,7 @@
 <Window x:Class="TelegramConsoleApp.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="程序设置" Width="560" Height="470" ResizeMode="NoResize"
+        Title="程序设置" Icon="Assets/AppIcon.ico" Width="560" Height="470" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner" Background="#F5F7FA"
         FontFamily="Microsoft YaHei UI" FontSize="13">
     <Grid Margin="18">

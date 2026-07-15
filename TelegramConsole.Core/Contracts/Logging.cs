@@ -53,6 +53,26 @@ public interface IExceptionMonitorService : IDisposable
     Task SendTestNotificationAsync();
 }
 
+public sealed record MentionRecord(
+    long Id,
+    DateTimeOffset OccurredAt,
+    string ChatName,
+    string Sender,
+    string Message,
+    string NotificationStatus);
+
+public sealed record MentionQuery(string Keyword = "", int Limit = 500);
+
+public interface IMentionMonitorService : IDisposable
+{
+    string DatabasePath { get; }
+    event Action? RecordsChanged;
+    void ActivateAccount(long userId, MentionAlertSettings settings);
+    void DeactivateAccount();
+    Task<IReadOnlyList<MentionRecord>> QueryAsync(MentionQuery query);
+    Task SendTestNotificationAsync();
+}
+
 public static class AppLoggerExtensions
 {
     public static void Info(this IAppLogger logger, string category, string message) =>

@@ -17,18 +17,25 @@ public partial class MainWindow : Window
     private readonly ITelegramService _telegram;
     private readonly ISchedulerService _scheduler;
     private readonly IExceptionMonitorService _exceptionMonitor;
+    private readonly IMentionMonitorService _mentionMonitor;
     private AccountProfile? _activeAccount;
+    private System.Windows.Forms.NotifyIcon? _trayIcon;
+    private bool _exitRequested;
+    private bool _trayHintShown;
     private List<DialogItem> _allDialogs = [];
     private bool _loadingHistory;
     private bool _initialized;
+    private int _exceptionQueryLimit = 10;
     private GridLength _expandedDialogWidth = new(290);
 
     public MainWindow()
     {
         InitializeComponent();
+        InitializeTrayIcon();
         _settings = _store.Load();
         _telegram = new TelegramService(_store, _logger);
         _exceptionMonitor = new ExceptionMonitorService(_store, _logger, _telegram, _settings);
+        _mentionMonitor = new MentionMonitorService(_store, _telegram, _logger);
         _scheduler = new SchedulerService(_telegram, _store, _settings, _logger);
 
         ApiIdBox.Text = _settings.ApiId == 0 ? "" : _settings.ApiId.ToString();
@@ -44,7 +51,10 @@ public partial class MainWindow : Window
         ExceptionNotifyEnabledBox.IsChecked = true;
         ExceptionMinimumLevelBox.SelectedIndex = 0;
         ExceptionQueryLevelBox.SelectedIndex = 0;
+        ExceptionFromDatePicker.SelectedDate = DateTime.Today;
+        ExceptionToDatePicker.SelectedDate = DateTime.Today;
         ExceptionEmailBox.Text = "";
+        MentionNotifyEnabledBox.IsChecked = false;
         SchedulePeriodBox.SelectedIndex = 0;
         AddMonday.IsChecked = true;
         RenderSchedules();
@@ -59,6 +69,7 @@ public partial class MainWindow : Window
         });
         _logger.EntryWritten += Logger_EntryWritten;
         _exceptionMonitor.RecordsChanged += ExceptionMonitor_RecordsChanged;
+        _mentionMonitor.RecordsChanged += MentionMonitor_RecordsChanged;
         Application.Current.DispatcherUnhandledException += Application_DispatcherUnhandledException;
         TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
         AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
@@ -66,6 +77,39 @@ public partial class MainWindow : Window
         Closing += MainWindow_Closing;
         Loaded += async (_, _) => await RefreshExceptionsAsync();
         _initialized = true;
+    }
+
+    private void InitializeTrayIcon()
+    {
+        var resource = System.Windows.Application.GetResourceStream(
+            new Uri("pack://application:,,,/Assets/AppIcon.ico"))
+            ?? throw new InvalidOperationException("找不到应用图标资源");
+        using var sourceIcon = new System.Drawing.Icon(resource.Stream);
+        var trayMenu = new System.Windows.Forms.ContextMenuStrip();
+        trayMenu.Items.Add("显示主窗口", null, (_, _) => Dispatcher.BeginInvoke(ShowMainWindow));
+        trayMenu.Items.Add("退出程序", null, (_, _) => Dispatcher.BeginInvoke(ExitApplication));
+        _trayIcon = new System.Windows.Forms.NotifyIcon
+        {
+            Icon = (System.Drawing.Icon)sourceIcon.Clone(),
+            Text = "Telegram 控制台助手",
+            ContextMenuStrip = trayMenu,
+            Visible = true
+        };
+        _trayIcon.DoubleClick += (_, _) => Dispatcher.BeginInvoke(ShowMainWindow);
+    }
+
+    private void ShowMainWindow()
+    {
+        ShowInTaskbar = true;
+        Show();
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Activate();
+    }
+
+    private void ExitApplication()
+    {
+        _exitRequested = true;
+        Close();
     }
 
     private async void LoginButton_Click(object sender, RoutedEventArgs e) =>
@@ -101,17 +145,21 @@ public partial class MainWindow : Window
     {
         _activeAccount = null;
         _exceptionMonitor.DeactivateAccount();
+        _mentionMonitor.DeactivateAccount();
         await _scheduler.DeactivateAccountAsync();
         _allDialogs = [];
         DialogsList.ItemsSource = null;
         ScheduleChatBox.ItemsSource = null;
         ConfirmationPeerBox.ItemsSource = null;
         ExceptionPeerBox.ItemsSource = null;
+        MentionTargetBox.ItemsSource = null;
         ExceptionNotifyEnabledBox.IsChecked = false;
         ExceptionMinimumLevelBox.SelectedIndex = 0;
         ExceptionEmailBox.Clear();
+        MentionNotifyEnabledBox.IsChecked = false;
         ScheduleList.ItemsSource = null;
         ExceptionList.ItemsSource = null;
+        MentionList.ItemsSource = null;
         ChatConsole.Document.Blocks.Clear();
         MonitorConsole.Document.Blocks.Clear();
     }
@@ -151,9 +199,18 @@ public partial class MainWindow : Window
             ContinueLoginButton.Visibility = Visibility.Collapsed;
         SetLoginBusy(false);
         SetStatus($"已登录：{_telegram.CurrentUser}");
+        ShowAuthenticatedAccount();
         await ActivateAccountAsync();
         await LoadDialogsAsync();
         await _scheduler.RunDueTasksAsync();
+    }
+
+    private void ShowAuthenticatedAccount()
+    {
+        LoggedInAccountText.Text = _telegram.CurrentUser;
+        LoginFormPanel.Visibility = Visibility.Collapsed;
+        LoggedInPanel.Visibility = Visibility.Visible;
+        LoginButton.IsEnabled = false;
     }
 
     private async Task ActivateAccountAsync()
@@ -193,9 +250,12 @@ public partial class MainWindow : Window
         ExceptionMinimumLevelBox.SelectedIndex = account.ExceptionAlerts.MinimumLevel == AppLogLevel.Critical ? 1 : 0;
         ExceptionEmailBox.Text = account.ExceptionAlerts.EmailRecipient;
         _exceptionMonitor.ActivateAccount(userId, account.ExceptionAlerts);
+        MentionNotifyEnabledBox.IsChecked = account.MentionAlerts.NotificationsEnabled;
+        _mentionMonitor.ActivateAccount(userId, account.MentionAlerts);
         await _scheduler.ActivateAccountAsync(account);
         RenderSchedules();
         await RefreshExceptionsAsync();
+        await RefreshMentionsAsync();
     }
 
     private async void LoginValueBox_KeyDown(object sender, KeyEventArgs e)
@@ -235,6 +295,18 @@ public partial class MainWindow : Window
                 x.Kind == _activeAccount.ExceptionAlerts.TelegramPeerKind)
             : confirmationTargets[0];
         ExceptionPeerBox.SelectedItem ??= confirmationTargets[0];
+        var mentionTargets = new List<ConfirmationTarget>
+        {
+            new(null, "", "（仅记录，不发送通知）")
+        };
+        mentionTargets.AddRange(_allDialogs.Where(x => !x.IsGroup)
+            .Select(x => new ConfirmationTarget(x, x.Kind, x.Name)));
+        MentionTargetBox.ItemsSource = mentionTargets;
+        MentionTargetBox.SelectedItem = _activeAccount?.MentionAlerts.TargetPeerId is long mentionPeerId
+            ? mentionTargets.FirstOrDefault(x => x.Dialog?.Id == mentionPeerId &&
+                x.Kind == _activeAccount.MentionAlerts.TargetPeerKind)
+            : mentionTargets[0];
+        MentionTargetBox.SelectedItem ??= mentionTargets[0];
         SetStatus($"已加载 {_allDialogs.Count} 个会话，其中 {groups.Count} 个群聊/频道");
     }
 
@@ -403,8 +475,12 @@ public partial class MainWindow : Window
     private async void RemoveSchedule_Click(object sender, RoutedEventArgs e)
     {
         if (_activeAccount is null) return;
-        var selected = ScheduleList.SelectedItems.Cast<ScheduleRow>().ToList();
-        if (selected.Count == 0) return;
+        var selected = GetCheckedScheduleRows();
+        if (selected.Count == 0)
+        {
+            ShowError("请先勾选至少一个定时任务");
+            return;
+        }
         var selectedIds = selected.Select(x => x.Id).ToHashSet();
         _activeAccount.Schedules.RemoveAll(x => selectedIds.Contains(x.Id));
         _store.Save(_settings);
@@ -417,8 +493,8 @@ public partial class MainWindow : Window
     {
         await RunUiAsync(async () =>
         {
-            var selected = ScheduleList.SelectedItems.Cast<ScheduleRow>().ToList();
-            if (selected.Count != 1) throw new InvalidOperationException("编辑时请只选择一个定时任务");
+            var selected = GetCheckedScheduleRows();
+            if (selected.Count != 1) throw new InvalidOperationException("编辑时请只勾选一个定时任务");
             var task = _activeAccount?.Schedules.FirstOrDefault(x => x.Id == selected[0].Id)
                 ?? throw new InvalidOperationException("找不到选中的定时任务");
             var editor = new ScheduleEditWindow(task, _allDialogs) { Owner = this };
@@ -435,8 +511,8 @@ public partial class MainWindow : Window
     {
         await RunUiAsync(async () =>
         {
-            var selected = ScheduleList.SelectedItems.Cast<ScheduleRow>().ToList();
-            if (selected.Count == 0) throw new InvalidOperationException("请先选择至少一个定时任务");
+            var selected = GetCheckedScheduleRows();
+            if (selected.Count == 0) throw new InvalidOperationException("请先勾选至少一个定时任务");
             RunNowButton.IsEnabled = false;
             try
             {
@@ -490,6 +566,9 @@ public partial class MainWindow : Window
                 x.LastSentDate?.ToString("yyyy-MM-dd") ?? "-"))
             .ToList();
     }
+
+    private List<ScheduleRow> GetCheckedScheduleRows() =>
+        ScheduleList.Items.Cast<ScheduleRow>().Where(x => x.IsChecked).ToList();
 
     private void SaveEmailSettings_Click(object sender, RoutedEventArgs e)
     {
@@ -575,6 +654,23 @@ public partial class MainWindow : Window
 
     private void MainWindow_Closing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
+        if (!_exitRequested)
+        {
+            e.Cancel = true;
+            ShowInTaskbar = false;
+            Hide();
+            if (!_trayHintShown && _trayIcon is not null)
+            {
+                _trayHintShown = true;
+                _trayIcon.ShowBalloonTip(
+                    2500,
+                    "Telegram 控制台助手仍在运行",
+                    "定时任务和消息监控继续工作。双击托盘图标可恢复窗口。",
+                    System.Windows.Forms.ToolTipIcon.Info);
+            }
+            return;
+        }
+
         _logger.Info("Application", "应用正在退出");
         if (int.TryParse(ApiIdBox.Text, out var apiId)) _settings.ApiId = apiId;
         _settings.ApiHash = ApiHashBox.Password.Trim();
@@ -591,6 +687,8 @@ public partial class MainWindow : Window
         _store.Save(_settings);
         _exceptionMonitor.RecordsChanged -= ExceptionMonitor_RecordsChanged;
         _exceptionMonitor.Dispose();
+        _mentionMonitor.RecordsChanged -= MentionMonitor_RecordsChanged;
+        _mentionMonitor.Dispose();
         _scheduler.Dispose();
         _telegram.Dispose();
         Application.Current.DispatcherUnhandledException -= Application_DispatcherUnhandledException;
@@ -598,6 +696,17 @@ public partial class MainWindow : Window
         AppDomain.CurrentDomain.UnhandledException -= CurrentDomain_UnhandledException;
         _logger.EntryWritten -= Logger_EntryWritten;
         _logger.Dispose();
+        DisposeTrayIcon();
+    }
+
+    private void DisposeTrayIcon()
+    {
+        if (_trayIcon is null) return;
+        _trayIcon.Visible = false;
+        _trayIcon.ContextMenuStrip?.Dispose();
+        _trayIcon.Icon?.Dispose();
+        _trayIcon.Dispose();
+        _trayIcon = null;
     }
 
     private void Logger_EntryWritten(AppLogEntry entry) =>
@@ -632,6 +741,82 @@ public partial class MainWindow : Window
 
     private void ClearLogDisplay_Click(object sender, RoutedEventArgs e) => LogConsole.Document.Blocks.Clear();
 
+    private async void SaveMentionSettings_Click(object sender, RoutedEventArgs e) =>
+        await RunUiAsync(() =>
+        {
+            SaveMentionSettings();
+            SetStatus("@消息通知配置已加密保存");
+            return Task.CompletedTask;
+        });
+
+    private void SaveMentionSettings()
+    {
+        if (_activeAccount is null) throw new InvalidOperationException("请先登录 Telegram 账号");
+        var target = MentionTargetBox.SelectedItem as ConfirmationTarget;
+        if (MentionNotifyEnabledBox.IsChecked == true && target?.Dialog is null)
+            throw new InvalidOperationException("启用通知时请选择机器人或私聊");
+        var settings = _activeAccount.MentionAlerts;
+        settings.NotificationsEnabled = MentionNotifyEnabledBox.IsChecked == true;
+        settings.TargetPeerId = target?.Dialog?.Id;
+        settings.TargetPeerKind = target?.Kind ?? "";
+        settings.TargetPeerTitle = target?.Dialog?.Name ?? "";
+        _store.Save(_settings);
+        _mentionMonitor.ActivateAccount(_activeAccount.UserId, settings);
+    }
+
+    private async void TestMentionNotification_Click(object sender, RoutedEventArgs e) =>
+        await RunUiAsync(async () =>
+        {
+            SaveMentionSettings();
+            await _mentionMonitor.SendTestNotificationAsync();
+            SetStatus("@消息测试通知发送成功");
+        });
+
+    private async void RefreshMentions_Click(object sender, RoutedEventArgs e) =>
+        await RunUiAsync(RefreshMentionsAsync);
+
+    private async void ResetMentionQuery_Click(object sender, RoutedEventArgs e)
+    {
+        MentionKeywordBox.Clear();
+        await RunUiAsync(RefreshMentionsAsync);
+    }
+
+    private async Task RefreshMentionsAsync()
+    {
+        var records = await _mentionMonitor.QueryAsync(new MentionQuery(MentionKeywordBox.Text.Trim()));
+        MentionList.ItemsSource = records.Select(x => new MentionRow(
+            x.Id,
+            x.OccurredAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
+            x.ChatName,
+            x.Sender,
+            x.Message,
+            x.NotificationStatus)).ToList();
+    }
+
+    private void MentionMonitor_RecordsChanged() =>
+        Dispatcher.BeginInvoke(async () =>
+        {
+            try { await RefreshMentionsAsync(); }
+            catch (Exception ex) { _logger.Error("MentionMonitor", "刷新@消息列表失败", ex); }
+        });
+
+    private void MentionList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (MentionList.SelectedItem is not MentionRow row) return;
+        System.Windows.MessageBox.Show(
+            this,
+            $"时间：{row.OccurredAtText}\n群聊：{row.ChatName}\n发送人：{row.Sender}\n通知：{row.NotificationStatus}\n\n{row.Message}",
+            $"@我的消息 #{row.Id}",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
+    private void OpenMentionDatabase_Click(object sender, RoutedEventArgs e)
+    {
+        var directory = Path.GetDirectoryName(_mentionMonitor.DatabasePath)!;
+        Process.Start(new ProcessStartInfo(directory) { UseShellExecute = true });
+    }
+
     private async void SaveExceptionSettings_Click(object sender, RoutedEventArgs e) =>
         await RunUiAsync(() =>
         {
@@ -664,8 +849,11 @@ public partial class MainWindow : Window
             SetStatus("异常测试通知发送成功");
         });
 
-    private async void RefreshExceptions_Click(object sender, RoutedEventArgs e) =>
+    private async void RefreshExceptions_Click(object sender, RoutedEventArgs e)
+    {
+        _exceptionQueryLimit = 500;
         await RunUiAsync(RefreshExceptionsAsync);
+    }
 
     private async void RetryExceptionNotifications_Click(object sender, RoutedEventArgs e) =>
         await RunUiAsync(async () =>
@@ -689,7 +877,7 @@ public partial class MainWindow : Window
             _ => (AppLogLevel?)null
         };
         var records = await _exceptionMonitor.QueryAsync(new ExceptionQuery(
-            from, toExclusive, level, ExceptionKeywordBox.Text.Trim()));
+            from, toExclusive, level, ExceptionKeywordBox.Text.Trim(), _exceptionQueryLimit));
         ExceptionList.ItemsSource = records.Select(x => new ExceptionRow(
             x.Id,
             x.OccurredAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
@@ -704,10 +892,11 @@ public partial class MainWindow : Window
 
     private async void ResetExceptionQuery_Click(object sender, RoutedEventArgs e)
     {
-        ExceptionFromDatePicker.SelectedDate = null;
-        ExceptionToDatePicker.SelectedDate = null;
+        ExceptionFromDatePicker.SelectedDate = DateTime.Today;
+        ExceptionToDatePicker.SelectedDate = DateTime.Today;
         ExceptionQueryLevelBox.SelectedIndex = 0;
         ExceptionKeywordBox.Clear();
+        _exceptionQueryLimit = 10;
         await RunUiAsync(RefreshExceptionsAsync);
     }
 
@@ -792,16 +981,34 @@ public partial class MainWindow : Window
         box.ScrollToEnd();
     }
 
-    private sealed record ScheduleRow(
-        Guid Id,
-        string EnabledText,
-        string ChatTitle,
-        string PeriodText,
-        string Message,
-        string Confirmation,
-        string LastSentText);
+    private sealed class ScheduleRow(
+        Guid id,
+        string enabledText,
+        string chatTitle,
+        string periodText,
+        string message,
+        string confirmation,
+        string lastSentText)
+    {
+        public bool IsChecked { get; set; }
+        public Guid Id { get; } = id;
+        public string EnabledText { get; } = enabledText;
+        public string ChatTitle { get; } = chatTitle;
+        public string PeriodText { get; } = periodText;
+        public string Message { get; } = message;
+        public string Confirmation { get; } = confirmation;
+        public string LastSentText { get; } = lastSentText;
+    }
 
     private sealed record ConfirmationTarget(DialogItem? Dialog, string Kind, string Name);
+
+    private sealed record MentionRow(
+        long Id,
+        string OccurredAtText,
+        string ChatName,
+        string Sender,
+        string Message,
+        string NotificationStatus);
 
     private sealed record ExceptionRow(
         long Id,

@@ -3,6 +3,8 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>TelegramConsoleApp</RootNamespace>
@@ -10,5 +12,9 @@
   <ItemGroup>
     <ProjectReference Include="..\TelegramConsole.Core\TelegramConsole.Core.csproj" />
     <ProjectReference Include="..\TelegramConsole.Infrastructure\TelegramConsole.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="Assets\AppIcon.ico" />
+    <Resource Include="Assets\AppIcon.png" />
   </ItemGroup>
 </Project>

@@ -20,6 +20,15 @@ public sealed class AccountProfile
     public string PhoneNumber { get; set; } = "";
     public List<ScheduledMessage> Schedules { get; set; } = [];
     public ExceptionAlertSettings ExceptionAlerts { get; set; } = new();
+    public MentionAlertSettings MentionAlerts { get; set; } = new();
+}
+
+public sealed class MentionAlertSettings
+{
+    public bool NotificationsEnabled { get; set; }
+    public long? TargetPeerId { get; set; }
+    public string TargetPeerKind { get; set; } = "";
+    public string TargetPeerTitle { get; set; } = "";
 }
 
 public sealed class ExceptionAlertSettings
