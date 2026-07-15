@@ -137,11 +137,11 @@
         <Border Grid.Row="4" Background="#09090B" Padding="12,0">
             <Grid>
                 <TextBlock VerticalAlignment="Center" Foreground="#71717A" FontSize="11"
-                           Text="enter 发送   ctrl+l 清屏   esc 关闭" />
+                           Text="{DynamicResource ConsoleHelp}" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                    <TextBlock Text="● 自己 " Foreground="#22C55E" FontSize="11" />
-                    <TextBlock Text="● 消息 " Foreground="#FFFFFF" FontSize="11" />
-                    <TextBlock Text="● @提及" Foreground="#3B82F6" FontSize="11" />
+                    <TextBlock Text="{DynamicResource SelfLegend}" Foreground="#22C55E" FontSize="11" />
+                    <TextBlock Text="{DynamicResource MessageLegend}" Foreground="#FFFFFF" FontSize="11" />
+                    <TextBlock Text="{DynamicResource MentionLegend}" Foreground="#3B82F6" FontSize="11" />
                 </StackPanel>
             </Grid>
         </Border>

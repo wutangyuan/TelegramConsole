@@ -6,11 +6,13 @@ namespace TelegramConsoleApp;
 public partial class ScheduleEditWindow : Window
 {
     private readonly ScheduledMessage _task;
+    private readonly bool _emailConfigured;
 
-    public ScheduleEditWindow(ScheduledMessage task, IReadOnlyCollection<DialogItem> dialogs)
+    public ScheduleEditWindow(ScheduledMessage task, IReadOnlyCollection<DialogItem> dialogs, bool emailConfigured)
     {
         InitializeComponent();
         _task = task;
+        _emailConfigured = emailConfigured;
 
         var targets = dialogs.Where(x => x.IsGroup)
             .Select(x => new PeerOption(x.Id, x.Kind, x.Name))
@@ -19,7 +21,7 @@ public partial class ScheduleEditWindow : Window
         TargetBox.ItemsSource = targets;
         TargetBox.SelectedItem = targets.FirstOrDefault(x => x.Id == task.ChatId && x.Kind == task.ChatKind);
 
-        var confirmations = new List<PeerOption> { new(null, "", "（不发送 Telegram 确认）") };
+        var confirmations = new List<PeerOption> { new(null, "", LocalizationManager.Text("NoTelegramConfirmation")) };
         confirmations.AddRange(dialogs.Select(x => new PeerOption(x.Id, x.Kind, x.Name)));
         if (task.ConfirmationPeerId is long confirmationId)
             EnsureOption(confirmations, confirmationId, task.ConfirmationPeerKind, task.ConfirmationPeerTitle);
@@ -49,17 +51,17 @@ public partial class ScheduleEditWindow : Window
         try
         {
             if (TargetBox.SelectedItem is not PeerOption target || target.Id is not long targetId)
-                throw new InvalidOperationException("请选择目标群聊");
+                throw new InvalidOperationException(LocalizationManager.Text("SelectTargetChat"));
             if (!TimeSpan.TryParseExact(TimeBox.Text.Trim(), @"hh\:mm", CultureInfo.InvariantCulture, out var time)
                 || time >= TimeSpan.FromDays(1))
-                throw new InvalidOperationException("时间格式应为 HH:mm，例如 08:00");
+                throw new InvalidOperationException(LocalizationManager.Text("InvalidTimeFormat"));
             var message = MessageBox.Text.Trim();
-            if (message.Length == 0) throw new InvalidOperationException("发送内容不能为空");
+            if (message.Length == 0) throw new InvalidOperationException(LocalizationManager.Text("MessageRequired"));
             var confirmation = ConfirmationPeerBox.SelectedItem as PeerOption;
             var period = PeriodBox.SelectedIndex == 1 ? SchedulePeriod.Weekly : SchedulePeriod.Daily;
             var weekDays = GetSelectedWeekDays();
             if (period == SchedulePeriod.Weekly && weekDays.Count == 0)
-                throw new InvalidOperationException("每周任务至少需要选择一天");
+                throw new InvalidOperationException(LocalizationManager.Text("WeeklyDayRequired"));
             var executionDefinitionChanged =
                 _task.ChatId != targetId
                 || _task.ChatKind != target.Kind
@@ -79,7 +81,10 @@ public partial class ScheduleEditWindow : Window
             _task.ConfirmationPeerId = confirmation?.Id;
             _task.ConfirmationPeerKind = confirmation?.Kind ?? "";
             _task.ConfirmationPeerTitle = confirmation?.Id is null ? "" : confirmation.Name;
-            _task.ConfirmationEmail = ConfirmationEmailBox.Text.Trim();
+            var confirmationEmail = ConfirmationEmailBox.Text.Trim();
+            if (confirmationEmail.Length > 0 && !_emailConfigured)
+                throw new InvalidOperationException(LocalizationManager.Text("EmailNotConfigured"));
+            _task.ConfirmationEmail = confirmationEmail;
             _task.ConfirmationText = string.IsNullOrWhiteSpace(ConfirmationTextBox.Text)
                 ? "签到完成：{群聊}，时间 {时间}"
                 : ConfirmationTextBox.Text.Trim();
@@ -88,7 +93,7 @@ public partial class ScheduleEditWindow : Window
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(this, ex.Message, "编辑任务", MessageBoxButton.OK, MessageBoxImage.Warning);
+            System.Windows.MessageBox.Show(this, ex.Message, LocalizationManager.Text("EditTaskError"), MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -117,5 +122,8 @@ public partial class ScheduleEditWindow : Window
         return days;
     }
 
-    private sealed record PeerOption(long? Id, string Kind, string Name);
+    private sealed record PeerOption(long? Id, string Kind, string Name)
+    {
+        public override string ToString() => Name;
+    }
 }

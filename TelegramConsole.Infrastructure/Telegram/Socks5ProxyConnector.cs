@@ -11,6 +11,7 @@ internal static class Socks5ProxyConnector
         var tcp = new TcpClient();
         try
         {
+            ConfigureSocket(tcp);
             await tcp.ConnectAsync(proxy.Host, proxy.Port);
             var stream = tcp.GetStream();
             var useAuthentication = !string.IsNullOrEmpty(proxy.UserName);
@@ -56,6 +57,25 @@ internal static class Socks5ProxyConnector
         {
             tcp.Dispose();
             throw;
+        }
+    }
+
+    private static void ConfigureSocket(TcpClient tcp)
+    {
+        tcp.NoDelay = true;
+        tcp.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, true);
+        if (!OperatingSystem.IsWindows()) return;
+        try
+        {
+            var keepAlive = new byte[12];
+            BitConverter.GetBytes(1u).CopyTo(keepAlive, 0);
+            BitConverter.GetBytes(60_000u).CopyTo(keepAlive, 4);
+            BitConverter.GetBytes(15_000u).CopyTo(keepAlive, 8);
+            tcp.Client.IOControl(IOControlCode.KeepAliveValues, keepAlive, null);
+        }
+        catch
+        {
+            // Some platforms do not support tuning TCP keep-alive intervals.
         }
     }
 

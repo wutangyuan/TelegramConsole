@@ -1,7 +1,7 @@
 <Window x:Class="TelegramConsoleApp.ScheduleEditWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="编辑定时任务" Icon="Assets/AppIcon.ico" Width="620" Height="560" MinWidth="560"
+        Title="{DynamicResource EditScheduleTitle}" Icon="Assets/AppIcon.ico" Width="700" Height="560" MinWidth="620"
         WindowStartupLocation="CenterOwner" ResizeMode="NoResize"
         Background="#F5F7FA" FontFamily="Microsoft YaHei UI" FontSize="13">
     <Grid Margin="18">
@@ -9,7 +9,7 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="52" />
         </Grid.RowDefinitions>
-        <GroupBox Header="任务配置" Padding="14">
+        <GroupBox Header="{DynamicResource TaskSettings}" Padding="14">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="125" />
@@ -27,42 +27,42 @@
                     <RowDefinition Height="70" />
                 </Grid.RowDefinitions>
 
-                <TextBlock Text="任务状态" VerticalAlignment="Center" />
-                <CheckBox x:Name="EnabledBox" Grid.Column="1" Content="启用此任务" VerticalAlignment="Center" />
+                <TextBlock Text="{DynamicResource TaskStatus}" VerticalAlignment="Center" />
+                <CheckBox x:Name="EnabledBox" Grid.Column="1" Content="{DynamicResource EnableTask}" VerticalAlignment="Center" />
 
-                <TextBlock Grid.Row="1" Text="目标群聊" VerticalAlignment="Center" />
+                <TextBlock Grid.Row="1" Text="{DynamicResource TargetChat}" VerticalAlignment="Center" />
                 <ComboBox x:Name="TargetBox" Grid.Row="1" Grid.Column="1" DisplayMemberPath="Name" />
 
-                <TextBlock Grid.Row="2" Text="执行周期" VerticalAlignment="Center" />
+                <TextBlock Grid.Row="2" Text="{DynamicResource ExecutionPeriod}" VerticalAlignment="Center" />
                 <ComboBox x:Name="PeriodBox" Grid.Row="2" Grid.Column="1" SelectionChanged="PeriodBox_SelectionChanged">
-                    <ComboBoxItem Content="每天" Tag="Daily" />
-                    <ComboBoxItem Content="每周" Tag="Weekly" />
+                    <ComboBoxItem Content="{DynamicResource Daily}" Tag="Daily" />
+                    <ComboBoxItem Content="{DynamicResource Weekly}" Tag="Weekly" />
                 </ComboBox>
 
-                <TextBlock Grid.Row="3" Text="每周执行日" VerticalAlignment="Center" />
+                <TextBlock Grid.Row="3" Text="{DynamicResource WeeklyDays}" VerticalAlignment="Center" />
                 <UniformGrid x:Name="WeekDaysPanel" Grid.Row="3" Grid.Column="1" Rows="1">
-                    <CheckBox x:Name="MondayBox" Content="周一" VerticalAlignment="Center" />
-                    <CheckBox x:Name="TuesdayBox" Content="周二" VerticalAlignment="Center" />
-                    <CheckBox x:Name="WednesdayBox" Content="周三" VerticalAlignment="Center" />
-                    <CheckBox x:Name="ThursdayBox" Content="周四" VerticalAlignment="Center" />
-                    <CheckBox x:Name="FridayBox" Content="周五" VerticalAlignment="Center" />
-                    <CheckBox x:Name="SaturdayBox" Content="周六" VerticalAlignment="Center" />
-                    <CheckBox x:Name="SundayBox" Content="周日" VerticalAlignment="Center" />
+                    <CheckBox x:Name="MondayBox" Content="{DynamicResource Monday}" VerticalAlignment="Center" />
+                    <CheckBox x:Name="TuesdayBox" Content="{DynamicResource Tuesday}" VerticalAlignment="Center" />
+                    <CheckBox x:Name="WednesdayBox" Content="{DynamicResource Wednesday}" VerticalAlignment="Center" />
+                    <CheckBox x:Name="ThursdayBox" Content="{DynamicResource Thursday}" VerticalAlignment="Center" />
+                    <CheckBox x:Name="FridayBox" Content="{DynamicResource Friday}" VerticalAlignment="Center" />
+                    <CheckBox x:Name="SaturdayBox" Content="{DynamicResource Saturday}" VerticalAlignment="Center" />
+                    <CheckBox x:Name="SundayBox" Content="{DynamicResource Sunday}" VerticalAlignment="Center" />
                 </UniformGrid>
 
-                <TextBlock Grid.Row="4" Text="执行时间" VerticalAlignment="Center" />
+                <TextBlock Grid.Row="4" Text="{DynamicResource ExecutionTime}" VerticalAlignment="Center" />
                 <TextBox x:Name="TimeBox" Grid.Row="4" Grid.Column="1" ToolTip="格式 HH:mm，例如 08:00" />
 
-                <TextBlock Grid.Row="5" Text="发送内容" VerticalAlignment="Center" />
+                <TextBlock Grid.Row="5" Text="{DynamicResource MessageContent}" VerticalAlignment="Center" />
                 <TextBox x:Name="MessageBox" Grid.Row="5" Grid.Column="1" />
 
-                <TextBlock Grid.Row="6" Text="Telegram 完成确认" VerticalAlignment="Center" />
+                <TextBlock Grid.Row="6" Text="{DynamicResource TelegramConfirmation}" VerticalAlignment="Center" />
                 <ComboBox x:Name="ConfirmationPeerBox" Grid.Row="6" Grid.Column="1" DisplayMemberPath="Name" />
 
-                <TextBlock Grid.Row="7" Text="确认邮件" VerticalAlignment="Center" />
+                <TextBlock Grid.Row="7" Text="{DynamicResource ConfirmationEmail}" VerticalAlignment="Center" />
                 <TextBox x:Name="ConfirmationEmailBox" Grid.Row="7" Grid.Column="1" ToolTip="不发送邮件时留空" />
 
-                <TextBlock Grid.Row="8" Text="确认内容" VerticalAlignment="Top" Margin="0,9,0,0" />
+                <TextBlock Grid.Row="8" Text="{DynamicResource ConfirmationContent}" VerticalAlignment="Top" Margin="0,9,0,0" />
                 <TextBox x:Name="ConfirmationTextBox" Grid.Row="8" Grid.Column="1"
                          AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Top"
                          ToolTip="支持 {群聊}、{时间}、{内容}" />
@@ -70,8 +70,8 @@
         </GroupBox>
 
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom">
-            <Button Content="取消" Width="95" IsCancel="True" />
-            <Button Content="保存修改" Width="110" IsDefault="True" Click="SaveButton_Click"
+            <Button Content="{DynamicResource Cancel}" Width="95" IsCancel="True" />
+            <Button Content="{DynamicResource SaveChanges}" Width="120" IsDefault="True" Click="SaveButton_Click"
                     Background="#2481CC" Foreground="White" />
         </StackPanel>
     </Grid>

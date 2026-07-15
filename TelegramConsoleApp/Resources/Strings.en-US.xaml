@@ -1,0 +1,76 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+    <sys:String x:Key="AppTitle">Telegram Console Assistant (WTelegramClient / WPF)</sys:String>
+    <sys:String x:Key="SettingsTitle">Application Settings</sys:String>
+    <sys:String x:Key="Language">Language</sys:String><sys:String x:Key="FollowSystem">Follow system</sys:String><sys:String x:Key="Chinese">简体中文</sys:String><sys:String x:Key="English">English</sys:String>
+    <sys:String x:Key="ConnectionSettings">Connection</sys:String><sys:String x:Key="PhoneNumber">Phone</sys:String>
+    <sys:String x:Key="Login">Log In</sys:String><sys:String x:Key="Settings">⚙ Settings</sys:String>
+    <sys:String x:Key="VerificationCode">Verification code</sys:String><sys:String x:Key="ContinueLogin">Continue</sys:String>
+    <sys:String x:Key="LoggedInAccount">Signed in as: </sys:String><sys:String x:Key="LoginLocked">  Login is locked for this session</sys:String>
+    <sys:String x:Key="Online">Online</sys:String><sys:String x:Key="ConnectingStatus">Connecting</sys:String>
+    <sys:String x:Key="RefreshDialogs">Refresh</sys:String><sys:String x:Key="OpenConsole">Pop-out Console</sys:String><sys:String x:Key="BlankScreen">Blank</sys:String>
+    <sys:String x:Key="OpenInConsole">Open in pop-out console</sys:String>
+    <sys:String x:Key="ChatTerminal">⌨ Chat</sys:String><sys:String x:Key="GroupMonitor">◉ Group Monitor</sys:String>
+    <sys:String x:Key="Schedules">◷ Schedules</sys:String><sys:String x:Key="Mentions">@ Mentions</sys:String>
+    <sys:String x:Key="Exceptions">⚠ Exceptions</sys:String><sys:String x:Key="RuntimeLogs">≡ Logs</sys:String><sys:String x:Key="Send">Send</sys:String>
+    <sys:String x:Key="MonitorEnabled">Enable group monitoring (show incoming and outgoing group messages)</sys:String>
+    <sys:String x:Key="Chat">Chat</sys:String><sys:String x:Key="Time">Time</sys:String><sys:String x:Key="Content">Content</sys:String>
+    <sys:String x:Key="AddTask">Add</sys:String><sys:String x:Key="RunNow">Run Now</sys:String><sys:String x:Key="EditSelected">Edit</sys:String><sys:String x:Key="DeleteSelected">Delete</sys:String>
+    <sys:String x:Key="Period">Period</sys:String><sys:String x:Key="Daily">Daily</sys:String><sys:String x:Key="Weekly">Weekly</sys:String><sys:String x:Key="Weekday">Weekdays</sys:String>
+    <sys:String x:Key="MondayShort">Mon</sys:String><sys:String x:Key="TuesdayShort">Tue</sys:String><sys:String x:Key="WednesdayShort">Wed</sys:String><sys:String x:Key="ThursdayShort">Thu</sys:String><sys:String x:Key="FridayShort">Fri</sys:String><sys:String x:Key="SaturdayShort">Sat</sys:String><sys:String x:Key="SundayShort">Sun</sys:String>
+    <sys:String x:Key="TelegramConfirmation">Telegram confirmation</sys:String><sys:String x:Key="ConfirmationEmail">Confirmation email</sys:String><sys:String x:Key="ConfirmationContent">Confirmation text</sys:String>
+    <sys:String x:Key="SmtpSettings">SMTP settings (only required for email notifications)</sys:String>
+    <sys:String x:Key="Server">Server</sys:String><sys:String x:Key="Port">Port</sys:String><sys:String x:Key="Account">Account</sys:String><sys:String x:Key="PasswordAuthCode">Password / app code</sys:String>
+    <sys:String x:Key="FromAddress">From</sys:String><sys:String x:Key="SaveEmailSettings">Save Email</sys:String>
+    <sys:String x:Key="Select">Select</sys:String><sys:String x:Key="Status">Status</sys:String><sys:String x:Key="MessageContent">Message</sys:String><sys:String x:Key="CompletionNotification">Completion Notification</sys:String><sys:String x:Key="LastSent">Last Sent</sys:String>
+    <sys:String x:Key="EnableNotification">Enable notifications</sys:String><sys:String x:Key="SaveSettings">Save Settings</sys:String><sys:String x:Key="TestNotification">Test Notification</sys:String><sys:String x:Key="OpenDataDirectory">Open Data Folder</sys:String>
+    <sys:String x:Key="Keyword">Keyword</sys:String><sys:String x:Key="Search">Search</sys:String><sys:String x:Key="Reset">Reset</sys:String>
+    <sys:String x:Key="OccurredAt">Time</sys:String><sys:String x:Key="Sender">Sender</sys:String><sys:String x:Key="NotificationStatus">Notification</sys:String>
+    <sys:String x:Key="EnableAutoNotification">Enable automatic notifications</sys:String><sys:String x:Key="ErrorOrHigher">Error or higher</sys:String><sys:String x:Key="CriticalOnly">Critical only</sys:String>
+    <sys:String x:Key="NotificationEmail">Notification email</sys:String><sys:String x:Key="SaveNotificationSettings">Save Notifications</sys:String><sys:String x:Key="RetryNotification">Retry Selected</sys:String><sys:String x:Key="OpenDatabaseDirectory">Open Database Folder</sys:String>
+    <sys:String x:Key="StartDate">From</sys:String><sys:String x:Key="EndDate">To</sys:String><sys:String x:Key="Level">Level</sys:String><sys:String x:Key="All">All</sys:String><sys:String x:Key="Number">ID</sys:String><sys:String x:Key="Source">Source</sys:String><sys:String x:Key="ExceptionMessage">Exception</sys:String><sys:String x:Key="Email">Email</sys:String>
+    <sys:String x:Key="OpenLogDirectory">Open Log Folder</sys:String><sys:String x:Key="ClearDisplay">Clear Display</sys:String>
+    <sys:String x:Key="ProxySettings">Telegram Connection Proxy</sys:String><sys:String x:Key="EnableProxy">Enable proxy</sys:String><sys:String x:Key="ProxyEnabled">Use proxy for login and messages</sys:String>
+    <sys:String x:Key="ProxyTab">Connection Proxy</sys:String><sys:String x:Key="EmailTab">Email SMTP</sys:String>
+    <sys:String x:Key="ProxyType">Proxy type</sys:String><sys:String x:Key="Address">Address</sys:String><sys:String x:Key="TestPort">Test Port</sys:String><sys:String x:Key="UserName">Username</sys:String><sys:String x:Key="Password">Password</sys:String>
+    <sys:String x:Key="MtProxyLink">MTProxy link</sys:String><sys:String x:Key="NoAuthHint">Leave blank when not required</sys:String>
+    <sys:String x:Key="ProxyHint">Default local SOCKS5 proxy: 127.0.0.1:7890. Log in again after changing the proxy.</sys:String>
+    <sys:String x:Key="Cancel">Cancel</sys:String><sys:String x:Key="Save">Save</sys:String>
+    <sys:String x:Key="EditScheduleTitle">Edit Schedule</sys:String><sys:String x:Key="TaskSettings">Task Settings</sys:String><sys:String x:Key="TaskStatus">Status</sys:String><sys:String x:Key="EnableTask">Enable this task</sys:String>
+    <sys:String x:Key="TargetChat">Target chat</sys:String><sys:String x:Key="ExecutionPeriod">Period</sys:String><sys:String x:Key="WeeklyDays">Days of week</sys:String><sys:String x:Key="ExecutionTime">Time</sys:String><sys:String x:Key="SaveChanges">Save Changes</sys:String>
+    <sys:String x:Key="Monday">Monday</sys:String><sys:String x:Key="Tuesday">Tuesday</sys:String><sys:String x:Key="Wednesday">Wednesday</sys:String><sys:String x:Key="Thursday">Thursday</sys:String><sys:String x:Key="Friday">Friday</sys:String><sys:String x:Key="Saturday">Saturday</sys:String><sys:String x:Key="Sunday">Sunday</sys:String>
+    <sys:String x:Key="ConsoleHelp">enter send   ctrl+l clear   esc close</sys:String><sys:String x:Key="SelfLegend">● Me </sys:String><sys:String x:Key="MessageLegend">● Message </sys:String><sys:String x:Key="MentionLegend">● @Mention</sys:String>
+    <sys:String x:Key="ConfigureTelegram">Enter your Telegram API settings, then click “Log In”.</sys:String>
+    <sys:String x:Key="ProxySaved">Encrypted proxy settings saved: {0}</sys:String><sys:String x:Key="ProxyDisabled">Proxy disabled; using a direct connection.</sys:String>
+    <sys:String x:Key="ApiIdInvalid">API ID must be a positive integer.</sys:String><sys:String x:Key="FillLoginSettings">Enter the API Hash and phone number, including country code.</sys:String>
+    <sys:String x:Key="ConnectingTelegram">Connecting to Telegram...</sys:String><sys:String x:Key="LoginInputRequired">Enter the requested login information.</sys:String>
+    <sys:String x:Key="TelegramRequires">Telegram requires: {0}</sys:String><sys:String x:Key="LoggedIn">Signed in: {0}</sys:String>
+    <sys:String x:Key="ConnectionErrorTitle">Telegram Connection Error</sys:String><sys:String x:Key="ConnectionErrorBody">The connection was interrupted. The client is reconnecting automatically. Double-click the tray icon to view or sign in again.</sys:String>
+    <sys:String x:Key="ShowMainWindow">Show Main Window</sys:String><sys:String x:Key="ExitApplication">Exit</sys:String>
+    <sys:String x:Key="SelectDialogFirst">Select a private chat or group first.</sys:String><sys:String x:Key="SelectChatFirst">Select a private chat or group on the left first.</sys:String>
+    <sys:String x:Key="BlankStatus">The terminal is blank. Select a chat to resume displaying messages.</sys:String><sys:String x:Key="ExpandDialogs">Expand chat list</sys:String><sys:String x:Key="CollapseDialogs">Collapse chat list</sys:String>
+    <sys:String x:Key="MessageSent">Message sent to {0}</sys:String><sys:String x:Key="LoginFirst">Sign in to Telegram first.</sys:String>
+    <sys:String x:Key="SelectTargetChat">Sign in and select a target group first.</sys:String><sys:String x:Key="InvalidTimeFormat">Use HH:mm format, for example 08:00.</sys:String>
+    <sys:String x:Key="InvalidTimeRange">Enter a time from 00:00 to 23:59.</sys:String><sys:String x:Key="MessageRequired">Message content is required.</sys:String>
+    <sys:String x:Key="WeeklyDayRequired">Select at least one day for a weekly task.</sys:String><sys:String x:Key="TaskAdded">Scheduled task added.</sys:String>
+    <sys:String x:Key="SelectTask">Select at least one scheduled task.</sys:String><sys:String x:Key="TasksDeleted">Deleted {0} scheduled task(s).</sys:String>
+    <sys:String x:Key="EditOneTask">Select exactly one task to edit.</sys:String><sys:String x:Key="TaskNotFound">The selected task was not found.</sys:String>
+    <sys:String x:Key="TasksRunning">Running {0} task(s)...</sys:String><sys:String x:Key="TasksCompleted">Completed {0} task(s).</sys:String>
+    <sys:String x:Key="Enabled">Enabled</sys:String><sys:String x:Key="Disabled">Disabled</sys:String><sys:String x:Key="NoNotification">None</sys:String>
+    <sys:String x:Key="OperationFailed">Operation Failed</sys:String><sys:String x:Key="ErrorPrefix">Error: {0}</sys:String>
+    <sys:String x:Key="PromptPassword">Two-step verification password</sys:String><sys:String x:Key="PromptName">Name</sys:String><sys:String x:Key="PromptEmail">Email</sys:String><sys:String x:Key="PromptEmailCode">Email verification code</sys:String>
+    <sys:String x:Key="Testing">Testing...</sys:String><sys:String x:Key="TestingProxy">Connecting to {0}:{1}...</sys:String>
+    <sys:String x:Key="ProxyTestSuccess">Success: local proxy {0}:{1} is reachable.</sys:String><sys:String x:Key="ProxyTestFailed">Proxy Test Failed</sys:String>
+    <sys:String x:Key="ProxyTimeout">Failed: proxy connection timed out after 5 seconds.</sys:String><sys:String x:Key="ProxyAddressRequired">Proxy address is required.</sys:String>
+    <sys:String x:Key="ProxyPortInvalid">Proxy port must be an integer from 1 to 65535.</sys:String><sys:String x:Key="ProxySettingsTitle">Proxy Settings</sys:String>
+    <sys:String x:Key="NoTelegramConfirmation">(No Telegram confirmation)</sys:String><sys:String x:Key="EditTaskError">Edit Task</sys:String>
+    <sys:String x:Key="ExceptionQueryComplete">Exception query complete: {0} record(s).</sys:String>
+    <sys:String x:Key="DailySchedule">Daily at {0}</sys:String><sys:String x:Key="WeeklySchedule">Weekly on {0} at {1}</sys:String>
+    <sys:String x:Key="EmailPrefix">Email: </sys:String><sys:String x:Key="EmailSettingsSaved">Encrypted email settings saved.</sys:String>
+    <sys:String x:Key="EnableSsl">Use an SSL/TLS encrypted connection</sys:String>
+    <sys:String x:Key="EmailConfigHint">This is the global email sender configuration. Schedules and exception alerts only specify recipients and use this SMTP account for delivery.</sys:String>
+    <sys:String x:Key="SmtpPortInvalid">SMTP port must be an integer from 1 to 65535.</sys:String>
+    <sys:String x:Key="EmailConfigIncomplete">Email settings are incomplete. Enter at least the SMTP server and sender address.</sys:String>
+    <sys:String x:Key="EmailNotConfigured">A recipient email was selected, but email delivery is not configured. Open Settings → Email SMTP first.</sys:String>
+</ResourceDictionary>

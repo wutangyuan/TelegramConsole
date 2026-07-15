@@ -16,6 +16,7 @@ public interface ITelegramService : IDisposable
     string CurrentUser { get; }
     event Action<ChatLine>? MessageReceived;
     event Action<string>? Log;
+    event Action<TelegramConnectionState>? ConnectionStateChanged;
     Task<string?> BeginLoginAsync(AppSettings settings);
     Task<string?> ContinueLoginAsync(string value);
     Task<List<DialogItem>> LoadDialogsAsync();
@@ -24,6 +25,15 @@ public interface ITelegramService : IDisposable
     Task SendScheduledAsync(ScheduledMessage schedule);
     Task SendConfirmationAsync(ScheduledMessage schedule, string text);
 }
+
+public enum TelegramConnectionStatus
+{
+    Connecting,
+    Connected,
+    Disconnected
+}
+
+public sealed record TelegramConnectionState(TelegramConnectionStatus Status, string Message);
 
 public interface ISchedulerService : IDisposable
 {

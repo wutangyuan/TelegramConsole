@@ -1,19 +1,19 @@
 <Window x:Class="TelegramConsoleApp.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Telegram 控制台助手（WTelegramClient / WPF）"
+        Title="{DynamicResource AppTitle}"
         Icon="Assets/AppIcon.ico"
         Width="1280" Height="820" MinWidth="1040" MinHeight="700"
-        WindowStartupLocation="CenterScreen" Background="#F5F7FA"
+        WindowStartupLocation="CenterScreen" Background="{StaticResource PageBrush}"
         FontFamily="Microsoft YaHei UI" FontSize="13">
-    <Grid Margin="14">
+    <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
-            <RowDefinition Height="30" />
+            <RowDefinition Height="64" />
         </Grid.RowDefinitions>
 
-        <GroupBox Header="连接配置" Padding="10" Margin="0,0,0,10">
+        <GroupBox Header="{DynamicResource ConnectionSettings}" Padding="10" Margin="0,0,0,10">
             <Grid>
               <Grid x:Name="LoginFormPanel">
                 <Grid.ColumnDefinitions>
@@ -23,53 +23,54 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="230" />
+                    <ColumnDefinition Width="260" />
                 </Grid.ColumnDefinitions>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="40" />
-                    <RowDefinition Height="40" />
+                    <RowDefinition Height="42" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <TextBlock Text="API ID" VerticalAlignment="Center" Margin="4" />
                 <TextBox x:Name="ApiIdBox" Grid.Column="1" />
                 <TextBlock Grid.Column="2" Text="API Hash" VerticalAlignment="Center" Margin="8,4,4,4" />
                 <PasswordBox x:Name="ApiHashBox" Grid.Column="3" />
-                <TextBlock Grid.Column="4" Text="手机号" VerticalAlignment="Center" Margin="8,4,4,4" />
+                <TextBlock Grid.Column="4" Text="{DynamicResource PhoneNumber}" VerticalAlignment="Center" Margin="8,4,4,4" />
                 <TextBox x:Name="PhoneBox" Grid.Column="5" />
                 <Grid Grid.Column="6">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="86" />
+                        <ColumnDefinition Width="110" />
                     </Grid.ColumnDefinitions>
-                    <Button x:Name="LoginButton" Content="一键登录"
-                            Click="LoginButton_Click" Background="{StaticResource AccentBrush}"
-                            Foreground="White" FontWeight="SemiBold" />
-                    <Button Grid.Column="1" Content="⚙ 设置" Click="SettingsButton_Click" />
+                    <Button x:Name="LoginButton" Content="{DynamicResource Login}"
+                            Click="LoginButton_Click" Style="{StaticResource PrimaryButtonStyle}" />
+                    <Button Grid.Column="1" Content="{DynamicResource Settings}" Click="SettingsButton_Click" />
                 </Grid>
 
-                <TextBlock x:Name="LoginPromptLabel" Grid.Row="1" Text="验证码"
+                <TextBlock x:Name="LoginPromptLabel" Grid.Row="1" Text="{DynamicResource VerificationCode}"
                            VerticalAlignment="Center" Visibility="Collapsed" Margin="4" />
                 <TextBox x:Name="LoginValueBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="5"
                          Visibility="Collapsed" KeyDown="LoginValueBox_KeyDown" />
                 <PasswordBox x:Name="LoginPasswordBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="5"
                              Visibility="Collapsed" KeyDown="LoginPasswordBox_KeyDown" />
-                <Button x:Name="ContinueLoginButton" Grid.Row="1" Grid.Column="6" Content="继续登录"
+                <Button x:Name="ContinueLoginButton" Grid.Row="1" Grid.Column="6" Content="{DynamicResource ContinueLogin}"
                         Visibility="Collapsed" Click="ContinueLoginButton_Click" />
               </Grid>
               <Grid x:Name="LoggedInPanel" Height="42" Visibility="Collapsed">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="100" />
+                    <ColumnDefinition Width="110" />
                 </Grid.ColumnDefinitions>
-                <Border Width="12" Height="12" CornerRadius="6" Background="#22C55E"
+                <Border x:Name="ConnectionStatusDot" Width="12" Height="12" CornerRadius="6" Background="#22C55E"
                         VerticalAlignment="Center" Margin="4,0,10,0" />
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="当前已登录账号：" FontWeight="SemiBold" />
+                    <TextBlock Text="{DynamicResource LoggedInAccount}" FontWeight="SemiBold" />
                     <TextBlock x:Name="LoggedInAccountText" FontWeight="Bold" Foreground="#166534" />
-                    <TextBlock Text="　登录按钮已锁定，本次运行不会重复登录" Foreground="#64748B" />
+                    <TextBlock Text="　·　" Foreground="#94A3B8" />
+                    <TextBlock x:Name="ConnectionStatusText" Text="{DynamicResource Online}"
+                               FontWeight="SemiBold" Foreground="#16A34A" />
                 </StackPanel>
-                <Button Grid.Column="2" Content="⚙ 设置" Click="SettingsButton_Click" />
+                <Button Grid.Column="2" Content="{DynamicResource Settings}" Click="SettingsButton_Click" />
               </Grid>
             </Grid>
         </GroupBox>
@@ -81,7 +82,7 @@
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <Grid Grid.Column="0">
+            <Grid Grid.Column="0" Background="White">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="42" />
                     <RowDefinition Height="42" />
@@ -93,9 +94,9 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="70" />
                     </Grid.ColumnDefinitions>
-                    <Button Content="刷新会话" Click="RefreshDialogs_Click" Margin="0,0,3,0" />
-                    <Button Grid.Column="1" Content="独立控制台" Click="OpenConsole_Click" Margin="3,0,0,0" />
-                    <Button Grid.Column="2" Content="空屏" Click="BlankConsole_Click" Margin="6,0,0,0"
+                    <Button Content="{DynamicResource RefreshDialogs}" Click="RefreshDialogs_Click" Margin="0,0,3,0" Padding="7,5" FontSize="12" />
+                    <Button Grid.Column="1" Content="{DynamicResource OpenConsole}" Click="OpenConsole_Click" Margin="3,0,0,0" Padding="7,5" FontSize="12" />
+                    <Button Grid.Column="2" Content="{DynamicResource BlankScreen}" Click="BlankConsole_Click" Margin="6,0,0,0" Padding="7,5" FontSize="12"
                             ToolTip="取消当前会话并停止在聊天终端显示消息" />
                 </Grid>
                 <TextBox x:Name="DialogFilterBox" Grid.Row="1" TextChanged="DialogFilterBox_TextChanged"
@@ -105,7 +106,7 @@
                          DisplayMemberPath="Name" BorderBrush="#CBD5E1">
                     <ListBox.ContextMenu>
                         <ContextMenu>
-                            <MenuItem Header="在独立控制台中打开" Click="OpenConsole_Click" />
+                            <MenuItem Header="{DynamicResource OpenInConsole}" Click="OpenConsole_Click" />
                         </ContextMenu>
                     </ListBox.ContextMenu>
                 </ListBox>
@@ -120,15 +121,15 @@
             </Grid>
 
             <TabControl Grid.Column="2" Margin="4,0,0,0">
-                <TabItem Header="聊天终端">
+                <TabItem Header="{DynamicResource ChatTerminal}">
                     <Grid Margin="10">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*" />
                             <RowDefinition Height="48" />
                         </Grid.RowDefinitions>
                         <RichTextBox x:Name="ChatConsole" IsReadOnly="True" FontFamily="Cascadia Mono, Consolas"
-                                     FontSize="14" Background="#000000" Foreground="#FFFFFF"
-                                     BorderThickness="1" VerticalScrollBarVisibility="Auto" />
+                                     FontSize="14" Background="#090D12" Foreground="#F8FAFC" Padding="10"
+                                     BorderBrush="#1E293B" BorderThickness="1" VerticalScrollBarVisibility="Auto" />
                         <Grid Grid.Row="1" Margin="0,8,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -136,29 +137,30 @@
                             </Grid.ColumnDefinitions>
                             <TextBox x:Name="MessageBox" AcceptsReturn="True" KeyDown="MessageBox_KeyDown"
                                      ToolTip="Enter 发送，Shift+Enter 换行" Margin="0,0,8,0" />
-                            <Button Grid.Column="1" Content="发送" Click="SendButton_Click"
-                                    Background="{StaticResource AccentBrush}" Foreground="White" Margin="0" />
+                            <Button Grid.Column="1" Content="{DynamicResource Send}" Click="SendButton_Click"
+                                    Style="{StaticResource PrimaryButtonStyle}" Margin="0" />
                         </Grid>
                     </Grid>
                 </TabItem>
 
-                <TabItem Header="群消息监控">
+                <TabItem Header="{DynamicResource GroupMonitor}">
                     <Grid Margin="10">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="38" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
                         <CheckBox x:Name="MonitorEnabledBox"
-                                  Content="启用群消息监控（实时显示收到和发出的群消息）"
+                                  Content="{DynamicResource MonitorEnabled}"
                                   VerticalAlignment="Center" Checked="MonitorEnabledBox_Changed"
                                   Unchecked="MonitorEnabledBox_Changed" />
                         <RichTextBox x:Name="MonitorConsole" Grid.Row="1" IsReadOnly="True"
-                                     FontFamily="Cascadia Mono, Consolas" FontSize="14" Background="#000000"
-                                     Foreground="#FFFFFF" VerticalScrollBarVisibility="Auto" />
+                                     FontFamily="Cascadia Mono, Consolas" FontSize="14" Background="#090D12"
+                                     Foreground="#F8FAFC" Padding="10" BorderBrush="#1E293B"
+                                     VerticalScrollBarVisibility="Auto" />
                     </Grid>
                 </TabItem>
 
-                <TabItem Header="定时签到">
+                <TabItem Header="{DynamicResource Schedules}">
                     <Grid Margin="10">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -183,84 +185,53 @@
                                 <ColumnDefinition Width="100" />
                                 <ColumnDefinition Width="100" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="群聊" VerticalAlignment="Center" />
+                            <TextBlock Text="{DynamicResource Chat}" VerticalAlignment="Center" />
                             <ComboBox x:Name="ScheduleChatBox" Grid.Column="1" DisplayMemberPath="Name" />
-                            <TextBlock Grid.Column="2" Text="时间" VerticalAlignment="Center" Margin="8,0,0,0" />
+                            <TextBlock Grid.Column="2" Text="{DynamicResource Time}" VerticalAlignment="Center" Margin="8,0,0,0" />
                             <TextBox x:Name="ScheduleTimeBox" Grid.Column="3" Text="08:00" />
-                            <TextBlock Grid.Column="4" Text="内容" VerticalAlignment="Center" Margin="8,0,0,0" />
+                            <TextBlock Grid.Column="4" Text="{DynamicResource Content}" VerticalAlignment="Center" Margin="8,0,0,0" />
                             <TextBox x:Name="ScheduleMessageBox" Grid.Column="5" Text="今日签到" />
-                            <Button Grid.Column="6" Content="添加任务" Click="AddSchedule_Click" />
-                            <Button x:Name="RunNowButton" Grid.Column="7" Content="立即执行" Click="RunNow_Click"
-                                    Background="#2481CC" Foreground="White" />
-                            <Button Grid.Column="8" Content="编辑选中" Click="EditSchedule_Click" />
-                            <Button Grid.Column="9" Content="删除选中" Click="RemoveSchedule_Click" />
-                            <TextBlock Grid.Row="1" Text="周期" VerticalAlignment="Center" />
+                            <Button Grid.Column="6" Content="{DynamicResource AddTask}" Click="AddSchedule_Click" />
+                            <Button x:Name="RunNowButton" Grid.Column="7" Content="{DynamicResource RunNow}" Click="RunNow_Click"
+                                    Style="{StaticResource PrimaryButtonStyle}" />
+                            <Button Grid.Column="8" Content="{DynamicResource EditSelected}" Click="EditSchedule_Click" />
+                            <Button Grid.Column="9" Content="{DynamicResource DeleteSelected}" Click="RemoveSchedule_Click" />
+                            <TextBlock Grid.Row="1" Text="{DynamicResource Period}" VerticalAlignment="Center" />
                             <ComboBox x:Name="SchedulePeriodBox" Grid.Row="1" Grid.Column="1"
                                       SelectionChanged="SchedulePeriodBox_SelectionChanged">
-                                <ComboBoxItem Content="每天" Tag="Daily" />
-                                <ComboBoxItem Content="每周" Tag="Weekly" />
+                                <ComboBoxItem Content="{DynamicResource Daily}" Tag="Daily" />
+                                <ComboBoxItem Content="{DynamicResource Weekly}" Tag="Weekly" />
                             </ComboBox>
-                            <TextBlock Grid.Row="1" Grid.Column="2" Text="星期" VerticalAlignment="Center" Margin="8,0,0,0" />
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="{DynamicResource Weekday}" VerticalAlignment="Center" Margin="8,0,0,0" />
                             <UniformGrid x:Name="ScheduleWeekDaysPanel" Grid.Row="1" Grid.Column="3"
                                          Grid.ColumnSpan="7" Rows="1" IsEnabled="False" Margin="4,0">
-                                <CheckBox x:Name="AddMonday" Content="一" VerticalAlignment="Center" />
-                                <CheckBox x:Name="AddTuesday" Content="二" VerticalAlignment="Center" />
-                                <CheckBox x:Name="AddWednesday" Content="三" VerticalAlignment="Center" />
-                                <CheckBox x:Name="AddThursday" Content="四" VerticalAlignment="Center" />
-                                <CheckBox x:Name="AddFriday" Content="五" VerticalAlignment="Center" />
-                                <CheckBox x:Name="AddSaturday" Content="六" VerticalAlignment="Center" />
-                                <CheckBox x:Name="AddSunday" Content="日" VerticalAlignment="Center" />
+                                <CheckBox x:Name="AddMonday" Content="{DynamicResource MondayShort}" VerticalAlignment="Center" />
+                                <CheckBox x:Name="AddTuesday" Content="{DynamicResource TuesdayShort}" VerticalAlignment="Center" />
+                                <CheckBox x:Name="AddWednesday" Content="{DynamicResource WednesdayShort}" VerticalAlignment="Center" />
+                                <CheckBox x:Name="AddThursday" Content="{DynamicResource ThursdayShort}" VerticalAlignment="Center" />
+                                <CheckBox x:Name="AddFriday" Content="{DynamicResource FridayShort}" VerticalAlignment="Center" />
+                                <CheckBox x:Name="AddSaturday" Content="{DynamicResource SaturdayShort}" VerticalAlignment="Center" />
+                                <CheckBox x:Name="AddSunday" Content="{DynamicResource SundayShort}" VerticalAlignment="Center" />
                             </UniformGrid>
                         </Grid>
                         <StackPanel Grid.Row="1">
                             <Grid Margin="0,5,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="210" />
+                                <ColumnDefinition Width="270" />
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="210" />
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="Telegram 确认" VerticalAlignment="Center" />
+                                <TextBlock Text="{DynamicResource TelegramConfirmation}" VerticalAlignment="Center" />
                                 <ComboBox x:Name="ConfirmationPeerBox" Grid.Column="1" DisplayMemberPath="Name" />
-                                <TextBlock Grid.Column="2" Text="确认邮件" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                <TextBlock Grid.Column="2" Text="{DynamicResource ConfirmationEmail}" VerticalAlignment="Center" Margin="8,0,0,0" />
                                 <TextBox x:Name="ConfirmationEmailBox" Grid.Column="3" ToolTip="可留空" />
-                                <TextBlock Grid.Column="4" Text="确认内容" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                <TextBlock Grid.Column="4" Text="{DynamicResource ConfirmationContent}" VerticalAlignment="Center" Margin="8,0,0,0" />
                                 <TextBox x:Name="ConfirmationTextBox" Grid.Column="5"
                                          Text="签到完成：{群聊}，时间 {时间}" ToolTip="支持 {群聊}、{时间}、{内容}" />
                             </Grid>
-                            <Expander Header="邮件 SMTP 配置（仅在需要邮件通知时填写）" Margin="0,4,0,0">
-                                <Grid Margin="0,5,0,5">
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                    </Grid.RowDefinitions>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="75" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="服务器" VerticalAlignment="Center" />
-                                    <TextBox x:Name="SmtpHostBox" Grid.Column="1" />
-                                    <TextBlock Grid.Column="2" Text="端口" VerticalAlignment="Center" />
-                                    <TextBox x:Name="SmtpPortBox" Grid.Column="3" Text="587" />
-                                    <TextBlock Grid.Column="4" Text="账号" VerticalAlignment="Center" />
-                                    <TextBox x:Name="SmtpUserBox" Grid.Column="5" />
-                                    <TextBlock Grid.Column="6" Text="密码/授权码" VerticalAlignment="Center" />
-                                    <PasswordBox x:Name="SmtpPasswordBox" Grid.Column="7" />
-                                    <CheckBox x:Name="SmtpSslBox" Grid.Column="8" Content="SSL" IsChecked="True" VerticalAlignment="Center" />
-                                    <TextBlock Grid.Row="1" Text="发件地址" VerticalAlignment="Center" />
-                                    <TextBox x:Name="SmtpFromBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" />
-                                    <Button Grid.Row="1" Grid.Column="5" Content="保存邮件配置" Click="SaveEmailSettings_Click" />
-                                </Grid>
-                            </Expander>
                         </StackPanel>
                         <TextBlock Grid.Row="2" Foreground="#64748B" VerticalAlignment="Center"
                                    Text="勾选任务后才能执行、编辑或删除；双击任务可启用/停用。应用保持运行并登录时按本机时区执行。" />
@@ -268,7 +239,7 @@
                                   MouseDoubleClick="ScheduleList_MouseDoubleClick">
                             <ListView.View>
                                 <GridView>
-                                    <GridViewColumn Header="选择" Width="55">
+                                    <GridViewColumn Header="{DynamicResource Select}" Width="55">
                                         <GridViewColumn.CellTemplate>
                                             <DataTemplate>
                                                 <CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
@@ -276,18 +247,18 @@
                                             </DataTemplate>
                                         </GridViewColumn.CellTemplate>
                                     </GridViewColumn>
-                                    <GridViewColumn Header="状态" Width="70" DisplayMemberBinding="{Binding EnabledText}" />
-                                    <GridViewColumn Header="群聊" Width="240" DisplayMemberBinding="{Binding ChatTitle}" />
-                                    <GridViewColumn Header="周期" Width="170" DisplayMemberBinding="{Binding PeriodText}" />
-                                    <GridViewColumn Header="发送内容" Width="340" DisplayMemberBinding="{Binding Message}" />
-                                    <GridViewColumn Header="完成通知" Width="220" DisplayMemberBinding="{Binding Confirmation}" />
-                                    <GridViewColumn Header="上次发送" Width="120" DisplayMemberBinding="{Binding LastSentText}" />
+                                    <GridViewColumn Header="{DynamicResource Status}" Width="70" DisplayMemberBinding="{Binding EnabledText}" />
+                                    <GridViewColumn Header="{DynamicResource Chat}" Width="240" DisplayMemberBinding="{Binding ChatTitle}" />
+                                    <GridViewColumn Header="{DynamicResource Period}" Width="170" DisplayMemberBinding="{Binding PeriodText}" />
+                                    <GridViewColumn Header="{DynamicResource MessageContent}" Width="340" DisplayMemberBinding="{Binding Message}" />
+                                    <GridViewColumn Header="{DynamicResource CompletionNotification}" Width="220" DisplayMemberBinding="{Binding Confirmation}" />
+                                    <GridViewColumn Header="{DynamicResource LastSent}" Width="120" DisplayMemberBinding="{Binding LastSentText}" />
                                 </GridView>
                             </ListView.View>
                         </ListView>
                     </Grid>
                 </TabItem>
-                <TabItem Header="@我的消息">
+                <TabItem Header="{DynamicResource Mentions}">
                     <Grid Margin="10">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="44" />
@@ -304,13 +275,13 @@
                                 <ColumnDefinition Width="120" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <CheckBox x:Name="MentionNotifyEnabledBox" Content="启用通知"
+                            <CheckBox x:Name="MentionNotifyEnabledBox" Content="{DynamicResource EnableNotification}"
                                       VerticalAlignment="Center" />
                             <ComboBox x:Name="MentionTargetBox" Grid.Column="1" Margin="8,0"
                                       DisplayMemberPath="Name" ToolTip="选择机器人或私聊" />
-                            <Button Grid.Column="2" Content="保存配置" Click="SaveMentionSettings_Click" />
-                            <Button Grid.Column="3" Content="测试通知" Click="TestMentionNotification_Click" />
-                            <Button Grid.Column="4" Content="打开数据目录" Click="OpenMentionDatabase_Click" />
+                            <Button Grid.Column="2" Content="{DynamicResource SaveSettings}" Click="SaveMentionSettings_Click" />
+                            <Button Grid.Column="3" Content="{DynamicResource TestNotification}" Click="TestMentionNotification_Click" />
+                            <Button Grid.Column="4" Content="{DynamicResource OpenDataDirectory}" Click="OpenMentionDatabase_Click" />
                         </Grid>
                         <Grid Grid.Row="1">
                             <Grid.ColumnDefinitions>
@@ -319,11 +290,11 @@
                                 <ColumnDefinition Width="90" />
                                 <ColumnDefinition Width="90" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="关键字" VerticalAlignment="Center" />
+                            <TextBlock Text="{DynamicResource Keyword}" VerticalAlignment="Center" />
                             <TextBox x:Name="MentionKeywordBox" Grid.Column="1" Margin="8,0"
                                      ToolTip="搜索群聊、发送人或消息内容" />
-                            <Button Grid.Column="2" Content="查询" Click="RefreshMentions_Click" />
-                            <Button Grid.Column="3" Content="重置" Click="ResetMentionQuery_Click" />
+                            <Button Grid.Column="2" Content="{DynamicResource Search}" Click="RefreshMentions_Click" />
+                            <Button Grid.Column="3" Content="{DynamicResource Reset}" Click="ResetMentionQuery_Click" />
                         </Grid>
                         <TextBlock Grid.Row="2" Foreground="#64748B" VerticalAlignment="Center"
                                    Text="只记录其他人 @ 当前账号的消息；记录和通知配置按 Telegram 账号隔离。双击查看完整内容。" />
@@ -331,17 +302,17 @@
                                   MouseDoubleClick="MentionList_MouseDoubleClick">
                             <ListView.View>
                                 <GridView>
-                                    <GridViewColumn Header="发生时间" Width="170" DisplayMemberBinding="{Binding OccurredAtText}" />
-                                    <GridViewColumn Header="群聊" Width="220" DisplayMemberBinding="{Binding ChatName}" />
-                                    <GridViewColumn Header="发送人" Width="150" DisplayMemberBinding="{Binding Sender}" />
-                                    <GridViewColumn Header="消息内容" Width="430" DisplayMemberBinding="{Binding Message}" />
-                                    <GridViewColumn Header="通知状态" Width="180" DisplayMemberBinding="{Binding NotificationStatus}" />
+                                    <GridViewColumn Header="{DynamicResource OccurredAt}" Width="170" DisplayMemberBinding="{Binding OccurredAtText}" />
+                                    <GridViewColumn Header="{DynamicResource Chat}" Width="220" DisplayMemberBinding="{Binding ChatName}" />
+                                    <GridViewColumn Header="{DynamicResource Sender}" Width="150" DisplayMemberBinding="{Binding Sender}" />
+                                    <GridViewColumn Header="{DynamicResource MessageContent}" Width="430" DisplayMemberBinding="{Binding Message}" />
+                                    <GridViewColumn Header="{DynamicResource NotificationStatus}" Width="180" DisplayMemberBinding="{Binding NotificationStatus}" />
                                 </GridView>
                             </ListView.View>
                         </ListView>
                     </Grid>
                 </TabItem>
-                <TabItem Header="异常中心">
+                <TabItem Header="{DynamicResource Exceptions}">
                     <Grid Margin="10">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="44" />
@@ -353,36 +324,36 @@
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="130" />
+                                <ColumnDefinition Width="165" />
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="240" />
+                                <ColumnDefinition Width="280" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="220" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <CheckBox x:Name="ExceptionNotifyEnabledBox" Content="启用自动通知"
+                            <CheckBox x:Name="ExceptionNotifyEnabledBox" Content="{DynamicResource EnableAutoNotification}"
                                       VerticalAlignment="Center" />
                             <ComboBox x:Name="ExceptionMinimumLevelBox" Grid.Column="1" Margin="8,0">
-                                <ComboBoxItem Content="错误及以上" Tag="Error" />
-                                <ComboBoxItem Content="仅严重异常" Tag="Critical" />
+                                <ComboBoxItem Content="{DynamicResource ErrorOrHigher}" Tag="Error" />
+                                <ComboBoxItem Content="{DynamicResource CriticalOnly}" Tag="Critical" />
                             </ComboBox>
                             <TextBlock Grid.Column="2" Text="Telegram" VerticalAlignment="Center" />
                             <ComboBox x:Name="ExceptionPeerBox" Grid.Column="3" DisplayMemberPath="Name" />
-                            <TextBlock Grid.Column="4" Text="通知邮箱" VerticalAlignment="Center" Margin="10,0,4,0" />
+                            <TextBlock Grid.Column="4" Text="{DynamicResource NotificationEmail}" VerticalAlignment="Center" Margin="10,0,4,0" />
                             <TextBox x:Name="ExceptionEmailBox" Grid.Column="5" ToolTip="留空表示不发送邮件" />
                         </Grid>
                         <StackPanel Grid.Row="1" Orientation="Horizontal">
-                            <Button Content="保存通知配置" Click="SaveExceptionSettings_Click" />
-                            <Button Content="测试通知" Click="TestExceptionNotification_Click" />
-                            <Button Content="重发选中通知" Click="RetryExceptionNotifications_Click" />
-                            <Button Content="打开数据库目录" Click="OpenExceptionDatabase_Click" />
+                            <Button Content="{DynamicResource SaveNotificationSettings}" Click="SaveExceptionSettings_Click" />
+                            <Button Content="{DynamicResource TestNotification}" Click="TestExceptionNotification_Click" />
+                            <Button Content="{DynamicResource RetryNotification}" Click="RetryExceptionNotifications_Click" />
+                            <Button Content="{DynamicResource OpenDatabaseDirectory}" Click="OpenExceptionDatabase_Click" />
                         </StackPanel>
                         <Grid Grid.Row="2">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="145" />
+                                <ColumnDefinition Width="180" />
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="145" />
+                                <ColumnDefinition Width="180" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="130" />
                                 <ColumnDefinition Width="Auto" />
@@ -390,21 +361,21 @@
                                 <ColumnDefinition Width="90" />
                                 <ColumnDefinition Width="90" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="开始日期" VerticalAlignment="Center" />
+                            <TextBlock Text="{DynamicResource StartDate}" VerticalAlignment="Center" />
                             <DatePicker x:Name="ExceptionFromDatePicker" Grid.Column="1" Margin="4,0,8,0" />
-                            <TextBlock Grid.Column="2" Text="结束日期" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="2" Text="{DynamicResource EndDate}" VerticalAlignment="Center" />
                             <DatePicker x:Name="ExceptionToDatePicker" Grid.Column="3" Margin="4,0,8,0" />
-                            <TextBlock Grid.Column="4" Text="级别" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="4" Text="{DynamicResource Level}" VerticalAlignment="Center" />
                             <ComboBox x:Name="ExceptionQueryLevelBox" Grid.Column="5" Margin="4,0,8,0">
-                                <ComboBoxItem Content="全部" Tag="All" />
+                                <ComboBoxItem Content="{DynamicResource All}" Tag="All" />
                                 <ComboBoxItem Content="Error" Tag="Error" />
                                 <ComboBoxItem Content="Critical" Tag="Critical" />
                             </ComboBox>
-                            <TextBlock Grid.Column="6" Text="关键字" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="6" Text="{DynamicResource Keyword}" VerticalAlignment="Center" />
                             <TextBox x:Name="ExceptionKeywordBox" Grid.Column="7" Margin="4,0,8,0"
                                      ToolTip="搜索来源、异常消息和堆栈" />
-                            <Button Grid.Column="8" Content="查询" Click="RefreshExceptions_Click" />
-                            <Button Grid.Column="9" Content="重置" Click="ResetExceptionQuery_Click" />
+                            <Button Grid.Column="8" Content="{DynamicResource Search}" Click="RefreshExceptions_Click" />
+                            <Button Grid.Column="9" Content="{DynamicResource Reset}" Click="ResetExceptionQuery_Click" />
                         </Grid>
                         <TextBlock Grid.Row="3" Foreground="#64748B" VerticalAlignment="Center"
                                    Text="仅带 Exception/堆栈的 Error、Critical 日志写入 SQLite；双击记录查看详情，列表支持多选重发。" />
@@ -412,41 +383,47 @@
                                   MouseDoubleClick="ExceptionList_MouseDoubleClick">
                             <ListView.View>
                                 <GridView>
-                                    <GridViewColumn Header="编号" Width="70" DisplayMemberBinding="{Binding Id}" />
-                                    <GridViewColumn Header="发生时间" Width="170" DisplayMemberBinding="{Binding OccurredAtText}" />
-                                    <GridViewColumn Header="级别" Width="80" DisplayMemberBinding="{Binding Level}" />
-                                    <GridViewColumn Header="来源" Width="130" DisplayMemberBinding="{Binding Category}" />
-                                    <GridViewColumn Header="异常消息" Width="360" DisplayMemberBinding="{Binding Message}" />
+                                    <GridViewColumn Header="{DynamicResource Number}" Width="70" DisplayMemberBinding="{Binding Id}" />
+                                    <GridViewColumn Header="{DynamicResource OccurredAt}" Width="170" DisplayMemberBinding="{Binding OccurredAtText}" />
+                                    <GridViewColumn Header="{DynamicResource Level}" Width="80" DisplayMemberBinding="{Binding Level}" />
+                                    <GridViewColumn Header="{DynamicResource Source}" Width="130" DisplayMemberBinding="{Binding Category}" />
+                                    <GridViewColumn Header="{DynamicResource ExceptionMessage}" Width="360" DisplayMemberBinding="{Binding Message}" />
                                     <GridViewColumn Header="Telegram" Width="170" DisplayMemberBinding="{Binding TelegramStatus}" />
-                                    <GridViewColumn Header="邮件" Width="170" DisplayMemberBinding="{Binding EmailStatus}" />
+                                    <GridViewColumn Header="{DynamicResource Email}" Width="170" DisplayMemberBinding="{Binding EmailStatus}" />
                                 </GridView>
                             </ListView.View>
                         </ListView>
                     </Grid>
                 </TabItem>
-                <TabItem Header="运行日志">
+                <TabItem Header="{DynamicResource RuntimeLogs}">
                     <Grid Margin="10">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="44" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
                         <StackPanel Orientation="Horizontal">
-                            <Button Content="打开日志目录" Click="OpenLogDirectory_Click" />
-                            <Button Content="清空当前显示" Click="ClearLogDisplay_Click" />
+                            <Button Content="{DynamicResource OpenLogDirectory}" Click="OpenLogDirectory_Click" />
+                            <Button Content="{DynamicResource ClearDisplay}" Click="ClearLogDisplay_Click" />
                             <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Foreground="#64748B"
                                        Text="日志按天保存，自动保留最近 30 天；不记录密码、验证码和消息正文。" />
                         </StackPanel>
                         <RichTextBox x:Name="LogConsole" Grid.Row="1" IsReadOnly="True"
                                      FontFamily="Cascadia Mono, Consolas" FontSize="13"
-                                     Background="#000000" Foreground="#FFFFFF" BorderThickness="0"
+                                     Background="#090D12" Foreground="#F8FAFC" Padding="10"
+                                     BorderBrush="#1E293B" BorderThickness="1"
                                      VerticalScrollBarVisibility="Auto" />
                     </Grid>
                 </TabItem>
             </TabControl>
         </Grid>
 
-        <Border Grid.Row="2" BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" Margin="0,8,0,0">
-            <TextBlock x:Name="StatusText" VerticalAlignment="Center" Foreground="#415064" />
+        <Border Grid.Row="2" Background="White" BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1" CornerRadius="8" Margin="0,8,0,0" Padding="4">
+            <TextBox x:Name="StatusText" IsReadOnly="True" TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                     VerticalContentAlignment="Center" Foreground="#415064"
+                     Background="Transparent" BorderThickness="0" Padding="4,2"
+                     ToolTip="状态信息支持选择复制，内容较长时可上下滚动查看" />
         </Border>
     </Grid>
 </Window>

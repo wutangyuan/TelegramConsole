@@ -42,12 +42,6 @@ public partial class MainWindow : Window
         ApiHashBox.Password = _settings.ApiHash;
         PhoneBox.Text = _settings.PhoneNumber;
         MonitorEnabledBox.IsChecked = _settings.MonitorEnabled;
-        SmtpHostBox.Text = _settings.Email.SmtpHost;
-        SmtpPortBox.Text = _settings.Email.SmtpPort.ToString();
-        SmtpUserBox.Text = _settings.Email.UserName;
-        SmtpPasswordBox.Password = _settings.Email.Password;
-        SmtpFromBox.Text = _settings.Email.FromAddress;
-        SmtpSslBox.IsChecked = _settings.Email.EnableSsl;
         ExceptionNotifyEnabledBox.IsChecked = true;
         ExceptionMinimumLevelBox.SelectedIndex = 0;
         ExceptionQueryLevelBox.SelectedIndex = 0;
@@ -58,10 +52,11 @@ public partial class MainWindow : Window
         SchedulePeriodBox.SelectedIndex = 0;
         AddMonday.IsChecked = true;
         RenderSchedules();
-        SetStatus("请配置 Telegram API 参数后点击“一键登录”");
+        SetStatus(L("ConfigureTelegram"));
 
         _telegram.MessageReceived += line => Dispatcher.BeginInvoke(() => HandleIncoming(line));
         _telegram.Log += text => Dispatcher.BeginInvoke(() => SetStatus(text));
+        _telegram.ConnectionStateChanged += state => Dispatcher.BeginInvoke(() => HandleConnectionState(state));
         _scheduler.Status += text => Dispatcher.BeginInvoke(() =>
         {
             SetStatus(text);
@@ -86,8 +81,8 @@ public partial class MainWindow : Window
             ?? throw new InvalidOperationException("找不到应用图标资源");
         using var sourceIcon = new System.Drawing.Icon(resource.Stream);
         var trayMenu = new System.Windows.Forms.ContextMenuStrip();
-        trayMenu.Items.Add("显示主窗口", null, (_, _) => Dispatcher.BeginInvoke(ShowMainWindow));
-        trayMenu.Items.Add("退出程序", null, (_, _) => Dispatcher.BeginInvoke(ExitApplication));
+        trayMenu.Items.Add(L("ShowMainWindow"), null, (_, _) => Dispatcher.BeginInvoke(ShowMainWindow));
+        trayMenu.Items.Add(L("ExitApplication"), null, (_, _) => Dispatcher.BeginInvoke(ExitApplication));
         _trayIcon = new System.Windows.Forms.NotifyIcon
         {
             Icon = (System.Drawing.Icon)sourceIcon.Clone(),
@@ -119,17 +114,20 @@ public partial class MainWindow : Window
     {
         var window = new SettingsWindow(_settings, _store) { Owner = this };
         if (window.ShowDialog() == true)
+        {
+            RenderSchedules();
             SetStatus(_settings.Proxy.Enabled
-                ? $"代理设置已加密保存：{(_settings.Proxy.Type == "MtProxy" ? "MTProxy" : $"SOCKS5 {_settings.Proxy.Host}:{_settings.Proxy.Port}")}"
-                : "代理已关闭，将使用直连");
+                ? LF("ProxySaved", _settings.Proxy.Type == "MtProxy" ? "MTProxy" : $"SOCKS5 {_settings.Proxy.Host}:{_settings.Proxy.Port}")
+                : L("ProxyDisabled"));
+        }
     }
 
     private async Task BeginLoginAsync()
     {
         if (!int.TryParse(ApiIdBox.Text.Trim(), out var apiId) || apiId <= 0)
-            throw new InvalidOperationException("API ID 必须是正整数");
+            throw new InvalidOperationException(L("ApiIdInvalid"));
         if (string.IsNullOrWhiteSpace(ApiHashBox.Password) || string.IsNullOrWhiteSpace(PhoneBox.Text))
-            throw new InvalidOperationException("请填写 API Hash 和手机号（含国家区号）");
+            throw new InvalidOperationException(L("FillLoginSettings"));
 
         _settings.ApiId = apiId;
         _settings.ApiHash = ApiHashBox.Password.Trim();
@@ -137,7 +135,7 @@ public partial class MainWindow : Window
         _store.Save(_settings);
         await DeactivateAccountAsync();
         SetLoginBusy(true);
-        SetStatus("正在连接 Telegram...");
+        SetStatus(L("ConnectingTelegram"));
         await HandleLoginResultAsync(await _telegram.BeginLoginAsync(_settings));
     }
 
@@ -172,7 +170,7 @@ public partial class MainWindow : Window
         var value = LoginPasswordBox.Visibility == Visibility.Visible
             ? LoginPasswordBox.Password
             : LoginValueBox.Text;
-        if (string.IsNullOrWhiteSpace(value)) throw new InvalidOperationException("请输入登录所需信息");
+        if (string.IsNullOrWhiteSpace(value)) throw new InvalidOperationException(L("LoginInputRequired"));
         ContinueLoginButton.IsEnabled = false;
         await HandleLoginResultAsync(await _telegram.ContinueLoginAsync(value.Trim()));
     }
@@ -191,14 +189,14 @@ public partial class MainWindow : Window
             ContinueLoginButton.Visibility = Visibility.Visible;
             ContinueLoginButton.IsEnabled = true;
             if (isPassword) LoginPasswordBox.Focus(); else LoginValueBox.Focus();
-            SetStatus($"Telegram 要求输入：{PromptText(prompt)}");
+            SetStatus(LF("TelegramRequires", PromptText(prompt)));
             return;
         }
 
         LoginPromptLabel.Visibility = LoginValueBox.Visibility = LoginPasswordBox.Visibility =
             ContinueLoginButton.Visibility = Visibility.Collapsed;
         SetLoginBusy(false);
-        SetStatus($"已登录：{_telegram.CurrentUser}");
+        SetStatus(LF("LoggedIn", _telegram.CurrentUser));
         ShowAuthenticatedAccount();
         await ActivateAccountAsync();
         await LoadDialogsAsync();
@@ -208,9 +206,51 @@ public partial class MainWindow : Window
     private void ShowAuthenticatedAccount()
     {
         LoggedInAccountText.Text = _telegram.CurrentUser;
+        ConnectionStatusText.Text = L("Online");
+        ConnectionStatusText.Foreground = Brushes.ForestGreen;
+        ConnectionStatusDot.Background = Brushes.LimeGreen;
         LoginFormPanel.Visibility = Visibility.Collapsed;
         LoggedInPanel.Visibility = Visibility.Visible;
         LoginButton.IsEnabled = false;
+    }
+
+    private void HandleConnectionState(TelegramConnectionState state)
+    {
+        switch (state.Status)
+        {
+            case TelegramConnectionStatus.Connecting:
+                if (LoggedInPanel.Visibility == Visibility.Visible)
+                {
+                    ConnectionStatusText.Text = L("ConnectingStatus");
+                    ConnectionStatusText.Foreground = Brushes.DarkOrange;
+                    ConnectionStatusDot.Background = Brushes.DarkOrange;
+                }
+                SetStatus(state.Message, Brushes.DarkOrange);
+                break;
+            case TelegramConnectionStatus.Connected:
+                if (_telegram.CurrentUserId != 0) ShowAuthenticatedAccount();
+                SetStatus(state.Message, Brushes.ForestGreen);
+                break;
+            case TelegramConnectionStatus.Disconnected:
+                ShowDisconnectedLogin(state.Message);
+                break;
+        }
+    }
+
+    private void ShowDisconnectedLogin(string message)
+    {
+        LoggedInPanel.Visibility = Visibility.Collapsed;
+        LoginFormPanel.Visibility = Visibility.Visible;
+        LoginPromptLabel.Visibility = LoginValueBox.Visibility = LoginPasswordBox.Visibility =
+            ContinueLoginButton.Visibility = Visibility.Collapsed;
+        SetLoginBusy(false);
+        SetStatus(message, Brushes.OrangeRed);
+        if (!IsVisible && _trayIcon is not null)
+            _trayIcon.ShowBalloonTip(
+                5000,
+                L("ConnectionErrorTitle"),
+                L("ConnectionErrorBody"),
+                System.Windows.Forms.ToolTipIcon.Error);
     }
 
     private async Task ActivateAccountAsync()
@@ -318,7 +358,7 @@ public partial class MainWindow : Window
     {
         if (DialogsList.SelectedItem is not DialogItem dialog)
         {
-            ShowError("请先选择要打开的私聊或群聊");
+            ShowError(L("SelectDialogFirst"));
             return;
         }
         var window = new ChatConsoleWindow(_telegram, dialog);
@@ -329,7 +369,7 @@ public partial class MainWindow : Window
     {
         DialogsList.SelectedItem = null;
         ChatConsole.Document.Blocks.Clear();
-        SetStatus("聊天终端已切换为空屏；重新选择会话后恢复显示");
+        SetStatus(L("BlankStatus"));
     }
 
     private void ToggleDialogsButton_Click(object sender, RoutedEventArgs e)
@@ -339,13 +379,13 @@ public partial class MainWindow : Window
             _expandedDialogWidth = DialogColumn.Width;
             DialogColumn.Width = new GridLength(0);
             ToggleDialogsButton.Content = "❯";
-            ToggleDialogsButton.ToolTip = "展开会话列表";
+            ToggleDialogsButton.ToolTip = L("ExpandDialogs");
         }
         else
         {
             DialogColumn.Width = _expandedDialogWidth.Value > 0 ? _expandedDialogWidth : new GridLength(290);
             ToggleDialogsButton.Content = "❮";
-            ToggleDialogsButton.ToolTip = "收起会话列表";
+            ToggleDialogsButton.ToolTip = L("CollapseDialogs");
         }
     }
 
@@ -399,13 +439,13 @@ public partial class MainWindow : Window
     private async Task SendMessageAsync()
     {
         if (DialogsList.SelectedItem is not DialogItem dialog)
-            throw new InvalidOperationException("请先在左侧选择私聊或群聊");
+            throw new InvalidOperationException(L("SelectChatFirst"));
         var text = MessageBox.Text.Trim();
         if (text.Length == 0) return;
         await _telegram.SendAsync(dialog, text);
         MessageBox.Clear();
         AppendConsole(ChatConsole, $"[{DateTime.Now:HH:mm:ss}] 我: {text}", Brushes.LimeGreen);
-        SetStatus($"消息已发送到 {dialog.Name}");
+        SetStatus(LF("MessageSent", dialog.Name));
     }
 
     private void HandleIncoming(ChatLine line)
@@ -426,23 +466,23 @@ public partial class MainWindow : Window
     {
         try
         {
-            if (_activeAccount is null) throw new InvalidOperationException("请先登录 Telegram 账号");
+            if (_activeAccount is null) throw new InvalidOperationException(L("LoginFirst"));
             if (ScheduleChatBox.SelectedItem is not DialogItem group)
-                throw new InvalidOperationException("请先登录并选择目标群聊");
+                throw new InvalidOperationException(L("SelectTargetChat"));
             if (!TimeSpan.TryParseExact(ScheduleTimeBox.Text.Trim(), @"hh\:mm", CultureInfo.InvariantCulture, out var time))
-                throw new InvalidOperationException("时间格式应为 HH:mm，例如 08:00");
-            if (time >= TimeSpan.FromDays(1)) throw new InvalidOperationException("请输入 00:00 到 23:59 之间的时间");
+                throw new InvalidOperationException(L("InvalidTimeFormat"));
+            if (time >= TimeSpan.FromDays(1)) throw new InvalidOperationException(L("InvalidTimeRange"));
             var message = ScheduleMessageBox.Text.Trim();
-            if (message.Length == 0) throw new InvalidOperationException("发送内容不能为空");
+            if (message.Length == 0) throw new InvalidOperationException(L("MessageRequired"));
             var confirmationTarget = ConfirmationPeerBox.SelectedItem as ConfirmationTarget;
             var confirmationText = ConfirmationTextBox.Text.Trim();
             if (confirmationText.Length == 0) confirmationText = "签到完成：{群聊}，时间 {时间}";
             var confirmationEmail = ConfirmationEmailBox.Text.Trim();
-            if (confirmationEmail.Length > 0) SaveEmailSettings(false);
+            EnsureEmailConfigured(confirmationEmail);
             var period = SchedulePeriodBox.SelectedIndex == 1 ? SchedulePeriod.Weekly : SchedulePeriod.Daily;
             var weekDays = GetSelectedWeekDays();
             if (period == SchedulePeriod.Weekly && weekDays.Count == 0)
-                throw new InvalidOperationException("每周任务至少需要选择一天");
+                throw new InvalidOperationException(L("WeeklyDayRequired"));
 
             var scheduledTask = new ScheduledMessage
             {
@@ -463,7 +503,7 @@ public partial class MainWindow : Window
             _store.Save(_settings);
             await _scheduler.UpsertAsync(scheduledTask);
             RenderSchedules();
-            SetStatus("定时任务已添加");
+            SetStatus(L("TaskAdded"));
         }
         catch (Exception ex)
         {
@@ -478,7 +518,7 @@ public partial class MainWindow : Window
         var selected = GetCheckedScheduleRows();
         if (selected.Count == 0)
         {
-            ShowError("请先勾选至少一个定时任务");
+            ShowError(L("SelectTask"));
             return;
         }
         var selectedIds = selected.Select(x => x.Id).ToHashSet();
@@ -486,7 +526,7 @@ public partial class MainWindow : Window
         _store.Save(_settings);
         foreach (var row in selected) await _scheduler.DeleteAsync(row.Id);
         RenderSchedules();
-        SetStatus($"已删除 {selected.Count} 个定时任务");
+        SetStatus(LF("TasksDeleted", selected.Count));
     }
 
     private async void EditSchedule_Click(object sender, RoutedEventArgs e)
@@ -494,10 +534,10 @@ public partial class MainWindow : Window
         await RunUiAsync(async () =>
         {
             var selected = GetCheckedScheduleRows();
-            if (selected.Count != 1) throw new InvalidOperationException("编辑时请只勾选一个定时任务");
+            if (selected.Count != 1) throw new InvalidOperationException(L("EditOneTask"));
             var task = _activeAccount?.Schedules.FirstOrDefault(x => x.Id == selected[0].Id)
-                ?? throw new InvalidOperationException("找不到选中的定时任务");
-            var editor = new ScheduleEditWindow(task, _allDialogs) { Owner = this };
+                ?? throw new InvalidOperationException(L("TaskNotFound"));
+            var editor = new ScheduleEditWindow(task, _allDialogs, IsEmailConfigured()) { Owner = this };
             if (editor.ShowDialog() != true) return;
             _store.Save(_settings);
             await _scheduler.UpsertAsync(task);
@@ -512,11 +552,16 @@ public partial class MainWindow : Window
         await RunUiAsync(async () =>
         {
             var selected = GetCheckedScheduleRows();
-            if (selected.Count == 0) throw new InvalidOperationException("请先勾选至少一个定时任务");
+            if (selected.Count == 0) throw new InvalidOperationException(L("SelectTask"));
+            var selectedIds = selected.Select(x => x.Id).ToHashSet();
+            var emailRecipient = _activeAccount?.Schedules
+                .FirstOrDefault(x => selectedIds.Contains(x.Id) && !string.IsNullOrWhiteSpace(x.ConfirmationEmail))
+                ?.ConfirmationEmail;
+            EnsureEmailConfigured(emailRecipient ?? "");
             RunNowButton.IsEnabled = false;
             try
             {
-                SetStatus($"正在立即执行 {selected.Count} 个任务...");
+                SetStatus(LF("TasksRunning", selected.Count));
                 var errors = new List<string>();
                 foreach (var row in selected)
                 {
@@ -532,7 +577,7 @@ public partial class MainWindow : Window
                 RenderSchedules();
                 if (errors.Count > 0)
                     throw new InvalidOperationException($"{selected.Count - errors.Count} 个成功，{errors.Count} 个失败：\n" + string.Join("\n", errors));
-                SetStatus($"已完成 {selected.Count} 个任务的立即执行");
+                SetStatus(LF("TasksCompleted", selected.Count));
             }
             finally
             {
@@ -558,7 +603,7 @@ public partial class MainWindow : Window
             .OrderBy(x => x.Time)
             .Select(x => new ScheduleRow(
                 x.Id,
-                x.Enabled ? "启用" : "停用",
+                x.Enabled ? L("Enabled") : L("Disabled"),
                 x.ChatTitle,
                 DescribeSchedule(x),
                 x.Message,
@@ -570,38 +615,23 @@ public partial class MainWindow : Window
     private List<ScheduleRow> GetCheckedScheduleRows() =>
         ScheduleList.Items.Cast<ScheduleRow>().Where(x => x.IsChecked).ToList();
 
-    private void SaveEmailSettings_Click(object sender, RoutedEventArgs e)
-    {
-        try
-        {
-            SaveEmailSettings(true);
-        }
-        catch (Exception ex)
-        {
-            ShowError(ex.Message);
-        }
-    }
-
-    private void SaveEmailSettings(bool showStatus)
-    {
-        if (!int.TryParse(SmtpPortBox.Text.Trim(), out var port) || port is < 1 or > 65535)
-            throw new InvalidOperationException("SMTP 端口不正确");
-        _settings.Email.SmtpHost = SmtpHostBox.Text.Trim();
-        _settings.Email.SmtpPort = port;
-        _settings.Email.UserName = SmtpUserBox.Text.Trim();
-        _settings.Email.Password = SmtpPasswordBox.Password;
-        _settings.Email.FromAddress = SmtpFromBox.Text.Trim();
-        _settings.Email.EnableSsl = SmtpSslBox.IsChecked == true;
-        _store.Save(_settings);
-        if (showStatus) SetStatus("邮件配置已加密保存");
-    }
-
     private static string BuildConfirmationSummary(ScheduledMessage task)
     {
         var targets = new List<string>();
         if (task.ConfirmationPeerId is not null) targets.Add("TG: " + task.ConfirmationPeerTitle);
-        if (!string.IsNullOrWhiteSpace(task.ConfirmationEmail)) targets.Add("邮件: " + task.ConfirmationEmail);
-        return targets.Count == 0 ? "不通知" : string.Join(" / ", targets);
+        if (!string.IsNullOrWhiteSpace(task.ConfirmationEmail)) targets.Add(L("EmailPrefix") + task.ConfirmationEmail);
+        return targets.Count == 0 ? L("NoNotification") : string.Join(" / ", targets);
+    }
+
+    private bool IsEmailConfigured() =>
+        !string.IsNullOrWhiteSpace(_settings.Email.SmtpHost)
+        && _settings.Email.SmtpPort is >= 1 and <= 65535
+        && !string.IsNullOrWhiteSpace(_settings.Email.FromAddress);
+
+    private void EnsureEmailConfigured(string recipient)
+    {
+        if (!string.IsNullOrWhiteSpace(recipient) && !IsEmailConfigured())
+            throw new InvalidOperationException(L("EmailNotConfigured"));
     }
 
     private void SchedulePeriodBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -626,14 +656,15 @@ public partial class MainWindow : Window
     private static string DescribeSchedule(ScheduledMessage task)
     {
         var time = task.Time.ToString(@"hh\:mm");
-        if (task.Period == SchedulePeriod.Daily) return $"每天 {time}";
+        if (task.Period == SchedulePeriod.Daily) return LF("DailySchedule", time);
         var names = new Dictionary<DayOfWeek, string>
         {
-            [DayOfWeek.Monday] = "一", [DayOfWeek.Tuesday] = "二", [DayOfWeek.Wednesday] = "三",
-            [DayOfWeek.Thursday] = "四", [DayOfWeek.Friday] = "五", [DayOfWeek.Saturday] = "六",
-            [DayOfWeek.Sunday] = "日"
+            [DayOfWeek.Monday] = L("MondayShort"), [DayOfWeek.Tuesday] = L("TuesdayShort"), [DayOfWeek.Wednesday] = L("WednesdayShort"),
+            [DayOfWeek.Thursday] = L("ThursdayShort"), [DayOfWeek.Friday] = L("FridayShort"), [DayOfWeek.Saturday] = L("SaturdayShort"),
+            [DayOfWeek.Sunday] = L("SundayShort")
         };
-        return $"每周{string.Join('、', task.WeekDays.Select(x => names[x]))} {time}";
+        var separator = LocalizationManager.CurrentLanguage == "en-US" ? ", " : "、";
+        return LF("WeeklySchedule", string.Join(separator, task.WeekDays.Select(x => names[x])), time);
     }
 
     private async Task RunUiAsync(Func<Task> action)
@@ -642,12 +673,19 @@ public partial class MainWindow : Window
         {
             await action();
         }
+        catch (InvalidOperationException ex)
+        {
+            SetLoginBusy(false);
+            ContinueLoginButton.IsEnabled = true;
+            SetStatus(LF("ErrorPrefix", ex.Message));
+            ShowError(ex.Message);
+        }
         catch (Exception ex)
         {
             _logger.Error("UI", "界面操作失败", ex);
             SetLoginBusy(false);
             ContinueLoginButton.IsEnabled = true;
-            SetStatus("错误：" + ex.Message);
+            SetStatus(LF("ErrorPrefix", ex.Message));
             ShowError(ex.Message);
         }
     }
@@ -675,15 +713,6 @@ public partial class MainWindow : Window
         if (int.TryParse(ApiIdBox.Text, out var apiId)) _settings.ApiId = apiId;
         _settings.ApiHash = ApiHashBox.Password.Trim();
         _settings.PhoneNumber = PhoneBox.Text.Trim();
-        if (int.TryParse(SmtpPortBox.Text.Trim(), out var smtpPort) && smtpPort is >= 1 and <= 65535)
-        {
-            _settings.Email.SmtpHost = SmtpHostBox.Text.Trim();
-            _settings.Email.SmtpPort = smtpPort;
-            _settings.Email.UserName = SmtpUserBox.Text.Trim();
-            _settings.Email.Password = SmtpPasswordBox.Password;
-            _settings.Email.FromAddress = SmtpFromBox.Text.Trim();
-            _settings.Email.EnableSsl = SmtpSslBox.IsChecked == true;
-        }
         _store.Save(_settings);
         _exceptionMonitor.RecordsChanged -= ExceptionMonitor_RecordsChanged;
         _exceptionMonitor.Dispose();
@@ -837,6 +866,7 @@ public partial class MainWindow : Window
         alerts.TelegramPeerKind = target?.Kind ?? "";
         alerts.TelegramPeerTitle = target?.Dialog?.Name ?? "";
         alerts.EmailRecipient = ExceptionEmailBox.Text.Trim();
+        EnsureEmailConfigured(alerts.EmailRecipient);
         _store.Save(_settings);
         if (showStatus) SetStatus("异常通知配置已加密保存");
     }
@@ -887,7 +917,7 @@ public partial class MainWindow : Window
             x.Details,
             x.TelegramStatus,
             x.EmailStatus)).ToList();
-        SetStatus($"异常查询完成，共 {records.Count} 条");
+        SetStatus(LF("ExceptionQueryComplete", records.Count));
     }
 
     private async void ResetExceptionQuery_Click(object sender, RoutedEventArgs e)
@@ -949,18 +979,23 @@ public partial class MainWindow : Window
         ApiIdBox.IsEnabled = ApiHashBox.IsEnabled = PhoneBox.IsEnabled = !busy;
     }
 
-    private void SetStatus(string text) => StatusText.Text = $"[{DateTime.Now:HH:mm:ss}] {text}";
+    private void SetStatus(string text, Brush? color = null)
+    {
+        StatusText.Text = $"[{DateTime.Now:HH:mm:ss}] {text}";
+        StatusText.Foreground = color ?? Brushes.DarkSlateGray;
+        StatusText.ScrollToEnd();
+    }
 
     private void ShowError(string text) => System.Windows.MessageBox.Show(
-        this, text, "操作失败", MessageBoxButton.OK, MessageBoxImage.Error);
+        this, text, L("OperationFailed"), MessageBoxButton.OK, MessageBoxImage.Error);
 
     private static string PromptText(string prompt) => prompt switch
     {
-        "verification_code" => "验证码",
-        "password" => "两步验证密码",
-        "name" => "姓名",
-        "email" => "邮箱",
-        "email_verification_code" => "邮箱验证码",
+        "verification_code" => L("VerificationCode"),
+        "password" => L("PromptPassword"),
+        "name" => L("PromptName"),
+        "email" => L("PromptEmail"),
+        "email_verification_code" => L("PromptEmailCode"),
         _ => prompt
     };
 
@@ -1000,7 +1035,13 @@ public partial class MainWindow : Window
         public string LastSentText { get; } = lastSentText;
     }
 
-    private sealed record ConfirmationTarget(DialogItem? Dialog, string Kind, string Name);
+    private static string L(string key) => LocalizationManager.Text(key);
+    private static string LF(string key, params object?[] args) => LocalizationManager.Format(key, args);
+
+    private sealed record ConfirmationTarget(DialogItem? Dialog, string Kind, string Name)
+    {
+        public override string ToString() => Name;
+    }
 
     private sealed record MentionRow(
         long Id,

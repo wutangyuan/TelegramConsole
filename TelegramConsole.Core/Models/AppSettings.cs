@@ -2,6 +2,7 @@ namespace TelegramConsole.Core;
 
 public sealed class AppSettings
 {
+    public string Language { get; set; } = "";
     public int ApiId { get; set; }
     public string ApiHash { get; set; } = "";
     public string PhoneNumber { get; set; } = "";
