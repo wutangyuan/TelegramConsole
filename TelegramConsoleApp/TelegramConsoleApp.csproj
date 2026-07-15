@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>TelegramConsoleApp</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TelegramConsole.Core\TelegramConsole.Core.csproj" />
+    <ProjectReference Include="..\TelegramConsole.Infrastructure\TelegramConsole.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

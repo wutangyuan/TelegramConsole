@@ -1,0 +1,30 @@
+# Visual Studio / build outputs
+.vs/
+output/
+**/bin/
+**/obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Local application data and credentials
+*.session
+*.session-journal
+settings.dat
+settings.json
+exceptions.db
+exceptions.db-*
+*.log
+logs/
+
+# Workspace projects not belonging to this solution
+WTelegramClient/
+tg-sign-plus/
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+

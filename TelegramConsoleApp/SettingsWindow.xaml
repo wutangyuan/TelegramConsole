@@ -1,0 +1,74 @@
+<Window x:Class="TelegramConsoleApp.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="程序设置" Width="560" Height="470" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" Background="#F5F7FA"
+        FontFamily="Microsoft YaHei UI" FontSize="13">
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="50" />
+        </Grid.RowDefinitions>
+        <GroupBox Header="Telegram 连接代理" Padding="12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="110" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="42" />
+                    <RowDefinition Height="42" />
+                    <RowDefinition Height="42" />
+                    <RowDefinition Height="42" />
+                    <RowDefinition Height="42" />
+                    <RowDefinition Height="72" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <TextBlock Text="启用代理" VerticalAlignment="Center" />
+                <CheckBox x:Name="EnabledBox" Grid.Column="1" Content="登录和消息连接通过代理"
+                          VerticalAlignment="Center" Checked="ProxyOption_Changed" Unchecked="ProxyOption_Changed" />
+
+                <TextBlock Grid.Row="1" Text="代理类型" VerticalAlignment="Center" />
+                <ComboBox x:Name="TypeBox" Grid.Row="1" Grid.Column="1" SelectionChanged="ProxyOption_Changed">
+                    <ComboBoxItem Content="SOCKS5" Tag="Socks5" />
+                    <ComboBoxItem Content="Telegram MTProxy" Tag="MtProxy" />
+                </ComboBox>
+
+                <TextBlock Grid.Row="2" Text="地址" VerticalAlignment="Center" />
+                <Grid Grid.Row="2" Grid.Column="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="80" />
+                        <ColumnDefinition Width="100" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="HostBox" Text="127.0.0.1" />
+                    <TextBox x:Name="PortBox" Grid.Column="1" Text="7890" />
+                    <Button x:Name="TestButton" Grid.Column="2" Content="测试端口" Click="TestButton_Click" />
+                </Grid>
+
+                <TextBlock Grid.Row="3" Text="用户名" VerticalAlignment="Center" />
+                <TextBox x:Name="UserNameBox" Grid.Row="3" Grid.Column="1" ToolTip="无认证时留空" />
+
+                <TextBlock Grid.Row="4" Text="密码" VerticalAlignment="Center" />
+                <PasswordBox x:Name="PasswordBox" Grid.Row="4" Grid.Column="1" ToolTip="无认证时留空" />
+
+                <TextBlock Grid.Row="5" Text="MTProxy 链接" VerticalAlignment="Top" Margin="0,9,0,0" />
+                <TextBox x:Name="MtProxyUrlBox" Grid.Row="5" Grid.Column="1" TextWrapping="Wrap"
+                         AcceptsReturn="True" VerticalContentAlignment="Top"
+                         ToolTip="例如 https://t.me/proxy?server=...&amp;port=...&amp;secret=..." />
+
+                <Border Grid.Row="6" Grid.ColumnSpan="2" Background="#E8F1FA" Padding="10" Margin="0,8,0,0">
+                    <TextBlock x:Name="HintText" TextWrapping="Wrap"
+                               Text="默认使用本机 SOCKS5：127.0.0.1:7890。修改代理后需要重新登录才能应用。" />
+                </Border>
+            </Grid>
+        </GroupBox>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+            <Button Content="取消" Width="90" IsCancel="True" />
+            <Button Content="保存" Width="100" IsDefault="True" Click="SaveButton_Click"
+                    Background="#2481CC" Foreground="White" />
+        </StackPanel>
+    </Grid>
+</Window>
