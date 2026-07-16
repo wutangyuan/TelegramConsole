@@ -9,7 +9,11 @@
         <Grid.RowDefinitions><RowDefinition Height="40"/><RowDefinition Height="*"/></Grid.RowDefinitions>
         <Grid>
             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-            <TextBlock Text="{DynamicResource ProductivityGuideHint}" Foreground="#64748B" VerticalAlignment="Center"/>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="{DynamicResource ProductivityGuideHint}" Foreground="#64748B"/>
+                <TextBlock Text="　·　" Foreground="#94A3B8"/>
+                <TextBlock x:Name="ProductivityStatusText" Foreground="#166534" FontWeight="SemiBold"/>
+            </StackPanel>
             <Button Grid.Column="1" Content="{DynamicResource OpenGuide}" Click="OpenGuide_Click"/>
         </Grid>
         <TabControl Grid.Row="1">

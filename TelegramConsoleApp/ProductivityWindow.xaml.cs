@@ -270,13 +270,20 @@ public partial class ProductivityWindow : Window
         var dialog = DraftDialogBox.SelectedItem as DialogItem
                      ?? throw new InvalidOperationException(LocalizationManager.Get("SelectTargetChat"));
         await _telegram.SaveCloudDraftAsync(dialog, DraftTextBox.Text);
+        SetStatus(LocalizationManager.Format("CloudDraftSaved", dialog.Name));
     });
 
     private async void LoadDraft_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
     {
         var dialog = DraftDialogBox.SelectedItem as DialogItem
                      ?? throw new InvalidOperationException(LocalizationManager.Get("SelectTargetChat"));
-        DraftTextBox.Text = await _telegram.LoadCloudDraftAsync(dialog);
+        var draft = await _telegram.LoadCloudDraftAsync(dialog);
+        DraftTextBox.Text = draft;
+        SetStatus(string.IsNullOrEmpty(draft)
+            ? LocalizationManager.Format("CloudDraftEmpty", dialog.Name)
+            : LocalizationManager.Format("CloudDraftLoaded", dialog.Name, draft.Length));
+        DraftTextBox.Focus();
+        DraftTextBox.CaretIndex = DraftTextBox.Text.Length;
     });
 
     private async void ClearDraft_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
@@ -285,6 +292,7 @@ public partial class ProductivityWindow : Window
                      ?? throw new InvalidOperationException(LocalizationManager.Get("SelectTargetChat"));
         await _telegram.SaveCloudDraftAsync(dialog, "");
         DraftTextBox.Clear();
+        SetStatus(LocalizationManager.Format("CloudDraftCleared", dialog.Name));
     });
 
     private async void CreateFolder_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
@@ -297,6 +305,8 @@ public partial class ProductivityWindow : Window
     private async void RefreshFolders_Click(object sender, RoutedEventArgs e) => await RunAsync(RefreshFoldersAsync);
 
     private async Task RefreshFoldersAsync() => FolderList.ItemsSource = await _telegram.LoadDialogFoldersAsync();
+
+    private void SetStatus(string message) => ProductivityStatusText.Text = message;
 
     private void OpenGuide_Click(object sender, RoutedEventArgs e)
     {
