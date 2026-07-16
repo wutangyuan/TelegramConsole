@@ -92,10 +92,7 @@ public sealed class BufferedTerminal : TextEditor
     public T? GetTagAtVisualPosition<T>(System.Windows.Point visualPosition) where T : class
     {
         var view = TextArea.TextView;
-        var documentPosition = new System.Windows.Point(
-            visualPosition.X + view.ScrollOffset.X,
-            visualPosition.Y + view.ScrollOffset.Y);
-        var position = view.GetPosition(documentPosition);
+        var position = view.GetPosition(visualPosition);
         if (position is null || position.Value.Line < 1 || position.Value.Line > Document.LineCount) return null;
         var line = Document.GetLineByNumber(position.Value.Line);
         var length = Math.Max(1, line.TotalLength);
