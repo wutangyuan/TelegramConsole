@@ -82,10 +82,11 @@ public partial class SettingsWindow : Window
         }
         catch (Exception ex)
         {
-            HintText.Text = "测试失败：" + ex.Message;
+            var message = UserMessageFormatter.From(ex);
+            HintText.Text = LocalizationManager.Format("ErrorPrefix", message);
             System.Windows.MessageBox.Show(
                 this,
-                $"无法连接代理端口。\n\n{ex.Message}",
+                message,
                 LocalizationManager.Text("ProxyTestFailed"),
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
@@ -124,7 +125,7 @@ public partial class SettingsWindow : Window
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(this, ex.Message, LocalizationManager.Text("ProxySettingsTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            System.Windows.MessageBox.Show(this, UserMessageFormatter.From(ex), LocalizationManager.Text("ProxySettingsTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 

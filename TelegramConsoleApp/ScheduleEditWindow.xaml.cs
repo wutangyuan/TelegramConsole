@@ -93,7 +93,7 @@ public partial class ScheduleEditWindow : Window
         }
         catch (Exception ex)
         {
-            System.Windows.MessageBox.Show(this, ex.Message, LocalizationManager.Text("EditTaskError"), MessageBoxButton.OK, MessageBoxImage.Warning);
+            System.Windows.MessageBox.Show(this, UserMessageFormatter.From(ex), LocalizationManager.Text("EditTaskError"), MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 

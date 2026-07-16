@@ -31,7 +31,7 @@ public partial class ChatConsoleWindow : Window
         }
         catch (Exception ex)
         {
-            AppendText("[ERROR] " + ex.Message, Brushes.OrangeRed);
+            AppendText("[ERROR] " + UserMessageFormatter.From(ex), Brushes.OrangeRed);
         }
     }
 
@@ -64,7 +64,7 @@ public partial class ChatConsoleWindow : Window
         }
         catch (Exception ex)
         {
-            AppendText("[ERROR] " + ex.Message, Brushes.OrangeRed);
+            AppendText("[ERROR] " + UserMessageFormatter.From(ex), Brushes.OrangeRed);
         }
         finally
         {

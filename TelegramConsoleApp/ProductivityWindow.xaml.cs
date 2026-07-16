@@ -144,7 +144,7 @@ public partial class ProductivityWindow : Window
             if (link.Length == 0) throw new InvalidOperationException(LocalizationManager.Get("NoPublicMessageLink"));
             System.Windows.Clipboard.SetText(link);
         }
-        catch (Exception ex) { ShowError(ex.Message); }
+        catch (Exception ex) { ShowError(UserMessageFormatter.From(ex)); }
     }
 
     private async void CreateServerSchedule_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
@@ -222,7 +222,7 @@ public partial class ProductivityWindow : Window
             SaveRules();
             ClearRuleEditor();
         }
-        catch (Exception ex) { ShowError(ex.Message); }
+        catch (Exception ex) { ShowError(UserMessageFormatter.From(ex)); }
     }
 
     private void LoadRule_Click(object sender, RoutedEventArgs e)
@@ -326,7 +326,7 @@ public partial class ProductivityWindow : Window
             if (!File.Exists(path)) throw new FileNotFoundException(LocalizationManager.Get("GuideNotFound"), path);
             Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
         }
-        catch (Exception ex) { ShowError(ex.Message); }
+        catch (Exception ex) { ShowError(UserMessageFormatter.From(ex)); }
     }
 
     private SearchRow SelectedMessage() => SearchResultList.SelectedItem as SearchRow
@@ -348,12 +348,7 @@ public partial class ProductivityWindow : Window
         {
             if (ex is not InvalidOperationException)
                 _logger.Error("Productivity", "效率工具操作失败", ex);
-            var message = ex.Message.Contains("CHANNEL_FORUM_MISSING", StringComparison.OrdinalIgnoreCase)
-                ? LocalizationManager.Get("ChatIsNotForum")
-                : ex is NullReferenceException
-                    ? LocalizationManager.Get("UnexpectedDataError")
-                    : ex.Message;
-            ShowError(message);
+            ShowError(UserMessageFormatter.From(ex));
         }
     }
 

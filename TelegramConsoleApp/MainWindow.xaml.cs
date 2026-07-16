@@ -548,8 +548,8 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            _logger.Error("UI", "界面操作失败", ex);
-            ShowError(ex.Message);
+            if (ex is not InvalidOperationException) _logger.Error("UI", "界面操作失败", ex);
+            ShowError(UserMessageFormatter.From(ex));
         }
     }
 
@@ -612,7 +612,7 @@ public partial class MainWindow : Window
                     }
                     catch (Exception ex)
                     {
-                        errors.Add($"{row.ChatTitle}: {ex.Message}");
+                        errors.Add($"{row.ChatTitle}: {UserMessageFormatter.From(ex)}");
                     }
                 }
                 RenderSchedules();
@@ -716,18 +716,20 @@ public partial class MainWindow : Window
         }
         catch (InvalidOperationException ex)
         {
+            var message = UserMessageFormatter.From(ex);
             SetLoginBusy(false);
             ContinueLoginButton.IsEnabled = true;
-            SetStatus(LF("ErrorPrefix", ex.Message));
-            ShowError(ex.Message);
+            SetStatus(LF("ErrorPrefix", message));
+            ShowError(message);
         }
         catch (Exception ex)
         {
             _logger.Error("UI", "界面操作失败", ex);
+            var message = UserMessageFormatter.From(ex);
             SetLoginBusy(false);
             ContinueLoginButton.IsEnabled = true;
-            SetStatus(LF("ErrorPrefix", ex.Message));
-            ShowError(ex.Message);
+            SetStatus(LF("ErrorPrefix", message));
+            ShowError(message);
         }
     }
 
@@ -807,7 +809,7 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             _logger.Error("UI", "无法打开日志目录", ex);
-            ShowError(ex.Message);
+            ShowError(UserMessageFormatter.From(ex));
         }
     }
 
