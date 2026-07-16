@@ -48,6 +48,16 @@ public sealed class BufferedTerminal : TextEditor
         Options.EnableTextDragDrop = false;
         _segments = new TextSegmentCollection<ColoredSegment>(Document);
         TextArea.TextView.LineTransformers.Add(new SegmentColorizer(_segments));
+        TextArea.TextView.AddHandler(
+            System.Windows.Input.Mouse.PreviewMouseDownEvent,
+            new System.Windows.Input.MouseButtonEventHandler(TextView_PreviewMouseDown),
+            handledEventsToo: true);
+        TextArea.TextView.AddHandler(
+            System.Windows.Input.Mouse.QueryCursorEvent,
+            new System.Windows.Input.QueryCursorEventHandler(TextView_QueryCursor),
+            handledEventsToo: true);
+        TextArea.TextView.PreviewMouseMove += TextView_PreviewMouseMove;
+        TextArea.TextView.MouseLeave += (_, _) => ResetTextViewCursor();
         _flushTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
         {
             Interval = TimeSpan.FromMilliseconds(50)
@@ -260,30 +270,45 @@ public sealed class BufferedTerminal : TextEditor
         return clone;
     }
 
-    protected override void OnPreviewMouseLeftButtonDown(System.Windows.Input.MouseButtonEventArgs e)
+    private void TextView_PreviewMouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
     {
+        if (e.ChangedButton != System.Windows.Input.MouseButton.Left) return;
         var link = GetTagAtVisualPosition<MediaLinkItem>(
             e.GetPosition(TextArea.TextView), preferSelection: false);
         if (link is not null)
         {
-            Cursor = System.Windows.Input.Cursors.Hand;
+            SetTextViewCursor(isLink: true);
             e.Handled = true;
-            return;
         }
-        base.OnPreviewMouseLeftButtonDown(e);
     }
 
-    protected override void OnQueryCursor(System.Windows.Input.QueryCursorEventArgs e)
+    private void TextView_QueryCursor(object sender, System.Windows.Input.QueryCursorEventArgs e)
     {
-        var link = GetTagAtVisualPosition<MediaLinkItem>(
-            System.Windows.Input.Mouse.GetPosition(TextArea.TextView), preferSelection: false);
-        if (link is not null)
+        if (IsMediaLinkAt(System.Windows.Input.Mouse.GetPosition(TextArea.TextView)))
         {
             e.Cursor = System.Windows.Input.Cursors.Hand;
             e.Handled = true;
-            return;
         }
-        base.OnQueryCursor(e);
+    }
+
+    private void TextView_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e) =>
+        SetTextViewCursor(IsMediaLinkAt(e.GetPosition(TextArea.TextView)));
+
+    private bool IsMediaLinkAt(System.Windows.Point position) =>
+        GetTagAtVisualPosition<MediaLinkItem>(position, preferSelection: false) is not null;
+
+    private void SetTextViewCursor(bool isLink)
+    {
+        TextArea.TextView.Cursor = isLink
+            ? System.Windows.Input.Cursors.Hand
+            : System.Windows.Input.Cursors.IBeam;
+        TextArea.TextView.ForceCursor = isLink;
+    }
+
+    private void ResetTextViewCursor()
+    {
+        TextArea.TextView.ForceCursor = false;
+        TextArea.TextView.Cursor = System.Windows.Input.Cursors.IBeam;
     }
 
     private sealed record PendingLine(
