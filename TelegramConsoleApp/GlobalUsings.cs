@@ -4,4 +4,3 @@ global using Application = System.Windows.Application;
 global using Brush = System.Windows.Media.Brush;
 global using Brushes = System.Windows.Media.Brushes;
 global using KeyEventArgs = System.Windows.Input.KeyEventArgs;
-global using RichTextBox = System.Windows.Controls.RichTextBox;

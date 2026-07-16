@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Diagnostics;
@@ -158,8 +157,8 @@ public partial class MainWindow : Window
         ScheduleList.ItemsSource = null;
         ExceptionList.ItemsSource = null;
         MentionList.ItemsSource = null;
-        ChatConsole.Document.Blocks.Clear();
-        MonitorConsole.Document.Blocks.Clear();
+        ChatConsole.ClearOutput();
+        MonitorConsole.ClearOutput();
     }
 
     private async void ContinueLoginButton_Click(object sender, RoutedEventArgs e) =>
@@ -227,6 +226,18 @@ public partial class MainWindow : Window
                 }
                 SetStatus(state.Message, Brushes.DarkOrange);
                 break;
+            case TelegramConnectionStatus.Recovering:
+                if (_telegram.CurrentUserId != 0)
+                {
+                    LoggedInAccountText.Text = _telegram.CurrentUser;
+                    LoginFormPanel.Visibility = Visibility.Collapsed;
+                    LoggedInPanel.Visibility = Visibility.Visible;
+                    ConnectionStatusText.Text = L("RecoveringStatus");
+                    ConnectionStatusText.Foreground = Brushes.DarkOrange;
+                    ConnectionStatusDot.Background = Brushes.DarkOrange;
+                }
+                SetStatus(state.Message, Brushes.DarkOrange);
+                break;
             case TelegramConnectionStatus.Connected:
                 if (_telegram.CurrentUserId != 0) ShowAuthenticatedAccount();
                 SetStatus(state.Message, Brushes.ForestGreen);
@@ -282,8 +293,8 @@ public partial class MainWindow : Window
 
         _allDialogs = [];
         DialogsList.ItemsSource = null;
-        ChatConsole.Document.Blocks.Clear();
-        MonitorConsole.Document.Blocks.Clear();
+        ChatConsole.ClearOutput();
+        MonitorConsole.ClearOutput();
         ConfirmationPeerBox.ItemsSource = null;
         ExceptionPeerBox.ItemsSource = null;
         ExceptionNotifyEnabledBox.IsChecked = account.ExceptionAlerts.NotificationsEnabled;
@@ -368,7 +379,7 @@ public partial class MainWindow : Window
     private void BlankConsole_Click(object sender, RoutedEventArgs e)
     {
         DialogsList.SelectedItem = null;
-        ChatConsole.Document.Blocks.Clear();
+        ChatConsole.ClearOutput();
         SetStatus(L("BlankStatus"));
     }
 
@@ -415,7 +426,7 @@ public partial class MainWindow : Window
             _loadingHistory = true;
             try
             {
-                ChatConsole.Document.Blocks.Clear();
+                ChatConsole.ClearOutput();
                 AppendConsole(ChatConsole, $"--- {dialog.Name} ---");
                 foreach (var line in await _telegram.LoadHistoryAsync(dialog)) AppendChatLine(ChatConsole, line);
             }
@@ -768,7 +779,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ClearLogDisplay_Click(object sender, RoutedEventArgs e) => LogConsole.Document.Blocks.Clear();
+    private void ClearLogDisplay_Click(object sender, RoutedEventArgs e) => LogConsole.ClearOutput();
 
     private async void SaveMentionSettings_Click(object sender, RoutedEventArgs e) =>
         await RunUiAsync(() =>
@@ -999,22 +1010,14 @@ public partial class MainWindow : Window
         _ => prompt
     };
 
-    private static void AppendChatLine(RichTextBox box, ChatLine line) =>
+    private static void AppendChatLine(BufferedTerminal box, ChatLine line) =>
         AppendConsole(
             box,
             $"[{line.Time:HH:mm:ss}] [{line.Chat}] {line.Sender}: {line.Text}",
             line.IsMentioned ? Brushes.DodgerBlue : line.IsOutgoing ? Brushes.LimeGreen : Brushes.White);
 
-    private static void AppendConsole(RichTextBox box, string text, Brush? color = null)
-    {
-        var paragraph = new Paragraph(new Run(text))
-        {
-            Margin = new Thickness(0),
-            Foreground = color ?? Brushes.White
-        };
-        box.Document.Blocks.Add(paragraph);
-        box.ScrollToEnd();
-    }
+    private static void AppendConsole(BufferedTerminal box, string text, Brush? color = null) =>
+        box.AppendLine(text, color ?? Brushes.White);
 
     private sealed class ScheduleRow(
         Guid id,

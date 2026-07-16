@@ -11,8 +11,13 @@ public sealed class TelegramService : ITelegramService
     private readonly ISettingsStore _store;
     private readonly IAppLogger _logger;
     private readonly Dictionary<string, InputPeer> _peers = [];
+    private readonly SemaphoreSlim _connectionLock = new(1, 1);
+    private readonly object _recoverySync = new();
     private TelegramConnectionStatus? _lastConnectionStatus;
+    private AppSettings? _connectionSettings;
+    private Task? _recoveryTask;
     private bool _suppressDisconnectLogging;
+    private bool _disposed;
 
     public bool IsLoggedIn => _client?.User is not null && !_client.Disconnected;
     public long CurrentUserId => _client?.User?.id ?? 0;
@@ -35,25 +40,20 @@ public sealed class TelegramService : ITelegramService
 
     public async Task<string?> BeginLoginAsync(AppSettings settings)
     {
-        _logger.Info("Telegram", "开始连接并登录 Telegram");
-        ReportConnection(TelegramConnectionStatus.Connecting, "正在连接 Telegram...");
-        _suppressDisconnectLogging = true;
+        await _connectionLock.WaitAsync();
         try
         {
-            _client?.Dispose();
+            _connectionSettings = settings;
+            return await CreateClientAndLoginAsync(
+                settings,
+                "开始连接并登录 Telegram",
+                "正在连接 Telegram...",
+                clearPeers: true);
         }
         finally
         {
-            _suppressDisconnectLogging = false;
+            _connectionLock.Release();
         }
-        _client = new WTelegram.Client(settings.ApiId, settings.ApiHash, _store.GetSessionPath(settings.PhoneNumber));
-        ConfigureClientConnection(_client);
-        ApplyProxy(_client, settings.Proxy);
-        _manager = _client.WithUpdateManager(OnUpdate);
-        var prompt = await _client.Login(settings.PhoneNumber);
-        _logger.Info("Telegram", prompt is null ? "Telegram 登录成功" : $"Telegram 登录等待输入：{prompt}");
-        if (prompt is null) ReportConnection(TelegramConnectionStatus.Connected, $"Telegram 已连接：{CurrentUser}");
-        return prompt;
     }
 
     public async Task<string?> ContinueLoginAsync(string value)
@@ -63,6 +63,49 @@ public sealed class TelegramService : ITelegramService
         _logger.Info("Telegram", prompt is null ? "Telegram 登录成功" : $"Telegram 登录继续等待输入：{prompt}");
         if (prompt is null) ReportConnection(TelegramConnectionStatus.Connected, $"Telegram 已连接：{CurrentUser}");
         return prompt;
+    }
+
+    private async Task<string?> CreateClientAndLoginAsync(
+        AppSettings settings,
+        string logMessage,
+        string statusMessage,
+        bool clearPeers)
+    {
+        _logger.Info("Telegram", logMessage);
+        ReportConnection(TelegramConnectionStatus.Connecting, statusMessage);
+        DisposeClientForReconnect(clearPeers);
+        _client = new WTelegram.Client(settings.ApiId, settings.ApiHash, _store.GetSessionPath(settings.PhoneNumber));
+        ConfigureClientConnection(_client);
+        ApplyProxy(_client, settings.Proxy);
+        _client.OnOther += OnOther;
+        _manager = _client.WithUpdateManager(OnUpdate);
+        var prompt = await _client.Login(settings.PhoneNumber);
+        _logger.Info("Telegram", prompt is null ? "Telegram 登录成功" : $"Telegram 登录等待输入：{prompt}");
+        if (prompt is null) ReportConnection(TelegramConnectionStatus.Connected, $"Telegram 已连接：{CurrentUser}");
+        return prompt;
+    }
+
+    private void DisposeClientForReconnect(bool clearPeers)
+    {
+        _suppressDisconnectLogging = true;
+        try
+        {
+            if (_client is not null) _client.OnOther -= OnOther;
+            _client?.Dispose();
+        }
+        finally
+        {
+            _suppressDisconnectLogging = false;
+        }
+        _manager = null;
+        if (clearPeers) _peers.Clear();
+    }
+
+    private Task OnOther(IObject notification)
+    {
+        if (notification is ReactorError reactorError && !_suppressDisconnectLogging)
+            QueueConnectionRecovery(reactorError.Exception);
+        return Task.CompletedTask;
     }
 
     private void HandleConnectionLog(string message)
@@ -75,11 +118,85 @@ public sealed class TelegramService : ITelegramService
         }
 
         if (_client?.User is null || message.Contains("Alt DC disconnected", StringComparison.OrdinalIgnoreCase)) return;
-        if (_client.Disconnected || IsConnectionFailureLog(message))
-            ReportConnection(
-                TelegramConnectionStatus.Disconnected,
-                "Telegram 连接异常，客户端正在自动重连；如未恢复，请重新登录。",
-                new IOException(message));
+        if (IsConnectionFailureLog(message)) QueueConnectionRecovery(new IOException(message));
+    }
+
+    private void QueueConnectionRecovery(Exception exception)
+    {
+        if (_disposed || _suppressDisconnectLogging || _client?.User is null || _connectionSettings is null) return;
+        lock (_recoverySync)
+        {
+            if (_recoveryTask is { IsCompleted: false }) return;
+            var failedClient = _client;
+            var settings = _connectionSettings;
+            _recoveryTask = Task.Run(() => RecoverConnectionAsync(failedClient, settings, exception));
+        }
+    }
+
+    private async Task RecoverConnectionAsync(
+        WTelegram.Client failedClient,
+        AppSettings settings,
+        Exception reactorException)
+    {
+        ReportConnection(
+            TelegramConnectionStatus.Recovering,
+            "Telegram 连接异常，正在等待客户端内部重连...",
+            reactorException);
+
+        try
+        {
+            await failedClient.Invoke(new TL.Methods.Ping { ping_id = Random.Shared.NextInt64() });
+            if (!_disposed && ReferenceEquals(_client, failedClient) && !failedClient.Disconnected)
+            {
+                ReportConnection(TelegramConnectionStatus.Connected, $"Telegram 已重新连接：{CurrentUser}");
+                return;
+            }
+        }
+        catch (Exception probeException)
+        {
+            if (_disposed || !ReferenceEquals(_client, failedClient)) return;
+            if (!failedClient.Disconnected)
+            {
+                _logger.Warning(
+                    "Telegram.Connection",
+                    $"Telegram API 探测失败，但客户端未处于断开状态，暂不判定为真正断线：{probeException.Message}");
+                return;
+            }
+
+            _logger.Error(
+                "Telegram.Connection",
+                "Telegram API 探测失败且客户端仍处于断开状态，确认主连接不可用",
+                probeException);
+        }
+
+        if (_disposed || !ReferenceEquals(_client, failedClient) || !failedClient.Disconnected) return;
+
+        await _connectionLock.WaitAsync();
+        try
+        {
+            if (_disposed || !ReferenceEquals(_client, failedClient)) return;
+            var prompt = await CreateClientAndLoginAsync(
+                settings,
+                "WTelegram 内部恢复失败，正在使用现有会话重建连接",
+                "Telegram 内部恢复失败，正在重建连接...",
+                clearPeers: false);
+            if (prompt is not null)
+                ReportConnection(
+                    TelegramConnectionStatus.Disconnected,
+                    "自动重连需要重新验证，请完成 Telegram 登录验证。");
+        }
+        catch (Exception reconnectException)
+        {
+            if (!_disposed)
+                ReportConnection(
+                    TelegramConnectionStatus.Disconnected,
+                    "Telegram 自动重连失败，请检查网络或代理后重新登录。",
+                    reconnectException);
+        }
+        finally
+        {
+            _connectionLock.Release();
+        }
     }
 
     private static bool IsConnectionFailureLog(string message) =>
@@ -95,10 +212,15 @@ public sealed class TelegramService : ITelegramService
     {
         if (_lastConnectionStatus == status) return;
         _lastConnectionStatus = status;
-        if (status == TelegramConnectionStatus.Disconnected)
+        if (status == TelegramConnectionStatus.Recovering)
             _logger.Error(
                 "Telegram.Connection",
-                "Telegram 主连接已中断，客户端将尝试自动重连",
+                "Telegram 主连接发生异常，正在通过 API 探测等待内部恢复",
+                exception ?? new IOException(message));
+        else if (status == TelegramConnectionStatus.Disconnected)
+            _logger.Error(
+                "Telegram.Connection",
+                "Telegram 主连接确认不可用，需要人工处理",
                 exception ?? new IOException(message));
         else if (status == TelegramConnectionStatus.Connected)
             _logger.Info("Telegram.Connection", "Telegram 主连接已建立或恢复");
@@ -265,15 +387,8 @@ public sealed class TelegramService : ITelegramService
 
     public void Dispose()
     {
+        _disposed = true;
         _logger.Info("Telegram", "Telegram 服务正在关闭");
-        _suppressDisconnectLogging = true;
-        try
-        {
-            _client?.Dispose();
-        }
-        finally
-        {
-            _suppressDisconnectLogging = false;
-        }
+        DisposeClientForReconnect(clearPeers: true);
     }
 }

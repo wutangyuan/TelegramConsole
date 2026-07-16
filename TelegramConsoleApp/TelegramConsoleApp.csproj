@@ -10,6 +10,7 @@
     <RootNamespace>TelegramConsoleApp</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
     <ProjectReference Include="..\TelegramConsole.Core\TelegramConsole.Core.csproj" />
     <ProjectReference Include="..\TelegramConsole.Infrastructure\TelegramConsole.Infrastructure.csproj" />
   </ItemGroup>

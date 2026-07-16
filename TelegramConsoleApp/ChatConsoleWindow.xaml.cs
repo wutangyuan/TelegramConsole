@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 
@@ -72,14 +71,7 @@ public partial class ChatConsoleWindow : Window
         line.IsMentioned ? Brushes.DodgerBlue : line.IsOutgoing ? Brushes.LimeGreen : Brushes.White);
 
     private void AppendText(string text, Brush? color = null)
-    {
-        ConsoleBox.Document.Blocks.Add(new Paragraph(new Run(text))
-        {
-            Margin = new Thickness(0, 1, 0, 1),
-            Foreground = color ?? Brushes.White
-        });
-        ConsoleBox.ScrollToEnd();
-    }
+        => ConsoleBox.AppendLine(text, color ?? Brushes.White);
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
@@ -90,7 +82,7 @@ public partial class ChatConsoleWindow : Window
         }
         else if (e.Key == Key.L && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
         {
-            ConsoleBox.Document.Blocks.Clear();
+            ConsoleBox.ClearOutput();
             e.Handled = true;
         }
     }

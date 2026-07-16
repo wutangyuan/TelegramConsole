@@ -1,6 +1,7 @@
 <Window x:Class="TelegramConsoleApp.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:TelegramConsoleApp"
         Title="{DynamicResource AppTitle}"
         Icon="Assets/AppIcon.ico"
         Width="1280" Height="820" MinWidth="1040" MinHeight="700"
@@ -127,9 +128,10 @@
                             <RowDefinition Height="*" />
                             <RowDefinition Height="48" />
                         </Grid.RowDefinitions>
-                        <RichTextBox x:Name="ChatConsole" IsReadOnly="True" FontFamily="Cascadia Mono, Consolas"
-                                     FontSize="14" Background="#090D12" Foreground="#F8FAFC" Padding="10"
-                                     BorderBrush="#1E293B" BorderThickness="1" VerticalScrollBarVisibility="Auto" />
+                        <local:BufferedTerminal x:Name="ChatConsole" FontFamily="Cascadia Mono, Consolas"
+                                                FontSize="14" Background="#090D12" Foreground="#F8FAFC"
+                                                BorderBrush="#1E293B" BorderThickness="1"
+                                                MaximumLines="1000" MaximumCharacters="500000" />
                         <Grid Grid.Row="1" Margin="0,8,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -153,10 +155,11 @@
                                   Content="{DynamicResource MonitorEnabled}"
                                   VerticalAlignment="Center" Checked="MonitorEnabledBox_Changed"
                                   Unchecked="MonitorEnabledBox_Changed" />
-                        <RichTextBox x:Name="MonitorConsole" Grid.Row="1" IsReadOnly="True"
-                                     FontFamily="Cascadia Mono, Consolas" FontSize="14" Background="#090D12"
-                                     Foreground="#F8FAFC" Padding="10" BorderBrush="#1E293B"
-                                     VerticalScrollBarVisibility="Auto" />
+                        <local:BufferedTerminal x:Name="MonitorConsole" Grid.Row="1"
+                                                FontFamily="Cascadia Mono, Consolas" FontSize="14"
+                                                Background="#090D12" Foreground="#F8FAFC"
+                                                BorderBrush="#1E293B" BorderThickness="1"
+                                                MaximumLines="1500" MaximumCharacters="750000" />
                     </Grid>
                 </TabItem>
 
@@ -407,11 +410,11 @@
                             <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Foreground="#64748B"
                                        Text="日志按天保存，自动保留最近 30 天；不记录密码、验证码和消息正文。" />
                         </StackPanel>
-                        <RichTextBox x:Name="LogConsole" Grid.Row="1" IsReadOnly="True"
-                                     FontFamily="Cascadia Mono, Consolas" FontSize="13"
-                                     Background="#090D12" Foreground="#F8FAFC" Padding="10"
-                                     BorderBrush="#1E293B" BorderThickness="1"
-                                     VerticalScrollBarVisibility="Auto" />
+                        <local:BufferedTerminal x:Name="LogConsole" Grid.Row="1"
+                                                FontFamily="Cascadia Mono, Consolas" FontSize="13"
+                                                Background="#090D12" Foreground="#F8FAFC"
+                                                BorderBrush="#1E293B" BorderThickness="1"
+                                                MaximumLines="2000" MaximumCharacters="1000000" />
                     </Grid>
                 </TabItem>
             </TabControl>

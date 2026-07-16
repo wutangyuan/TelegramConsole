@@ -15,7 +15,7 @@
     <sys:String x:Key="ContinueLogin">继续登录</sys:String>
     <sys:String x:Key="LoggedInAccount">当前已登录账号：</sys:String>
     <sys:String x:Key="LoginLocked">　登录按钮已锁定，本次运行不会重复登录</sys:String>
-    <sys:String x:Key="Online">在线</sys:String><sys:String x:Key="ConnectingStatus">连接中</sys:String>
+    <sys:String x:Key="Online">在线</sys:String><sys:String x:Key="ConnectingStatus">连接中</sys:String><sys:String x:Key="RecoveringStatus">恢复中</sys:String>
     <sys:String x:Key="RefreshDialogs">刷新会话</sys:String>
     <sys:String x:Key="OpenConsole">独立控制台</sys:String>
     <sys:String x:Key="BlankScreen">空屏</sys:String>
@@ -86,7 +86,7 @@
     <sys:String x:Key="ApiIdInvalid">API ID 必须是正整数</sys:String><sys:String x:Key="FillLoginSettings">请填写 API Hash 和手机号（含国家区号）</sys:String>
     <sys:String x:Key="ConnectingTelegram">正在连接 Telegram...</sys:String><sys:String x:Key="LoginInputRequired">请输入登录所需信息</sys:String>
     <sys:String x:Key="TelegramRequires">Telegram 要求输入：{0}</sys:String><sys:String x:Key="LoggedIn">已登录：{0}</sys:String>
-    <sys:String x:Key="ConnectionErrorTitle">Telegram 连接异常</sys:String><sys:String x:Key="ConnectionErrorBody">连接已中断，客户端正在自动重连。双击托盘图标可查看或重新登录。</sys:String>
+    <sys:String x:Key="ConnectionErrorTitle">Telegram 连接异常</sys:String><sys:String x:Key="ConnectionErrorBody">内部恢复和自动重建均未成功。请检查网络或代理后重新登录。</sys:String>
     <sys:String x:Key="ShowMainWindow">显示主窗口</sys:String><sys:String x:Key="ExitApplication">退出程序</sys:String>
     <sys:String x:Key="SelectDialogFirst">请先选择要打开的私聊或群聊</sys:String><sys:String x:Key="SelectChatFirst">请先在左侧选择私聊或群聊</sys:String>
     <sys:String x:Key="BlankStatus">聊天终端已切换为空屏；重新选择会话后恢复显示</sys:String><sys:String x:Key="ExpandDialogs">展开会话列表</sys:String><sys:String x:Key="CollapseDialogs">收起会话列表</sys:String>

@@ -29,6 +29,7 @@ public interface ITelegramService : IDisposable
 public enum TelegramConnectionStatus
 {
     Connecting,
+    Recovering,
     Connected,
     Disconnected
 }
