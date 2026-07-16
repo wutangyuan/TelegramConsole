@@ -434,9 +434,35 @@ public sealed class TelegramService : ITelegramService
     {
         EnsureLogin();
         var filters = await _client!.Messages_GetDialogFilters();
-        return filters.filters
-            .Select(x => new DialogFolderItem(x.ID, x.Title?.text ?? $"#{x.ID}", x.IncludePeers?.Length ?? 0))
-            .ToArray();
+        if (filters?.filters is null) return [];
+        var result = new List<DialogFolderItem>();
+        foreach (var filter in filters.filters)
+        {
+            if (filter is null) continue;
+            switch (filter)
+            {
+                case DialogFilter custom:
+                    result.Add(new DialogFolderItem(
+                        custom.id,
+                        custom.title?.text ?? $"#{custom.id}",
+                        custom.include_peers?.Length ?? 0));
+                    break;
+                case DialogFilterChatlist chatlist:
+                    result.Add(new DialogFolderItem(
+                        chatlist.id,
+                        chatlist.title?.text ?? $"#{chatlist.id}",
+                        chatlist.include_peers?.Length ?? 0));
+                    break;
+                default:
+                    var id = filter.ID;
+                    result.Add(new DialogFolderItem(
+                        id,
+                        filter.Title?.text ?? $"#{id}",
+                        filter.IncludePeers?.Length ?? 0));
+                    break;
+            }
+        }
+        return result;
     }
 
     public async Task CreateDialogFolderAsync(string title, IReadOnlyCollection<DialogItem> dialogs)

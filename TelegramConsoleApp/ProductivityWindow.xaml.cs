@@ -11,6 +11,7 @@ public partial class ProductivityWindow : Window
     private readonly AccountProfile _account;
     private readonly ISettingsStore _store;
     private readonly AppSettings _settings;
+    private readonly IAppLogger _logger;
     private Guid? _editingRuleId;
 
     public ProductivityWindow(
@@ -18,7 +19,8 @@ public partial class ProductivityWindow : Window
         IReadOnlyList<DialogItem> dialogs,
         AccountProfile account,
         ISettingsStore store,
-        AppSettings settings)
+        AppSettings settings,
+        IAppLogger logger)
     {
         InitializeComponent();
         _telegram = telegram;
@@ -26,6 +28,7 @@ public partial class ProductivityWindow : Window
         _account = account;
         _store = store;
         _settings = settings;
+        _logger = logger;
 
         var scopes = new[] { new SearchScope(LocalizationManager.Get("AllDialogs"), null) }
             .Concat(dialogs.Select(x => new SearchScope(x.Name, x))).ToArray();
@@ -53,7 +56,6 @@ public partial class ProductivityWindow : Window
             RuleTargetBox.SelectedIndex = 0;
         }
         RenderRules();
-        Loaded += async (_, _) => await RunAsync(RefreshFoldersAsync);
     }
 
     private async void Search_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
@@ -303,10 +305,17 @@ public partial class ProductivityWindow : Window
         return text.Length == 0 ? throw new InvalidOperationException(LocalizationManager.Get("MessageRequired")) : text;
     }
 
-    private static async Task RunAsync(Func<Task> action)
+    private async Task RunAsync(Func<Task> action)
     {
         try { await action(); }
-        catch (Exception ex) { ShowError(ex.Message); }
+        catch (Exception ex)
+        {
+            if (ex is not InvalidOperationException)
+                _logger.Error("Productivity", "效率工具操作失败", ex);
+            ShowError(ex is NullReferenceException
+                ? LocalizationManager.Get("UnexpectedDataError")
+                : ex.Message);
+        }
     }
 
     private static void ShowError(string message) => System.Windows.MessageBox.Show(

@@ -130,7 +130,7 @@ public partial class MainWindow : Window
             ShowError(L("LoginFirst"));
             return;
         }
-        new ProductivityWindow(_telegram, _allDialogs, _activeAccount, _store, _settings)
+        new ProductivityWindow(_telegram, _allDialogs, _activeAccount, _store, _settings, _logger)
         {
             Owner = this
         }.Show();
