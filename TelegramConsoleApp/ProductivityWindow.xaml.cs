@@ -260,7 +260,7 @@ public partial class ProductivityWindow : Window
 
     private void SaveRules()
     {
-        _store.Save(_settings);
+        _store.SaveAccount(_account);
         _telegram.ConfigureAutomationRules(_account.AutomationRules);
         RenderRules();
     }

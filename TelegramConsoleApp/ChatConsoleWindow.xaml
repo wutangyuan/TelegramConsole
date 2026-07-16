@@ -79,7 +79,7 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom">
-                    <Border Height="34" MinWidth="225" MaxWidth="360" Background="#0C0C0C"
+                    <Border Height="34" MinWidth="280" MaxWidth="450" Background="#0C0C0C"
                             CornerRadius="7,7,0,0" Padding="10,0,4,0">
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -92,8 +92,12 @@
                                 <TextBlock Text="›_" Foreground="#D4D4D4" FontSize="8"
                                            HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
-                            <TextBlock x:Name="PeerTitle" Grid.Column="1" Foreground="#FFFFFF"
-                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock x:Name="PeerTitle" Foreground="#FFFFFF" FontSize="12"
+                                           TextTrimming="CharacterEllipsis" />
+                                <TextBlock x:Name="AccountTitle" Foreground="#60A5FA" FontSize="10"
+                                           TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
                             <Button Grid.Column="2" Content="×" Style="{StaticResource TitleButtonStyle}"
                                     Width="30" Height="30" FontSize="17" Click="CloseButton_Click" />
                         </Grid>
@@ -151,10 +155,11 @@
                        VerticalAlignment="Center" FontWeight="Bold" />
             <TextBox x:Name="InputBox" Grid.Column="1" Padding="2" Background="#000000"
                      Foreground="#FFFFFF" BorderThickness="0" CaretBrush="#FFFFFF"
-                     VerticalContentAlignment="Center" KeyDown="InputBox_KeyDown" />
+                     VerticalContentAlignment="Center" KeyDown="InputBox_KeyDown"
+                     TextChanged="InputBox_TextChanged" />
             <Button x:Name="SendButton" Grid.Column="2" Content="SEND ↵" Click="SendButton_Click"
                     Background="#18181B" Foreground="#FFFFFF" BorderBrush="#3F3F46"
-                    Padding="6,3" />
+                    Padding="6,3" IsEnabled="False" />
         </Grid>
 
         <Border Grid.Row="5" Background="#09090B" Padding="12,0">
@@ -162,6 +167,7 @@
                 <TextBlock VerticalAlignment="Center" Foreground="#71717A" FontSize="11"
                            Text="{DynamicResource ConsoleHelp}" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <TextBlock x:Name="AccountStatusText" Foreground="#FBBF24" FontSize="11" Margin="0,0,14,0" />
                     <TextBlock Text="{DynamicResource SelfLegend}" Foreground="#22C55E" FontSize="11" />
                     <TextBlock Text="{DynamicResource MessageLegend}" Foreground="#FFFFFF" FontSize="11" />
                     <TextBlock Text="{DynamicResource MentionLegend}" Foreground="#3B82F6" FontSize="11" />

@@ -204,18 +204,23 @@
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="34" />
                                     </Grid.ColumnDefinitions>
-                                    <ContentPresenter Margin="{TemplateBinding Padding}" VerticalAlignment="Center"
+                                    <ContentPresenter x:Name="SelectionContent" Margin="{TemplateBinding Padding}" VerticalAlignment="Center"
                                                       Content="{TemplateBinding SelectionBoxItem}"
                                                       ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
                                                       ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"
                                                       ContentStringFormat="{TemplateBinding SelectionBoxItemStringFormat}"
                                                       IsHitTestVisible="False" />
+                                    <TextBox x:Name="PART_EditableTextBox" Grid.Column="0" Visibility="Collapsed"
+                                             Style="{x:Null}" Margin="8,2" Padding="2,0"
+                                             VerticalContentAlignment="Center" Background="Transparent"
+                                             Foreground="{TemplateBinding Foreground}" BorderThickness="0"
+                                             CaretBrush="{TemplateBinding Foreground}" />
                                     <Border Grid.Column="1" BorderBrush="#E2E8F0" BorderThickness="1,0,0,0">
                                         <Path x:Name="Arrow" Width="8" Height="5" Stretch="Fill"
                                               Fill="#64748B" HorizontalAlignment="Center" VerticalAlignment="Center"
                                               Data="M 0 0 L 4 4 L 8 0 Z" />
                                     </Border>
-                                    <ToggleButton Grid.ColumnSpan="2" Background="Transparent" BorderThickness="0"
+                                    <ToggleButton x:Name="DropDownToggle" Grid.ColumnSpan="2" Background="Transparent" BorderThickness="0"
                                                   Focusable="False" ClickMode="Press"
                                                   IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
                                         <ToggleButton.Template>
@@ -246,6 +251,12 @@
                                 <Setter TargetName="Arrow" Property="RenderTransform">
                                     <Setter.Value><RotateTransform Angle="180" CenterX="4" CenterY="2.5" /></Setter.Value>
                                 </Setter>
+                            </Trigger>
+                            <Trigger Property="IsEditable" Value="True">
+                                <Setter TargetName="SelectionContent" Property="Visibility" Value="Collapsed" />
+                                <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="DropDownToggle" Property="Grid.Column" Value="1" />
+                                <Setter TargetName="DropDownToggle" Property="Grid.ColumnSpan" Value="1" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="ComboBorder" Property="Background" Value="#F1F5F9" />

@@ -9,6 +9,7 @@ namespace TelegramConsole.Infrastructure;
 
 public sealed class TelegramService : ITelegramService
 {
+    private static int _wTelegramLoggingConfigured;
     private WTelegram.Client? _client;
     private WTelegram.UpdateManager? _manager;
     private readonly ISettingsStore _store;
@@ -46,11 +47,10 @@ public sealed class TelegramService : ITelegramService
         _logger = logger;
         _outbox = new OutgoingMessageStore(store);
         _messageIndex = new MessageIndexStore(store);
-        WTelegram.Helpers.Log = (level, message) =>
+        if (Interlocked.Exchange(ref _wTelegramLoggingConfigured, 1) == 0)
+            WTelegram.Helpers.Log = (level, message) =>
         {
-            _logger.Write(level >= 4 ? AppLogLevel.Warning : AppLogLevel.Debug, "WTelegram", message);
-            if (level >= 3 && !IsConnectionFailureLog(message)) Log?.Invoke(message);
-            HandleConnectionLog(message);
+            System.Diagnostics.Trace.WriteLine($"[WTelegram:{level}] {message}");
         };
     }
 
@@ -88,9 +88,20 @@ public sealed class TelegramService : ITelegramService
         bool clearPeers)
     {
         _logger.Info("Telegram", logMessage);
+        Log?.Invoke(logMessage);
         ReportConnection(TelegramConnectionStatus.Connecting, statusMessage);
         DisposeClientForReconnect(clearPeers);
-        _client = new WTelegram.Client(settings.ApiId, settings.ApiHash, _store.GetSessionPath(settings.PhoneNumber));
+        try
+        {
+            _client = new WTelegram.Client(settings.ApiId, settings.ApiHash, _store.GetSessionPath(settings.PhoneNumber));
+        }
+        catch (IOException ex) when (ex.Message.Contains("used by another process", StringComparison.OrdinalIgnoreCase) ||
+                                    ex.Message.Contains("另一个进程", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "该账户正在另一个 Telegram 控制台进程中运行，Session 已被占用。请在原窗口操作，或正常退出旧版本后再登录。",
+                ex);
+        }
         ConfigureClientConnection(_client);
         ApplyProxy(_client, settings.Proxy);
         _client.OnOther += OnOther;
@@ -130,19 +141,6 @@ public sealed class TelegramService : ITelegramService
         if (notification is ReactorError reactorError && !_suppressDisconnectLogging)
             QueueConnectionRecovery(reactorError.Exception);
         return Task.CompletedTask;
-    }
-
-    private void HandleConnectionLog(string message)
-    {
-        if (_suppressDisconnectLogging) return;
-        if (message.Contains("Connected to", StringComparison.OrdinalIgnoreCase) && _client?.User is not null)
-        {
-            ReportConnection(TelegramConnectionStatus.Connected, $"Telegram 已重新连接：{CurrentUser}");
-            return;
-        }
-
-        if (_client?.User is null || message.Contains("Alt DC disconnected", StringComparison.OrdinalIgnoreCase)) return;
-        if (IsConnectionFailureLog(message)) QueueConnectionRecovery(new IOException(message));
     }
 
     private void QueueConnectionRecovery(Exception exception)
@@ -222,15 +220,6 @@ public sealed class TelegramService : ITelegramService
             _connectionLock.Release();
         }
     }
-
-    private static bool IsConnectionFailureLog(string message) =>
-        message.Contains("Connection shut down", StringComparison.OrdinalIgnoreCase) ||
-        message.Contains("Could not read payload length", StringComparison.OrdinalIgnoreCase) ||
-        message.Contains("connection lost", StringComparison.OrdinalIgnoreCase) ||
-        message.Contains("connection closed", StringComparison.OrdinalIgnoreCase) ||
-        message.Contains("disconnected", StringComparison.OrdinalIgnoreCase) ||
-        message.Contains("exception occured in the reactor", StringComparison.OrdinalIgnoreCase) ||
-        message.Contains("exception occurred in the reactor", StringComparison.OrdinalIgnoreCase);
 
     private void ReportConnection(TelegramConnectionStatus status, string message, Exception? exception = null)
     {

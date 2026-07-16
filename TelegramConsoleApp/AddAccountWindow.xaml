@@ -1,0 +1,36 @@
+<Window x:Class="TelegramConsoleApp.AddAccountWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="添加 Telegram 账户" Icon="Assets/AppIcon.ico"
+        Width="480" Height="260" ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner" Background="{StaticResource PageBrush}">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <TextBlock Text="新账户会使用全局 API、代理和邮件配置，并建立独立加密会话。账号备注可以留空。"
+                   Foreground="{StaticResource MutedTextBrush}" Margin="4,0,4,12" />
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <TextBlock Text="账号备注（可选）" VerticalAlignment="Center" />
+            <TextBox x:Name="LocalNameBox" Grid.Column="1"
+                     ToolTip="例如：私人账号、工作账号；留空时登录后使用 Telegram 用户名" />
+        </Grid>
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="90"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <TextBlock Text="手机号" VerticalAlignment="Center" />
+            <TextBox x:Name="PhoneBox" Grid.Column="1" ToolTip="包含国家区号，例如 +8613800000000" />
+        </Grid>
+        <TextBlock Grid.Row="3" Margin="94,4,4,0" Foreground="{StaticResource MutedTextBrush}"
+                   Text="下一步将在独立工作区中输入 Telegram 验证码和二次密码。" />
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="取消" IsCancel="True" Width="90" />
+            <Button Content="开始登录" IsDefault="True" Width="110"
+                    Style="{StaticResource PrimaryButtonStyle}" Click="Confirm_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

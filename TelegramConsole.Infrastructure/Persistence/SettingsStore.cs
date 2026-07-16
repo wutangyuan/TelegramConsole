@@ -10,6 +10,7 @@ namespace TelegramConsole.Infrastructure;
 [SupportedOSPlatform("windows")]
 public sealed class SettingsStore : ISettingsStore
 {
+    private static readonly object FileSync = new();
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -33,7 +34,27 @@ public sealed class SettingsStore : ISettingsStore
         return BuildAccountSessionPath(phoneNumber);
     }
 
+    public bool IsSessionInUse(string phoneNumber)
+    {
+        var path = BuildAccountSessionPath(phoneNumber);
+        if (!File.Exists(path)) return false;
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            return false;
+        }
+        catch (IOException)
+        {
+            return true;
+        }
+    }
+
     public AppSettings Load()
+    {
+        lock (FileSync) return LoadCore();
+    }
+
+    private AppSettings LoadCore()
     {
         try
         {
@@ -46,7 +67,7 @@ public sealed class SettingsStore : ISettingsStore
             if (File.Exists(LegacySettingsPath))
             {
                 var migrated = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(LegacySettingsPath), JsonOptions) ?? new();
-                Save(migrated);
+                SaveCore(migrated);
                 File.Delete(LegacySettingsPath);
                 return Prepare(migrated);
             }
@@ -78,6 +99,48 @@ public sealed class SettingsStore : ISettingsStore
     }
 
     public void Save(AppSettings settings)
+    {
+        lock (FileSync)
+        {
+            var latest = LoadCore();
+            latest.Language = settings.Language;
+            latest.ApiId = settings.ApiId;
+            latest.ApiHash = settings.ApiHash;
+            latest.PhoneNumber = settings.PhoneNumber;
+            latest.MonitorEnabled = settings.MonitorEnabled;
+            latest.Schedules = settings.Schedules;
+            latest.Email = settings.Email;
+            latest.Proxy = settings.Proxy;
+            latest.ExceptionAlerts = settings.ExceptionAlerts;
+            foreach (var (userId, account) in settings.Accounts)
+                if (!latest.Accounts.ContainsKey(userId)) latest.Accounts[userId] = account;
+            SaveCore(latest);
+        }
+    }
+
+    public void SaveAccount(AccountProfile account)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+        if (account.UserId == 0) throw new ArgumentException("Telegram 用户 ID 不能为空", nameof(account));
+        lock (FileSync)
+        {
+            var latest = LoadCore();
+            latest.Accounts[account.UserId] = account;
+            SaveCore(latest);
+        }
+    }
+
+    public void RemoveAccount(long userId)
+    {
+        lock (FileSync)
+        {
+            var latest = LoadCore();
+            if (!latest.Accounts.Remove(userId)) return;
+            SaveCore(latest);
+        }
+    }
+
+    private void SaveCore(AppSettings settings)
     {
         Directory.CreateDirectory(DataDirectory);
         var temp = SettingsPath + ".tmp";

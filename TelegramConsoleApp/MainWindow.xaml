@@ -4,56 +4,82 @@
         xmlns:local="clr-namespace:TelegramConsoleApp"
         Title="{DynamicResource AppTitle}"
         Icon="Assets/AppIcon.ico"
-        Width="1280" Height="820" MinWidth="1040" MinHeight="700"
+        Width="1280" Height="820" MinWidth="820" MinHeight="600"
         WindowStartupLocation="CenterScreen" Background="{StaticResource PageBrush}"
         FontFamily="Microsoft YaHei UI" FontSize="13">
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="64" />
         </Grid.RowDefinitions>
 
-        <GroupBox Header="{DynamicResource ConnectionSettings}" Padding="10" Margin="0,0,0,10">
+        <Border Grid.Row="0" Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                CornerRadius="9" Padding="12,8" Margin="0,0,0,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <Border x:Name="TopConnectionDot" Width="10" Height="10" CornerRadius="5"
+                            Background="#94A3B8" Margin="0,0,10,0" />
+                    <TextBlock x:Name="TopAccountText" Text="未登录" FontWeight="Bold" FontSize="14" />
+                    <TextBlock Text="　·　" Foreground="#94A3B8" />
+                    <TextBlock x:Name="TopConnectionText" Text="等待登录" Foreground="{StaticResource MutedTextBrush}" />
+                </StackPanel>
+                <Button Grid.Column="1" x:Name="TopLoginButton" Content="登录 / 添加账户"
+                        Style="{StaticResource PrimaryButtonStyle}" Click="ToggleLoginPanel_Click" MinWidth="140" />
+                <Button Grid.Column="2" Content="{DynamicResource Settings}" Click="SettingsButton_Click" MinWidth="96" />
+                <Button Grid.Column="3" Content="账户管理" Click="AccountManager_Click" MinWidth="106" />
+            </Grid>
+        </Border>
+
+        <GroupBox Grid.Row="1" x:Name="ConnectionSettingsGroup" Header="账户登录" Padding="10"
+                  Margin="0,0,0,10" Visibility="Collapsed">
             <Grid>
               <Grid x:Name="LoginFormPanel">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="110" />
+                    <ColumnDefinition Width="170" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="130" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="260" />
+                    <ColumnDefinition Width="170" />
                 </Grid.ColumnDefinitions>
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="42" />
                     <RowDefinition Height="42" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <TextBlock Text="API ID" VerticalAlignment="Center" Margin="4" />
-                <TextBox x:Name="ApiIdBox" Grid.Column="1" />
-                <TextBlock Grid.Column="2" Text="API Hash" VerticalAlignment="Center" Margin="8,4,4,4" />
-                <PasswordBox x:Name="ApiHashBox" Grid.Column="3" />
-                <TextBlock Grid.Column="4" Text="{DynamicResource PhoneNumber}" VerticalAlignment="Center" Margin="8,4,4,4" />
-                <TextBox x:Name="PhoneBox" Grid.Column="5" />
-                <Grid Grid.Column="6">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="110" />
-                    </Grid.ColumnDefinitions>
-                    <Button x:Name="LoginButton" Content="{DynamicResource Login}"
-                            Click="LoginButton_Click" Style="{StaticResource PrimaryButtonStyle}" />
-                    <Button Grid.Column="1" Content="{DynamicResource Settings}" Click="SettingsButton_Click" />
-                </Grid>
+                <TextBlock Text="账号备注（可选）" VerticalAlignment="Center" Margin="4" />
+                <TextBox x:Name="LoginAliasBox" Grid.Column="1"
+                         ToolTip="仅在本程序中用于区分账户；留空时自动使用 Telegram 用户名" />
+                <TextBlock Grid.Column="2" Text="{DynamicResource PhoneNumber}" VerticalAlignment="Center" Margin="8,4,4,4" />
+                <TextBox x:Name="PhoneBox" Grid.Column="3" Grid.ColumnSpan="3" />
+                <Button x:Name="LoginButton" Grid.Column="6" Content="{DynamicResource Login}"
+                        Click="LoginButton_Click" Style="{StaticResource PrimaryButtonStyle}" />
 
-                <TextBlock x:Name="LoginPromptLabel" Grid.Row="1" Text="{DynamicResource VerificationCode}"
+                <TextBlock Grid.Row="1" Text="API ID" VerticalAlignment="Center" Margin="4" />
+                <TextBox x:Name="ApiIdBox" Grid.Row="1" Grid.Column="1" />
+                <TextBlock Grid.Row="1" Grid.Column="2" Text="API Hash" VerticalAlignment="Center" Margin="8,4,4,4" />
+                <PasswordBox x:Name="ApiHashBox" Grid.Row="1" Grid.Column="3" Grid.ColumnSpan="3" />
+                <TextBlock x:Name="LoginAccountHint" Grid.Row="1" Grid.Column="6" VerticalAlignment="Center"
+                           Text="新账户" FontSize="11" FontWeight="SemiBold" Foreground="#0369A1"
+                           TextTrimming="CharacterEllipsis" />
+
+                <TextBlock x:Name="LoginPromptLabel" Grid.Row="2" Text="{DynamicResource VerificationCode}"
                            VerticalAlignment="Center" Visibility="Collapsed" Margin="4" />
-                <TextBox x:Name="LoginValueBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="5"
+                <TextBox x:Name="LoginValueBox" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="5"
                          Visibility="Collapsed" KeyDown="LoginValueBox_KeyDown" />
-                <PasswordBox x:Name="LoginPasswordBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="5"
+                <PasswordBox x:Name="LoginPasswordBox" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="5"
                              Visibility="Collapsed" KeyDown="LoginPasswordBox_KeyDown" />
-                <Button x:Name="ContinueLoginButton" Grid.Row="1" Grid.Column="6" Content="{DynamicResource ContinueLogin}"
+                <Button x:Name="ContinueLoginButton" Grid.Row="2" Grid.Column="6" Content="{DynamicResource ContinueLogin}"
                         Visibility="Collapsed" Click="ContinueLoginButton_Click" />
               </Grid>
               <Grid x:Name="LoggedInPanel" Height="42" Visibility="Collapsed">
@@ -61,6 +87,7 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="130" />
+                    <ColumnDefinition Width="110" />
                     <ColumnDefinition Width="110" />
                 </Grid.ColumnDefinitions>
                 <Border x:Name="ConnectionStatusDot" Width="12" Height="12" CornerRadius="6" Background="#22C55E"
@@ -73,12 +100,13 @@
                                FontWeight="SemiBold" Foreground="#16A34A" />
                 </StackPanel>
                 <Button Grid.Column="2" Content="{DynamicResource ProductivityTools}" Click="ProductivityTools_Click" />
-                <Button Grid.Column="3" Content="{DynamicResource Settings}" Click="SettingsButton_Click" />
+                <Button Grid.Column="3" Content="账户管理" Click="AccountManager_Click" />
+                <Button Grid.Column="4" Content="{DynamicResource Settings}" Click="SettingsButton_Click" />
               </Grid>
             </Grid>
         </GroupBox>
 
-        <Grid Grid.Row="1">
+        <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition x:Name="DialogColumn" Width="290" MinWidth="0" />
                 <ColumnDefinition Width="34" />
@@ -161,9 +189,10 @@
                                 <ColumnDefinition Width="100" />
                             </Grid.ColumnDefinitions>
                             <TextBox x:Name="MessageBox" AcceptsReturn="True" KeyDown="MessageBox_KeyDown"
+                                     TextChanged="MessageBox_TextChanged"
                                      ToolTip="Enter 发送，Shift+Enter 换行" Margin="0,0,8,0" />
                             <Button x:Name="SendButton" Grid.Column="1" Content="{DynamicResource Send}" Click="SendButton_Click"
-                                    Style="{StaticResource PrimaryButtonStyle}" Margin="0" />
+                                    Style="{StaticResource PrimaryButtonStyle}" Margin="0" IsEnabled="False" />
                         </Grid>
                     </Grid>
                 </TabItem>
@@ -213,7 +242,8 @@
                                 <ColumnDefinition Width="100" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="{DynamicResource Chat}" VerticalAlignment="Center" />
-                            <ComboBox x:Name="ScheduleChatBox" Grid.Column="1" DisplayMemberPath="Name" />
+                            <ComboBox x:Name="ScheduleChatBox" Grid.Column="1" DisplayMemberPath="Name"
+                                      local:SearchableComboBoxBehavior.IsEnabled="True" />
                             <TextBlock Grid.Column="2" Text="{DynamicResource Time}" VerticalAlignment="Center" Margin="8,0,0,0" />
                             <TextBox x:Name="ScheduleTimeBox" Grid.Column="3" Text="08:00" />
                             <TextBlock Grid.Column="4" Text="{DynamicResource Content}" VerticalAlignment="Center" Margin="8,0,0,0" />
@@ -252,7 +282,8 @@
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="{DynamicResource TelegramConfirmation}" VerticalAlignment="Center" />
-                                <ComboBox x:Name="ConfirmationPeerBox" Grid.Column="1" DisplayMemberPath="Name" />
+                                <ComboBox x:Name="ConfirmationPeerBox" Grid.Column="1" DisplayMemberPath="Name"
+                                          local:SearchableComboBoxBehavior.IsEnabled="True" />
                                 <TextBlock Grid.Column="2" Text="{DynamicResource ConfirmationEmail}" VerticalAlignment="Center" Margin="8,0,0,0" />
                                 <TextBox x:Name="ConfirmationEmailBox" Grid.Column="3" ToolTip="可留空" />
                                 <TextBlock Grid.Column="4" Text="{DynamicResource ConfirmationContent}" VerticalAlignment="Center" Margin="8,0,0,0" />
@@ -305,7 +336,8 @@
                             <CheckBox x:Name="MentionNotifyEnabledBox" Content="{DynamicResource EnableNotification}"
                                       VerticalAlignment="Center" />
                             <ComboBox x:Name="MentionTargetBox" Grid.Column="1" Margin="8,0"
-                                      DisplayMemberPath="Name" ToolTip="选择机器人或私聊" />
+                                      DisplayMemberPath="Name" ToolTip="选择机器人或私聊"
+                                      local:SearchableComboBoxBehavior.IsEnabled="True" />
                             <Button Grid.Column="2" Content="{DynamicResource SaveSettings}" Click="SaveMentionSettings_Click" />
                             <Button Grid.Column="3" Content="{DynamicResource TestNotification}" Click="TestMentionNotification_Click" />
                             <Button Grid.Column="4" Content="{DynamicResource OpenDataDirectory}" Click="OpenMentionDatabase_Click" />
@@ -365,7 +397,8 @@
                                 <ComboBoxItem Content="{DynamicResource CriticalOnly}" Tag="Critical" />
                             </ComboBox>
                             <TextBlock Grid.Column="2" Text="Telegram" VerticalAlignment="Center" />
-                            <ComboBox x:Name="ExceptionPeerBox" Grid.Column="3" DisplayMemberPath="Name" />
+                            <ComboBox x:Name="ExceptionPeerBox" Grid.Column="3" DisplayMemberPath="Name"
+                                      local:SearchableComboBoxBehavior.IsEnabled="True" />
                             <TextBlock Grid.Column="4" Text="{DynamicResource NotificationEmail}" VerticalAlignment="Center" Margin="10,0,4,0" />
                             <TextBox x:Name="ExceptionEmailBox" Grid.Column="5" ToolTip="留空表示不发送邮件" />
                         </Grid>
@@ -475,7 +508,7 @@
             </TabControl>
         </Grid>
 
-        <Border Grid.Row="2" Background="White" BorderBrush="{StaticResource BorderBrush}"
+        <Border Grid.Row="3" Background="White" BorderBrush="{StaticResource BorderBrush}"
                 BorderThickness="1" CornerRadius="8" Margin="0,8,0,0" Padding="4">
             <TextBox x:Name="StatusText" IsReadOnly="True" TextWrapping="Wrap"
                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"

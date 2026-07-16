@@ -17,8 +17,11 @@ public sealed class AppSettings
 public sealed class AccountProfile
 {
     public long UserId { get; set; }
+    public string LocalName { get; set; } = "";
     public string DisplayName { get; set; } = "";
     public string PhoneNumber { get; set; } = "";
+    public bool AutoStart { get; set; } = true;
+    public int SortOrder { get; set; }
     public List<ScheduledMessage> Schedules { get; set; } = [];
     public ExceptionAlertSettings ExceptionAlerts { get; set; } = new();
     public MentionAlertSettings MentionAlerts { get; set; } = new();

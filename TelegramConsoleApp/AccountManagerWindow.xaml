@@ -1,0 +1,44 @@
+<Window x:Class="TelegramConsoleApp.AccountManagerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="账户管理" Icon="Assets/AppIcon.ico" Width="860" Height="520"
+        MinWidth="720" MinHeight="420" WindowStartupLocation="CenterOwner"
+        Background="{StaticResource PageBrush}">
+    <Grid Margin="16">
+        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+        <Grid Margin="0,0,0,10">
+            <StackPanel Orientation="Horizontal">
+                <Button Content="＋ 添加账户" Style="{StaticResource PrimaryButtonStyle}" Click="Add_Click" />
+                <Button Content="登录 / 打开工作区" Click="Open_Click" />
+                <Button Content="停止运行" Click="Stop_Click" />
+                <Button Content="平铺所有工作区" Click="Tile_Click" />
+            </StackPanel>
+            <Button Content="刷新" HorizontalAlignment="Right" Click="Refresh_Click" />
+        </Grid>
+        <DataGrid x:Name="AccountsGrid" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True"
+                  SelectionMode="Single" CanUserAddRows="False" HeadersVisibility="Column"
+                  SelectionUnit="FullRow" MouseDoubleClick="AccountsGrid_MouseDoubleClick">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="账号备注" Binding="{Binding LocalName}" Width="160" />
+                <DataGridTextColumn Header="Telegram 账号" Binding="{Binding DisplayName}" Width="*" />
+                <DataGridTextColumn Header="手机号" Binding="{Binding MaskedPhone}" Width="150" />
+                <DataGridTextColumn Header="运行状态" Binding="{Binding Status}" Width="120" />
+                <DataGridCheckBoxColumn Header="自动启动" Binding="{Binding AutoStart}" Width="90" />
+                <DataGridTemplateColumn Header="操作" Width="110">
+                    <DataGridTemplateColumn.CellTemplate>
+                        <DataTemplate>
+                            <Button Content="{Binding ActionText}" Tag="{Binding UserId}" Padding="8,3" Margin="3"
+                                    IsEnabled="{Binding CanOpen}"
+                                    Click="RowOpen_Click" />
+                        </DataTemplate>
+                    </DataGridTemplateColumn.CellTemplate>
+                </DataGridTemplateColumn>
+            </DataGrid.Columns>
+        </DataGrid>
+        <Grid Grid.Row="2" Margin="0,10,0,0">
+            <TextBlock Foreground="{StaticResource MutedTextBrush}" VerticalAlignment="Center"
+                       Text="选择账户后点击“登录 / 打开工作区”，或直接双击账户。关闭工作区只会隐藏，停止运行才会断开。" />
+            <Button Content="从列表移除" HorizontalAlignment="Right" Click="Remove_Click" />
+        </Grid>
+    </Grid>
+</Window>

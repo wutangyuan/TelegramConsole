@@ -14,6 +14,8 @@ public partial class MainWindow : Window
     private readonly ISettingsStore _store = new SettingsStore();
     private readonly IAppLogger _logger = new Log4NetAppLogger();
     private readonly AppSettings _settings;
+    private readonly AccountLaunchRequest? _launchRequest;
+    private readonly bool _managedWorkspace;
     private readonly ITelegramService _telegram;
     private readonly ISchedulerService _scheduler;
     private readonly IExceptionMonitorService _exceptionMonitor;
@@ -28,14 +30,45 @@ public partial class MainWindow : Window
     private QuoteTargetItem? _contextQuoteTarget;
     private bool _loadingHistory;
     private bool _initialized;
+    private bool _resourcesDisposed;
+    private bool _loginInProgress;
     private int _exceptionQueryLimit = 10;
     private GridLength _expandedDialogWidth = new(290);
 
-    public MainWindow()
+    public long AccountUserId => _activeAccount?.UserId ?? 0;
+    public string WorkspaceDisplayName => _activeAccount?.LocalName is { Length: > 0 } localName
+        ? localName
+        : _activeAccount?.DisplayName ?? _launchRequest?.LocalName ?? "新账户";
+    public string WorkspaceAccountLabel => _activeAccount is null
+        ? WorkspaceDisplayName
+        : string.IsNullOrWhiteSpace(_activeAccount.LocalName) || _activeAccount.LocalName == _activeAccount.DisplayName
+            ? _activeAccount.DisplayName
+            : $"{_activeAccount.LocalName} · {_activeAccount.DisplayName}";
+    public bool IsWorkspaceOnline => _telegram.IsLoggedIn;
+    public string PhoneNumber => PhoneBox.Text.Trim();
+
+    public MainWindow() : this(null, false)
     {
+    }
+
+    internal MainWindow(AccountLaunchRequest? launchRequest, bool managedWorkspace)
+    {
+        _launchRequest = launchRequest;
+        _managedWorkspace = managedWorkspace;
         InitializeComponent();
-        InitializeTrayIcon();
+        if (!_managedWorkspace) InitializeTrayIcon();
         _settings = _store.Load();
+        var knownAccount = _settings.Accounts.Values.FirstOrDefault(x =>
+            SamePhone(x.PhoneNumber, launchRequest?.PhoneNumber ?? _settings.PhoneNumber));
+        var loginLocalName = !string.IsNullOrWhiteSpace(launchRequest?.LocalName)
+            ? launchRequest.LocalName
+            : !string.IsNullOrWhiteSpace(knownAccount?.LocalName)
+                ? knownAccount.LocalName
+                : !string.IsNullOrWhiteSpace(knownAccount?.DisplayName)
+                    ? knownAccount.DisplayName
+                    : "新账户";
+        var loginDisplayName = knownAccount?.DisplayName ?? "";
+        UpdateLoginIdentity(loginLocalName, loginDisplayName);
         _telegram = new TelegramService(_store, _logger);
         _exceptionMonitor = new ExceptionMonitorService(_store, _logger, _telegram, _settings);
         _mentionMonitor = new MentionMonitorService(_store, _telegram, _logger);
@@ -43,7 +76,7 @@ public partial class MainWindow : Window
 
         ApiIdBox.Text = _settings.ApiId == 0 ? "" : _settings.ApiId.ToString();
         ApiHashBox.Password = _settings.ApiHash;
-        PhoneBox.Text = _settings.PhoneNumber;
+        PhoneBox.Text = launchRequest?.PhoneNumber ?? _settings.PhoneNumber;
         MonitorEnabledBox.IsChecked = _settings.MonitorEnabled;
         ExceptionNotifyEnabledBox.IsChecked = true;
         ExceptionMinimumLevelBox.SelectedIndex = 0;
@@ -70,13 +103,25 @@ public partial class MainWindow : Window
         _logger.EntryWritten += Logger_EntryWritten;
         _exceptionMonitor.RecordsChanged += ExceptionMonitor_RecordsChanged;
         _mentionMonitor.RecordsChanged += MentionMonitor_RecordsChanged;
-        Application.Current.DispatcherUnhandledException += Application_DispatcherUnhandledException;
-        TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
-        AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+        if (!_managedWorkspace)
+        {
+            Application.Current.DispatcherUnhandledException += Application_DispatcherUnhandledException;
+            TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+        }
         _logger.Info("Application", "WPF 主窗口已初始化");
         Closing += MainWindow_Closing;
-        Loaded += async (_, _) => await RefreshExceptionsAsync();
+        Loaded += MainWindow_Loaded;
+        Closed += (_, _) => AccountWorkspaceManager.Unregister(this);
+        if (loginLocalName != "新账户") Title = $"Telegram 控制台助手 - {loginLocalName}";
         _initialized = true;
+    }
+
+    private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        await RefreshExceptionsAsync();
+        if (_launchRequest?.AutoLogin == true && !_telegram.IsLoggedIn)
+            await RunUiAsync(BeginLoginAsync);
     }
 
     private void InitializeTrayIcon()
@@ -104,6 +149,7 @@ public partial class MainWindow : Window
             Visible = true
         };
         _trayIcon.DoubleClick += (_, _) => Dispatcher.BeginInvoke(ShowMainWindow);
+        AccountWorkspaceManager.Changed += UpdateTrayWorkspaces;
         UpdateTrayAccount();
     }
 
@@ -118,7 +164,8 @@ public partial class MainWindow : Window
     private void ExitApplication()
     {
         _exitRequested = true;
-        Close();
+        AccountWorkspaceManager.StopAll(this);
+        Application.Current.Shutdown();
     }
 
     private async void LoginButton_Click(object sender, RoutedEventArgs e) =>
@@ -136,6 +183,29 @@ public partial class MainWindow : Window
         }
     }
 
+    private void AccountManager_Click(object sender, RoutedEventArgs e)
+    {
+        AccountWorkspaceManager.Register(this, AccountUserId);
+        new AccountManagerWindow(_store) { Owner = this }.Show();
+    }
+
+    private void ToggleLoginPanel_Click(object sender, RoutedEventArgs e)
+    {
+        if (_telegram.IsLoggedIn)
+        {
+            var dialog = new AddAccountWindow { Owner = this };
+            if (dialog.ShowDialog() == true && dialog.Request is not null)
+                AccountWorkspaceManager.OpenNew(dialog.Request);
+            return;
+        }
+
+        ConnectionSettingsGroup.Visibility = ConnectionSettingsGroup.Visibility == Visibility.Visible
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+        if (ConnectionSettingsGroup.Visibility == Visibility.Visible)
+            (string.IsNullOrWhiteSpace(LoginAliasBox.Text) ? LoginAliasBox : PhoneBox).Focus();
+    }
+
     private void ProductivityTools_Click(object sender, RoutedEventArgs e)
     {
         if (_activeAccount is null)
@@ -151,6 +221,10 @@ public partial class MainWindow : Window
 
     private async Task BeginLoginAsync()
     {
+        if (_loginInProgress) return;
+        _loginInProgress = true;
+        try
+        {
         if (!int.TryParse(ApiIdBox.Text.Trim(), out var apiId) || apiId <= 0)
             throw new InvalidOperationException(L("ApiIdInvalid"));
         if (string.IsNullOrWhiteSpace(ApiHashBox.Password) || string.IsNullOrWhiteSpace(PhoneBox.Text))
@@ -164,6 +238,18 @@ public partial class MainWindow : Window
         SetLoginBusy(true);
         SetStatus(L("ConnectingTelegram"));
         await HandleLoginResultAsync(await _telegram.BeginLoginAsync(_settings));
+        }
+        finally
+        {
+            _loginInProgress = false;
+        }
+    }
+
+    internal async void StartLoginFromManager()
+    {
+        ShowWorkspace();
+        if (_telegram.IsLoggedIn || _loginInProgress) return;
+        await RunUiAsync(BeginLoginAsync);
     }
 
     private async Task DeactivateAccountAsync()
@@ -210,6 +296,7 @@ public partial class MainWindow : Window
     {
         if (prompt is not null)
         {
+            ConnectionSettingsGroup.Visibility = Visibility.Visible;
             var isPassword = prompt == "password";
             LoginPromptLabel.Text = PromptText(prompt);
             LoginValueBox.Text = "";
@@ -244,13 +331,22 @@ public partial class MainWindow : Window
         LoginFormPanel.Visibility = Visibility.Collapsed;
         LoggedInPanel.Visibility = Visibility.Visible;
         LoginButton.IsEnabled = false;
+        ConnectionSettingsGroup.Visibility = Visibility.Collapsed;
+        TopConnectionDot.Background = Brushes.LimeGreen;
+        TopConnectionText.Text = L("Online");
+        TopConnectionText.Foreground = Brushes.ForestGreen;
+        TopLoginButton.Content = "＋ 添加账户";
     }
 
     private void HandleConnectionState(TelegramConnectionState state)
     {
+        AccountWorkspaceManager.NotifyChanged();
         switch (state.Status)
         {
             case TelegramConnectionStatus.Connecting:
+                TopConnectionDot.Background = Brushes.DarkOrange;
+                TopConnectionText.Text = L("ConnectingStatus");
+                TopConnectionText.Foreground = Brushes.DarkOrange;
                 if (LoggedInPanel.Visibility == Visibility.Visible)
                 {
                     ConnectionStatusText.Text = L("ConnectingStatus");
@@ -260,6 +356,9 @@ public partial class MainWindow : Window
                 SetStatus(state.Message, Brushes.DarkOrange);
                 break;
             case TelegramConnectionStatus.Recovering:
+                TopConnectionDot.Background = Brushes.DarkOrange;
+                TopConnectionText.Text = L("RecoveringStatus");
+                TopConnectionText.Foreground = Brushes.DarkOrange;
                 if (_telegram.CurrentUserId != 0)
                 {
                     LoggedInAccountText.Text = _telegram.CurrentUser;
@@ -286,6 +385,11 @@ public partial class MainWindow : Window
         UpdateTrayAccount();
         LoggedInPanel.Visibility = Visibility.Collapsed;
         LoginFormPanel.Visibility = Visibility.Visible;
+        ConnectionSettingsGroup.Visibility = Visibility.Visible;
+        TopConnectionDot.Background = Brushes.OrangeRed;
+        TopConnectionText.Text = "需要重新登录";
+        TopConnectionText.Foreground = Brushes.OrangeRed;
+        TopLoginButton.Content = "登录 / 添加账户";
         LoginPromptLabel.Visibility = LoginValueBox.Visibility = LoginPasswordBox.Visibility =
             ContinueLoginButton.Visibility = Visibility.Collapsed;
         SetLoginBusy(false);
@@ -306,6 +410,32 @@ public partial class MainWindow : Window
         if (_trayIcon is not null)
         {
             var text = $"Telegram - {displayName}";
+            _trayIcon.Text = text.Length <= 63 ? text : text[..63];
+        }
+        UpdateTrayWorkspaces();
+    }
+
+    private void UpdateTrayWorkspaces()
+    {
+        if (_trayAccountItem is null) return;
+        var workspaces = AccountWorkspaceManager.RunningWorkspaces();
+        _trayAccountItem.DropDownItems.Clear();
+        _trayAccountItem.Enabled = workspaces.Count > 0;
+        _trayAccountItem.Text = workspaces.Count == 0 ? L("NotLoggedIn") : $"运行中的账户：{workspaces.Count}";
+        foreach (var workspace in workspaces)
+        {
+            var item = new System.Windows.Forms.ToolStripMenuItem
+            {
+                Text = $"{(workspace.IsOnline ? "●" : "○")} {workspace.DisplayName}",
+                Tag = workspace.Window
+            };
+            item.Click += (_, _) => Dispatcher.BeginInvoke(workspace.Window.ShowWorkspace);
+            _trayAccountItem.DropDownItems.Add(item);
+        }
+        if (_trayIcon is not null)
+        {
+            var online = workspaces.Count(x => x.IsOnline);
+            var text = $"Telegram - {online}/{workspaces.Count} 在线";
             _trayIcon.Text = text.Length <= 63 ? text : text[..63];
         }
     }
@@ -334,7 +464,12 @@ public partial class MainWindow : Window
         }
         account.DisplayName = _telegram.CurrentUser;
         account.PhoneNumber = _settings.PhoneNumber;
+        var localName = LoginAliasBox.Text.Trim();
+        if (!string.IsNullOrWhiteSpace(localName)) account.LocalName = localName;
+        else if (string.IsNullOrWhiteSpace(account.LocalName))
+            account.LocalName = string.IsNullOrWhiteSpace(_launchRequest?.LocalName) ? account.DisplayName : _launchRequest.LocalName;
         _activeAccount = account;
+        _store.SaveAccount(account);
         _store.Save(_settings);
 
         _allDialogs = [];
@@ -355,7 +490,25 @@ public partial class MainWindow : Window
         await RefreshExceptionsAsync();
         await RefreshMentionsAsync();
         await RefreshOutboxAsync();
+        Title = $"Telegram 控制台助手 - {account.LocalName} ({account.DisplayName})";
+        UpdateLoginIdentity(account.LocalName, account.DisplayName);
+        AccountWorkspaceManager.Register(this, userId);
     }
+
+    private void UpdateLoginIdentity(string localName, string displayName)
+    {
+        var identity = string.IsNullOrWhiteSpace(displayName) || displayName == localName
+            ? localName
+            : $"{localName} · {displayName}";
+        LoginAccountHint.Text = $"登录：{identity}";
+        LoginAliasBox.Text = localName == "新账户" ? "" : localName;
+        ConnectionSettingsGroup.Header = $"账户登录 · {identity}";
+        TopAccountText.Text = identity;
+    }
+
+    private static bool SamePhone(string left, string right) =>
+        !string.IsNullOrWhiteSpace(left) &&
+        new string(left.Where(char.IsDigit).ToArray()) == new string(right.Where(char.IsDigit).ToArray());
 
     private async void LoginValueBox_KeyDown(object sender, KeyEventArgs e)
     {
@@ -420,7 +573,7 @@ public partial class MainWindow : Window
             ShowError(L("SelectDialogFirst"));
             return;
         }
-        var window = new ChatConsoleWindow(_telegram, dialog);
+        var window = new ChatConsoleWindow(_telegram, dialog, this, WorkspaceAccountLabel);
         window.Show();
     }
 
@@ -497,8 +650,11 @@ public partial class MainWindow : Window
     {
         if (e.Key != Key.Enter || Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) return;
         e.Handled = true;
+        if (string.IsNullOrWhiteSpace(MessageBox.Text)) return;
         await RunUiAsync(SendMessageAsync);
     }
+
+    private void MessageBox_TextChanged(object sender, TextChangedEventArgs e) => UpdateChatSendButton();
 
     private async Task SendMessageAsync()
     {
@@ -577,8 +733,11 @@ public partial class MainWindow : Window
     private void SetChatSendEnabled(bool enabled)
     {
         MessageBox.IsEnabled = enabled;
-        SendButton.IsEnabled = enabled;
+        SendButton.IsEnabled = enabled && !string.IsNullOrWhiteSpace(MessageBox.Text);
     }
+
+    private void UpdateChatSendButton() =>
+        SendButton.IsEnabled = MessageBox.IsEnabled && !string.IsNullOrWhiteSpace(MessageBox.Text);
 
     private void HandleIncoming(ChatLine line)
     {
@@ -632,7 +791,7 @@ public partial class MainWindow : Window
                 ConfirmationText = confirmationText
             };
             _activeAccount.Schedules.Add(scheduledTask);
-            _store.Save(_settings);
+            _store.SaveAccount(_activeAccount);
             await _scheduler.UpsertAsync(scheduledTask);
             RenderSchedules();
             SetStatus(L("TaskAdded"));
@@ -655,7 +814,7 @@ public partial class MainWindow : Window
         }
         var selectedIds = selected.Select(x => x.Id).ToHashSet();
         _activeAccount.Schedules.RemoveAll(x => selectedIds.Contains(x.Id));
-        _store.Save(_settings);
+        _store.SaveAccount(_activeAccount);
         foreach (var row in selected) await _scheduler.DeleteAsync(row.Id);
         RenderSchedules();
         SetStatus(LF("TasksDeleted", selected.Count));
@@ -671,7 +830,7 @@ public partial class MainWindow : Window
                 ?? throw new InvalidOperationException(L("TaskNotFound"));
             var editor = new ScheduleEditWindow(task, _allDialogs, IsEmailConfigured()) { Owner = this };
             if (editor.ShowDialog() != true) return;
-            _store.Save(_settings);
+            _store.SaveAccount(_activeAccount!);
             await _scheduler.UpsertAsync(task);
             await _scheduler.RunDueTasksAsync();
             RenderSchedules();
@@ -724,7 +883,7 @@ public partial class MainWindow : Window
         var task = _activeAccount?.Schedules.FirstOrDefault(x => x.Id == row.Id);
         if (task is null) return;
         task.Enabled = !task.Enabled;
-        _store.Save(_settings);
+        if (_activeAccount is not null) _store.SaveAccount(_activeAccount);
         await _scheduler.UpsertAsync(task);
         RenderSchedules();
     }
@@ -843,11 +1002,34 @@ public partial class MainWindow : Window
             return;
         }
 
+        DisposeWorkspaceResources();
+    }
+
+    internal void StopWorkspace()
+    {
+        _exitRequested = true;
+        Close();
+    }
+
+    internal void ShowWorkspace()
+    {
+        ShowInTaskbar = true;
+        Show();
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Activate();
+    }
+
+    private void DisposeWorkspaceResources()
+    {
+        if (_resourcesDisposed) return;
+        _resourcesDisposed = true;
+
         _logger.Info("Application", "应用正在退出");
         if (int.TryParse(ApiIdBox.Text, out var apiId)) _settings.ApiId = apiId;
         _settings.ApiHash = ApiHashBox.Password.Trim();
         _settings.PhoneNumber = PhoneBox.Text.Trim();
         _store.Save(_settings);
+        if (_activeAccount is not null) _store.SaveAccount(_activeAccount);
         _exceptionMonitor.RecordsChanged -= ExceptionMonitor_RecordsChanged;
         _exceptionMonitor.Dispose();
         _mentionMonitor.RecordsChanged -= MentionMonitor_RecordsChanged;
@@ -856,9 +1038,12 @@ public partial class MainWindow : Window
         _telegram.AutomationActivity -= Telegram_AutomationActivity;
         _scheduler.Dispose();
         _telegram.Dispose();
-        Application.Current.DispatcherUnhandledException -= Application_DispatcherUnhandledException;
-        TaskScheduler.UnobservedTaskException -= TaskScheduler_UnobservedTaskException;
-        AppDomain.CurrentDomain.UnhandledException -= CurrentDomain_UnhandledException;
+        if (!_managedWorkspace)
+        {
+            Application.Current.DispatcherUnhandledException -= Application_DispatcherUnhandledException;
+            TaskScheduler.UnobservedTaskException -= TaskScheduler_UnobservedTaskException;
+            AppDomain.CurrentDomain.UnhandledException -= CurrentDomain_UnhandledException;
+        }
         _logger.EntryWritten -= Logger_EntryWritten;
         _logger.Dispose();
         DisposeTrayIcon();
@@ -866,6 +1051,7 @@ public partial class MainWindow : Window
 
     private void DisposeTrayIcon()
     {
+        AccountWorkspaceManager.Changed -= UpdateTrayWorkspaces;
         if (_trayIcon is null) return;
         _trayIcon.Visible = false;
         _trayIcon.ContextMenuStrip?.Dispose();
@@ -995,7 +1181,7 @@ public partial class MainWindow : Window
         settings.TargetPeerId = target?.Dialog?.Id;
         settings.TargetPeerKind = target?.Kind ?? "";
         settings.TargetPeerTitle = target?.Dialog?.Name ?? "";
-        _store.Save(_settings);
+        _store.SaveAccount(_activeAccount);
         _mentionMonitor.ActivateAccount(_activeAccount.UserId, settings);
     }
 
@@ -1073,7 +1259,7 @@ public partial class MainWindow : Window
         alerts.TelegramPeerTitle = target?.Dialog?.Name ?? "";
         alerts.EmailRecipient = ExceptionEmailBox.Text.Trim();
         EnsureEmailConfigured(alerts.EmailRecipient);
-        _store.Save(_settings);
+        _store.SaveAccount(_activeAccount);
         if (showStatus) SetStatus("异常通知配置已加密保存");
     }
 

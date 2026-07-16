@@ -10,16 +10,26 @@ public partial class ChatConsoleWindow : Window
     private const int QuoteHistoryLimit = 300;
     private readonly ITelegramService _telegram;
     private readonly DialogItem _dialog;
+    private readonly MainWindow _sourceWorkspace;
+    private readonly string _accountLabel;
     private QuoteTargetItem? _selectedQuoteTarget;
     private QuoteTargetItem? _contextQuoteTarget;
 
-    public ChatConsoleWindow(ITelegramService telegram, DialogItem dialog)
+    public ChatConsoleWindow(
+        ITelegramService telegram,
+        DialogItem dialog,
+        MainWindow sourceWorkspace,
+        string accountLabel)
     {
         InitializeComponent();
         _telegram = telegram;
         _dialog = dialog;
-        Title = $"Console - {dialog.Name}";
+        _sourceWorkspace = sourceWorkspace;
+        _accountLabel = string.IsNullOrWhiteSpace(accountLabel) ? telegram.CurrentUser : accountLabel;
+        Title = $"Console - {_accountLabel} - {dialog.Name}";
         PeerTitle.Text = dialog.Name;
+        AccountTitle.Text = $"账户：{_accountLabel}";
+        AccountStatusText.Text = $"账户：{_accountLabel}";
         Loaded += Window_Loaded;
         Closed += Window_Closed;
         _telegram.MessageReceived += Telegram_MessageReceived;
@@ -52,8 +62,11 @@ public partial class ChatConsoleWindow : Window
     {
         if (e.Key != Key.Enter) return;
         e.Handled = true;
+        if (string.IsNullOrWhiteSpace(InputBox.Text)) return;
         await SendAsync();
     }
+
+    private void InputBox_TextChanged(object sender, TextChangedEventArgs e) => UpdateSendButton();
 
     private async Task SendAsync()
     {
@@ -166,8 +179,11 @@ public partial class ChatConsoleWindow : Window
     private void SetSendEnabled(bool enabled)
     {
         InputBox.IsEnabled = enabled;
-        SendButton.IsEnabled = enabled;
+        SendButton.IsEnabled = enabled && !string.IsNullOrWhiteSpace(InputBox.Text);
     }
+
+    private void UpdateSendButton() =>
+        SendButton.IsEnabled = InputBox.IsEnabled && !string.IsNullOrWhiteSpace(InputBox.Text);
 
     private void AppendText(
         string text,
@@ -231,12 +247,10 @@ public partial class ChatConsoleWindow : Window
     private void Window_Closed(object? sender, EventArgs e)
     {
         _telegram.MessageReceived -= Telegram_MessageReceived;
-        if (Application.Current.MainWindow is not Window mainWindow || !mainWindow.IsLoaded) return;
-        if (!mainWindow.IsVisible) mainWindow.Show();
-        if (mainWindow.WindowState == WindowState.Minimized) mainWindow.WindowState = WindowState.Normal;
-        mainWindow.Activate();
-        mainWindow.Topmost = true;
-        mainWindow.Topmost = false;
-        mainWindow.Focus();
+        if (!_sourceWorkspace.IsLoaded) return;
+        _sourceWorkspace.ShowWorkspace();
+        _sourceWorkspace.Topmost = true;
+        _sourceWorkspace.Topmost = false;
+        _sourceWorkspace.Focus();
     }
 }

@@ -5,8 +5,11 @@ public interface ISettingsStore
     string DataDirectory { get; }
     string SessionPath { get; }
     string GetSessionPath(string phoneNumber);
+    bool IsSessionInUse(string phoneNumber);
     AppSettings Load();
     void Save(AppSettings settings);
+    void SaveAccount(AccountProfile account);
+    void RemoveAccount(long userId);
 }
 
 public interface ITelegramService : IDisposable

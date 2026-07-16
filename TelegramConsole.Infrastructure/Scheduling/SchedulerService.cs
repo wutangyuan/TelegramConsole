@@ -2,6 +2,7 @@ using Quartz;
 using Quartz.Impl;
 using Quartz.Impl.Matchers;
 using TelegramConsole.Core;
+using System.Collections.Specialized;
 
 namespace TelegramConsole.Infrastructure;
 
@@ -30,7 +31,16 @@ public sealed class SchedulerService : ISchedulerService
 
     private async Task InitializeAsync()
     {
-        _scheduler = await StdSchedulerFactory.GetDefaultScheduler();
+        var schedulerId = Guid.NewGuid().ToString("N");
+        var properties = new NameValueCollection
+        {
+            ["quartz.scheduler.instanceName"] = $"TelegramConsole-{schedulerId}",
+            ["quartz.scheduler.instanceId"] = schedulerId,
+            ["quartz.threadPool.type"] = "Quartz.Simpl.DefaultThreadPool, Quartz",
+            ["quartz.threadPool.threadCount"] = "2",
+            ["quartz.jobStore.type"] = "Quartz.Simpl.RAMJobStore, Quartz"
+        };
+        _scheduler = await new StdSchedulerFactory(properties).GetScheduler();
         _scheduler.Context[ContextKey] = this;
         await _scheduler.Start();
         Report(AppLogLevel.Information, "Quartz.NET 已启动，等待登录后加载账号任务");
@@ -133,7 +143,7 @@ public sealed class SchedulerService : ISchedulerService
         {
             await _telegram.SendScheduledAsync(task);
             task.LastSentDate = today;
-            _store.Save(_settings);
+            if (_activeAccount is not null) _store.SaveAccount(_activeAccount);
             var executionType = isManual ? " 手动" : isRecovery ? " 补发" : "";
             Report(AppLogLevel.Information, $"Quartz{executionType}任务已发送：{task.ChatTitle}（任务 {task.Id}）");
         }
