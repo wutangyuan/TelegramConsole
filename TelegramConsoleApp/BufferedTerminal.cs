@@ -46,9 +46,6 @@ public sealed class BufferedTerminal : TextEditor
         Options.EnableEmailHyperlinks = false;
         Options.EnableHyperlinks = false;
         Options.EnableTextDragDrop = false;
-        PreviewMouseMove += BufferedTerminal_PreviewMouseMove;
-        MouseLeave += (_, _) => Cursor = System.Windows.Input.Cursors.IBeam;
-
         _segments = new TextSegmentCollection<ColoredSegment>(Document);
         TextArea.TextView.LineTransformers.Add(new SegmentColorizer(_segments));
         _flushTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
@@ -263,11 +260,30 @@ public sealed class BufferedTerminal : TextEditor
         return clone;
     }
 
-    private void BufferedTerminal_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    protected override void OnPreviewMouseLeftButtonDown(System.Windows.Input.MouseButtonEventArgs e)
     {
-        var tag = GetTagAtVisualPosition<MediaLinkItem>(
+        var link = GetTagAtVisualPosition<MediaLinkItem>(
             e.GetPosition(TextArea.TextView), preferSelection: false);
-        Cursor = tag is null ? System.Windows.Input.Cursors.IBeam : System.Windows.Input.Cursors.Hand;
+        if (link is not null)
+        {
+            Cursor = System.Windows.Input.Cursors.Hand;
+            e.Handled = true;
+            return;
+        }
+        base.OnPreviewMouseLeftButtonDown(e);
+    }
+
+    protected override void OnQueryCursor(System.Windows.Input.QueryCursorEventArgs e)
+    {
+        var link = GetTagAtVisualPosition<MediaLinkItem>(
+            System.Windows.Input.Mouse.GetPosition(TextArea.TextView), preferSelection: false);
+        if (link is not null)
+        {
+            e.Cursor = System.Windows.Input.Cursors.Hand;
+            e.Handled = true;
+            return;
+        }
+        base.OnQueryCursor(e);
     }
 
     private sealed record PendingLine(
