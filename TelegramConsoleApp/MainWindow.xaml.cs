@@ -57,6 +57,7 @@ public partial class MainWindow : Window
         _telegram.Log += text => Dispatcher.BeginInvoke(() => SetStatus(text));
         _telegram.ConnectionStateChanged += state => Dispatcher.BeginInvoke(() => HandleConnectionState(state));
         _telegram.OutboxChanged += Telegram_OutboxChanged;
+        _telegram.AutomationActivity += Telegram_AutomationActivity;
         _scheduler.Status += text => Dispatcher.BeginInvoke(() =>
         {
             SetStatus(text);
@@ -122,6 +123,19 @@ public partial class MainWindow : Window
         }
     }
 
+    private void ProductivityTools_Click(object sender, RoutedEventArgs e)
+    {
+        if (_activeAccount is null)
+        {
+            ShowError(L("LoginFirst"));
+            return;
+        }
+        new ProductivityWindow(_telegram, _allDialogs, _activeAccount, _store, _settings)
+        {
+            Owner = this
+        }.Show();
+    }
+
     private async Task BeginLoginAsync()
     {
         if (!int.TryParse(ApiIdBox.Text.Trim(), out var apiId) || apiId <= 0)
@@ -144,6 +158,7 @@ public partial class MainWindow : Window
         _activeAccount = null;
         _exceptionMonitor.DeactivateAccount();
         _mentionMonitor.DeactivateAccount();
+        _telegram.ConfigureAutomationRules([]);
         await _scheduler.DeactivateAccountAsync();
         _allDialogs = [];
         DialogsList.ItemsSource = null;
@@ -305,6 +320,7 @@ public partial class MainWindow : Window
         _exceptionMonitor.ActivateAccount(userId, account.ExceptionAlerts);
         MentionNotifyEnabledBox.IsChecked = account.MentionAlerts.NotificationsEnabled;
         _mentionMonitor.ActivateAccount(userId, account.MentionAlerts);
+        _telegram.ConfigureAutomationRules(account.AutomationRules);
         await _scheduler.ActivateAccountAsync(account);
         RenderSchedules();
         await RefreshExceptionsAsync();
@@ -744,6 +760,7 @@ public partial class MainWindow : Window
         _mentionMonitor.RecordsChanged -= MentionMonitor_RecordsChanged;
         _mentionMonitor.Dispose();
         _telegram.OutboxChanged -= Telegram_OutboxChanged;
+        _telegram.AutomationActivity -= Telegram_AutomationActivity;
         _scheduler.Dispose();
         _telegram.Dispose();
         Application.Current.DispatcherUnhandledException -= Application_DispatcherUnhandledException;
@@ -802,6 +819,12 @@ public partial class MainWindow : Window
         catch (Exception ex) { _logger.Error("Outbox", "刷新发件箱失败", ex); }
     });
 
+    private void Telegram_AutomationActivity(string message) => Dispatcher.BeginInvoke(() =>
+    {
+        SetStatus(message);
+        AppendConsole(MonitorConsole, $"[{DateTime.Now:HH:mm:ss}] [规则] {message}");
+    });
+
     private async void RefreshOutbox_Click(object sender, RoutedEventArgs e) =>
         await RunUiAsync(RefreshOutboxAsync);
 
@@ -856,6 +879,7 @@ public partial class MainWindow : Window
     {
         "Schedule" => L("OutboxSchedule"),
         "Confirmation" => L("OutboxConfirmation"),
+        "Automation" => L("AutomationRules"),
         _ => L("OutboxManual")
     };
 

@@ -60,6 +60,7 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="130" />
                     <ColumnDefinition Width="110" />
                 </Grid.ColumnDefinitions>
                 <Border x:Name="ConnectionStatusDot" Width="12" Height="12" CornerRadius="6" Background="#22C55E"
@@ -71,7 +72,8 @@
                     <TextBlock x:Name="ConnectionStatusText" Text="{DynamicResource Online}"
                                FontWeight="SemiBold" Foreground="#16A34A" />
                 </StackPanel>
-                <Button Grid.Column="2" Content="{DynamicResource Settings}" Click="SettingsButton_Click" />
+                <Button Grid.Column="2" Content="{DynamicResource ProductivityTools}" Click="ProductivityTools_Click" />
+                <Button Grid.Column="3" Content="{DynamicResource Settings}" Click="SettingsButton_Click" />
               </Grid>
             </Grid>
         </GroupBox>

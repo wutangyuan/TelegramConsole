@@ -35,6 +35,8 @@ public static class LocalizationManager
     public static string Text(string key) =>
         Application.Current.TryFindResource(key)?.ToString() ?? key;
 
+    public static string Get(string key) => Text(key);
+
     public static string Format(string key, params object?[] args) =>
         string.Format(CultureInfo.CurrentCulture, Text(key), args);
 
