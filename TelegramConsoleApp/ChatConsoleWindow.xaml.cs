@@ -98,7 +98,9 @@ public partial class ChatConsoleWindow : Window
             : null;
         if (line.ReplyToMessageId is not int replyId)
         {
-            AppendText(body, color, messageTag, deduplicationKey);
+            ConsoleBox.AppendLines(
+                [(body, color, messageTag)], deduplicationKey,
+                MediaLinkFactory.Create(line, body, lineIndex: 0));
             return;
         }
         var sender = string.IsNullOrWhiteSpace(line.ReplySender) ? $"消息 #{replyId}" : line.ReplySender;
@@ -108,13 +110,35 @@ public partial class ChatConsoleWindow : Window
         [
             ($"↪ {sender}: {value}", Brushes.Gray, new QuoteTargetItem(replyId, sender, line.ReplyText)),
             (body, color, messageTag)
-        ], deduplicationKey);
+        ], deduplicationKey, MediaLinkFactory.Create(line, body, lineIndex: 1));
     }
 
     private void ConsoleBox_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
         _contextQuoteTarget = ConsoleBox.GetTagAtVisualPosition<QuoteTargetItem>(
             e.GetPosition(ConsoleBox.TextArea.TextView));
+    }
+
+    private async void ConsoleBox_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        var media = ConsoleBox.GetTagAtVisualPosition<MediaLinkItem>(
+            e.GetPosition(ConsoleBox.TextArea.TextView), preferSelection: false);
+        if (media is null) return;
+        e.Handled = true;
+        try
+        {
+            PeerTitle.Text = LocalizationManager.Format("DownloadingMedia", media.Label);
+            var path = await _telegram.DownloadMediaAsync(media.Dialog, media.MessageId);
+            MediaFileLauncher.Open(this, path);
+        }
+        catch (Exception ex)
+        {
+            AppendText("[ERROR] " + UserMessageFormatter.From(ex), Brushes.OrangeRed);
+        }
+        finally
+        {
+            PeerTitle.Text = _dialog.Name;
+        }
     }
 
     private void ConsoleBox_ContextMenuOpening(object sender, ContextMenuEventArgs e)

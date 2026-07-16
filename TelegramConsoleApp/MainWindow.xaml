@@ -135,6 +135,7 @@
                                                 FontSize="14" Background="#090D12" Foreground="#F8FAFC"
                                                 BorderBrush="#1E293B" BorderThickness="1"
                                                 MaximumLines="1000" MaximumCharacters="500000"
+                                                PreviewMouseLeftButtonUp="Terminal_PreviewMouseLeftButtonUp"
                                                 PreviewMouseRightButtonDown="ChatConsole_PreviewMouseRightButtonDown"
                                                 ContextMenuOpening="ChatConsole_ContextMenuOpening">
                             <local:BufferedTerminal.ContextMenu>
@@ -181,7 +182,8 @@
                                                 FontFamily="Cascadia Mono, Consolas" FontSize="14"
                                                 Background="#090D12" Foreground="#F8FAFC"
                                                 BorderBrush="#1E293B" BorderThickness="1"
-                                                MaximumLines="1500" MaximumCharacters="750000" />
+                                                MaximumLines="1500" MaximumCharacters="750000"
+                                                PreviewMouseLeftButtonUp="Terminal_PreviewMouseLeftButtonUp" />
                     </Grid>
                 </TabItem>
 

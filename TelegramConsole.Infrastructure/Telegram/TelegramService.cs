@@ -21,6 +21,7 @@ public sealed class TelegramService : ITelegramService
     private readonly object _messageCacheSync = new();
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private readonly SemaphoreSlim _sendLock = new(1, 1);
+    private readonly SemaphoreSlim _mediaDownloadLock = new(1, 1);
     private readonly object _recoverySync = new();
     private TelegramConnectionStatus? _lastConnectionStatus;
     private AppSettings? _connectionSettings;
@@ -322,6 +323,62 @@ public sealed class TelegramService : ITelegramService
             .ToList();
         await IndexMessagesAsync(lines);
         return lines;
+    }
+
+    public async Task<string> DownloadMediaAsync(DialogItem dialog, int messageId)
+    {
+        EnsureLogin();
+        TLMessage? message;
+        lock (_messageCacheSync)
+            _messageCache.TryGetValue((dialog.Kind, dialog.Id, messageId), out message);
+        if (message is null)
+            message = (await FetchMessagesAsync(dialog, [messageId])).GetValueOrDefault(messageId);
+        if (message is null) throw new InvalidOperationException("找不到媒体消息，可能已经被删除");
+
+        var (fileName, download) = message.media switch
+        {
+            MessageMediaPhoto { photo: Photo photo } =>
+                ($"photo_{messageId}.jpg", (Func<Stream, Task>)(async stream =>
+                    await _client!.DownloadFileAsync(photo, stream))),
+            MessageMediaDocument { document: Document document } =>
+                (DocumentFileName(document, messageId), (Func<Stream, Task>)(async stream =>
+                    await _client!.DownloadFileAsync(document, stream))),
+            _ => throw new InvalidOperationException("该媒体类型暂不支持下载")
+        };
+
+        var directory = Path.Combine(
+            _store.DataDirectory, "media", CurrentUserId.ToString(),
+            SanitizeFileName($"{dialog.Kind}_{dialog.Id}"));
+        Directory.CreateDirectory(directory);
+        var targetPath = Path.Combine(directory, SanitizeFileName(fileName));
+        await _mediaDownloadLock.WaitAsync();
+        try
+        {
+            if (File.Exists(targetPath) && new FileInfo(targetPath).Length > 0) return targetPath;
+            var partialPath = targetPath + ".part";
+            if (File.Exists(partialPath)) File.Delete(partialPath);
+            try
+            {
+                await using (var output = new FileStream(
+                    partialPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, useAsync: true))
+                {
+                    await download(output);
+                    await output.FlushAsync();
+                }
+                File.Move(partialPath, targetPath, overwrite: true);
+            }
+            catch
+            {
+                if (File.Exists(partialPath)) File.Delete(partialPath);
+                throw;
+            }
+            _logger.Info("Telegram.Media", $"媒体已下载：{dialog.Kind}/{dialog.Id}/{messageId} -> {targetPath}");
+            return targetPath;
+        }
+        finally
+        {
+            _mediaDownloadLock.Release();
+        }
     }
 
     public void ConfigureAutomationRules(IReadOnlyList<AutomationRule> rules) =>
@@ -759,7 +816,7 @@ public sealed class TelegramService : ITelegramService
             message.flags.HasFlag(TLMessage.Flags.out_), IsMentioned(message), message.id, dialog.Kind,
             TopicIdOf(message), replyId,
             replyMessage is null ? "" : NameOf(replyMessage.from_id), replyText,
-            MediaLabel(message.media) ?? "");
+            MediaLabel(message.media) ?? "", IsDownloadableMedia(message.media));
     }
 
     private async Task<TLMessage?> ResolveReplyMessageAsync(TLMessage message, DialogItem dialog)
@@ -881,6 +938,43 @@ public sealed class TelegramService : ITelegramService
         if (document.mime_type?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true) return "[图片]";
         var fileName = attributes.OfType<DocumentAttributeFilename>().FirstOrDefault()?.file_name;
         return string.IsNullOrWhiteSpace(fileName) ? "[文件]" : $"[文件: {fileName}]";
+    }
+
+    private static bool IsDownloadableMedia(MessageMedia? media) => media switch
+    {
+        MessageMediaPhoto { photo: Photo } => true,
+        MessageMediaDocument { document: Document } => true,
+        _ => false
+    };
+
+    private static string DocumentFileName(Document document, int messageId)
+    {
+        var fileName = document.attributes?.OfType<DocumentAttributeFilename>().FirstOrDefault()?.file_name;
+        if (!string.IsNullOrWhiteSpace(fileName)) return $"{messageId}_{fileName}";
+        var extension = document.mime_type?.ToLowerInvariant() switch
+        {
+            "video/mp4" => ".mp4",
+            "video/webm" => ".webm",
+            "audio/mpeg" => ".mp3",
+            "audio/ogg" => ".ogg",
+            "audio/wav" => ".wav",
+            "image/gif" => ".gif",
+            "image/webp" => ".webp",
+            "image/png" => ".png",
+            "image/jpeg" => ".jpg",
+            "application/pdf" => ".pdf",
+            "application/zip" => ".zip",
+            _ => ".bin"
+        };
+        return $"media_{messageId}{extension}";
+    }
+
+    private static string SanitizeFileName(string value)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var sanitized = new string(value.Select(x => invalid.Contains(x) ? '_' : x).ToArray()).Trim();
+        if (string.IsNullOrWhiteSpace(sanitized)) sanitized = "media";
+        return sanitized.Length <= 120 ? sanitized : sanitized[..120];
     }
 
     private async Task ProcessAutomationRulesAsync(ChatLine line)

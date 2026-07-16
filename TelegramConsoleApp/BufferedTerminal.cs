@@ -1,10 +1,17 @@
 using System.Windows.Media;
+using System.Windows.Input;
 using System.Windows.Threading;
 using ICSharpCode.AvalonEdit;
 using ICSharpCode.AvalonEdit.Document;
 using ICSharpCode.AvalonEdit.Rendering;
 
 namespace TelegramConsoleApp;
+
+public sealed record TerminalInlineLink(
+    int LineIndex,
+    int StartOffset,
+    int Length,
+    object Tag);
 
 /// <summary>
 /// AvalonEdit-based, append-only terminal surface with bounded buffering.
@@ -39,6 +46,8 @@ public sealed class BufferedTerminal : TextEditor
         Options.EnableEmailHyperlinks = false;
         Options.EnableHyperlinks = false;
         Options.EnableTextDragDrop = false;
+        PreviewMouseMove += BufferedTerminal_PreviewMouseMove;
+        MouseLeave += (_, _) => Cursor = System.Windows.Input.Cursors.IBeam;
 
         _segments = new TextSegmentCollection<ColoredSegment>(Document);
         TextArea.TextView.LineTransformers.Add(new SegmentColorizer(_segments));
@@ -66,12 +75,16 @@ public sealed class BufferedTerminal : TextEditor
 
     public void AppendLines(
         IReadOnlyList<(string Text, Brush? Foreground, object? Tag)> lines,
-        object? deduplicationKey = null)
+        object? deduplicationKey = null,
+        IReadOnlyList<TerminalInlineLink>? inlineLinks = null)
     {
         if (lines.Count == 0) return;
         var pendingLines = lines
-            .Select(x => new PendingLine(
-                Normalize(x.Text), Freeze(x.Foreground ?? Foreground ?? Brushes.White), x.Tag))
+            .Select((x, index) => new PendingLine(
+                Normalize(x.Text), Freeze(x.Foreground ?? Foreground ?? Brushes.White), x.Tag,
+                (inlineLinks ?? []).Where(link => link.LineIndex == index)
+                    .Select(link => new PendingLink(link.StartOffset, link.Length, link.Tag))
+                    .ToArray()))
             .ToArray();
         lock (_pendingSync)
         {
@@ -114,9 +127,11 @@ public sealed class BufferedTerminal : TextEditor
         _segments.Clear();
     }
 
-    public T? GetTagAtVisualPosition<T>(System.Windows.Point visualPosition) where T : class
+    public T? GetTagAtVisualPosition<T>(
+        System.Windows.Point visualPosition,
+        bool preferSelection = true) where T : class
     {
-        if (SelectionLength > 0)
+        if (preferSelection && SelectionLength > 0)
             return GetTagAtOffset<T>(SelectionStart);
         var view = TextArea.TextView;
         var documentPosition = new System.Windows.Point(
@@ -203,6 +218,20 @@ public sealed class BufferedTerminal : TextEditor
             Foreground = line.Foreground,
             Tag = line.Tag
         });
+        foreach (var link in line.Links)
+        {
+            var start = Math.Clamp(link.StartOffset, 0, line.Text.Length);
+            var length = Math.Clamp(link.Length, 0, line.Text.Length - start);
+            if (length == 0) continue;
+            _segments.Add(new ColoredSegment
+            {
+                StartOffset = offset + start,
+                Length = length,
+                Foreground = Freeze(Brushes.DodgerBlue),
+                Tag = link.Tag,
+                IsLink = true
+            });
+        }
     }
 
     private void EnforceLimits()
@@ -234,12 +263,29 @@ public sealed class BufferedTerminal : TextEditor
         return clone;
     }
 
-    private sealed record PendingLine(string Text, Brush Foreground, object? Tag);
+    private void BufferedTerminal_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        var tag = GetTagAtVisualPosition<MediaLinkItem>(
+            e.GetPosition(TextArea.TextView), preferSelection: false);
+        Cursor = tag is null ? System.Windows.Input.Cursors.IBeam : System.Windows.Input.Cursors.Hand;
+    }
+
+    private sealed record PendingLine(
+        string Text,
+        Brush Foreground,
+        object? Tag,
+        IReadOnlyList<PendingLink>? InlineLinks = null)
+    {
+        public IReadOnlyList<PendingLink> Links { get; } = InlineLinks ?? [];
+    }
+
+    private sealed record PendingLink(int StartOffset, int Length, object Tag);
 
     private sealed class ColoredSegment : TextSegment
     {
         public required Brush Foreground { get; init; }
         public object? Tag { get; init; }
+        public bool IsLink { get; init; }
     }
 
     private sealed class SegmentColorizer(TextSegmentCollection<ColoredSegment> segments)
@@ -254,7 +300,11 @@ public sealed class BufferedTerminal : TextEditor
                 var end = Math.Min(line.EndOffset, segment.EndOffset);
                 if (start >= end) continue;
                 ChangeLinePart(start, end, element =>
-                    element.TextRunProperties.SetForegroundBrush(segment.Foreground));
+                {
+                    element.TextRunProperties.SetForegroundBrush(segment.Foreground);
+                    if (segment.IsLink)
+                        element.TextRunProperties.SetTextDecorations(System.Windows.TextDecorations.Underline);
+                });
             }
         }
     }

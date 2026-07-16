@@ -507,6 +507,21 @@ public partial class MainWindow : Window
             e.GetPosition(ChatConsole.TextArea.TextView));
     }
 
+    private async void Terminal_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not BufferedTerminal terminal) return;
+        var media = terminal.GetTagAtVisualPosition<MediaLinkItem>(
+            e.GetPosition(terminal.TextArea.TextView), preferSelection: false);
+        if (media is null) return;
+        e.Handled = true;
+        await RunUiAsync(async () =>
+        {
+            SetStatus(LF("DownloadingMedia", media.Label));
+            var path = await _telegram.DownloadMediaAsync(media.Dialog, media.MessageId);
+            if (MediaFileLauncher.Open(this, path)) SetStatus(LF("MediaOpened", Path.GetFileName(path)));
+        });
+    }
+
     private void ChatConsole_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
         ChatQuoteMenuItem.IsEnabled = _contextQuoteTarget is not null;
@@ -1175,7 +1190,9 @@ public partial class MainWindow : Window
             : null;
         if (line.ReplyToMessageId is not int replyId)
         {
-            AppendConsole(box, body, color, messageTag, deduplicationKey);
+            box.AppendLines(
+                [(body, color, messageTag)], deduplicationKey,
+                MediaLinkFactory.Create(line, body, lineIndex: 0));
             return;
         }
         var sender = string.IsNullOrWhiteSpace(line.ReplySender) ? $"消息 #{replyId}" : line.ReplySender;
@@ -1184,7 +1201,7 @@ public partial class MainWindow : Window
             ($"↪ {sender}: {PreviewReply(line.ReplyText)}", Brushes.Gray,
                 new QuoteTargetItem(replyId, sender, line.ReplyText)),
             (body, color, messageTag)
-        ], deduplicationKey);
+        ], deduplicationKey, MediaLinkFactory.Create(line, body, lineIndex: 1));
     }
 
     private static string PreviewReply(string text)

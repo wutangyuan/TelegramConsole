@@ -20,7 +20,8 @@ public sealed record ChatLine(
     int? ReplyToMessageId = null,
     string ReplySender = "",
     string ReplyText = "",
-    string MediaLabel = "")
+    string MediaLabel = "",
+    bool HasDownloadableMedia = false)
 {
     public string DisplayText => string.IsNullOrWhiteSpace(MediaLabel) || Text == MediaLabel
         ? Text
