@@ -67,7 +67,7 @@
             <RowDefinition Height="44" />
             <RowDefinition Height="*" />
             <RowDefinition Height="1" />
-            <RowDefinition Height="40" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="48" />
             <RowDefinition Height="27" />
         </Grid.RowDefinitions>
@@ -115,31 +115,35 @@
 
         <local:BufferedTerminal x:Name="ConsoleBox" Grid.Row="1"
                                 Background="#000000" Foreground="#FFFFFF" BorderThickness="0"
-                                MaximumLines="1000" MaximumCharacters="500000" />
+                                MaximumLines="1000" MaximumCharacters="500000"
+                                ContextMenuOpening="ConsoleBox_ContextMenuOpening">
+            <local:BufferedTerminal.ContextMenu>
+                <ContextMenu Background="#18181B" Foreground="#FFFFFF">
+                    <MenuItem x:Name="ConsoleQuoteMenuItem" Header="{DynamicResource QuoteReply}"
+                              Click="ConsoleQuoteMenuItem_Click" />
+                </ContextMenu>
+            </local:BufferedTerminal.ContextMenu>
+        </local:BufferedTerminal>
 
         <Border Grid.Row="2" Background="#3F3F46" />
 
-        <Grid Grid.Row="3" Margin="12,4,12,0">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="88" />
-            </Grid.ColumnDefinitions>
-            <TextBlock Text="{DynamicResource QuoteTargetLabel}" Foreground="#A1A1AA"
-                       VerticalAlignment="Center" Margin="0,0,8,0" />
-            <ComboBox x:Name="QuoteTargetBox" Grid.Column="1" DisplayMemberPath="DisplayText"
-                      ToolTip="{DynamicResource QuoteTargetHint}" Margin="0,0,8,0"
-                      Background="#18181B" Foreground="#FFFFFF" BorderBrush="#3F3F46" />
-            <Button Grid.Column="2" Content="{DynamicResource ClearQuote}" Click="ClearQuoteButton_Click"
-                    Background="#18181B" Foreground="#FFFFFF" BorderBrush="#3F3F46" Padding="6,3" />
-        </Grid>
+        <Border x:Name="QuotePreviewPanel" Grid.Row="3" Visibility="Collapsed"
+                Background="#111827" BorderBrush="#3B82F6" BorderThickness="3,0,0,0"
+                Padding="10,4" Margin="12,4,12,0">
+            <Grid>
+                <TextBlock x:Name="QuotePreviewText" Foreground="#BFDBFE" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" Margin="0,0,34,0" />
+                <Button Content="×" HorizontalAlignment="Right" Width="28" Padding="0"
+                        Background="#18181B" Foreground="#FFFFFF" BorderBrush="#3F3F46"
+                        ToolTip="{DynamicResource ClearQuote}" Click="ClearQuoteButton_Click" />
+            </Grid>
+        </Border>
 
         <Grid Grid.Row="4" Margin="12,5">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="26" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="74" />
-                <ColumnDefinition Width="104" />
             </Grid.ColumnDefinitions>
             <TextBlock Text="›" Foreground="#22C55E" FontSize="22"
                        VerticalAlignment="Center" FontWeight="Bold" />
@@ -148,10 +152,7 @@
                      VerticalContentAlignment="Center" KeyDown="InputBox_KeyDown" />
             <Button x:Name="SendButton" Grid.Column="2" Content="SEND ↵" Click="SendButton_Click"
                     Background="#18181B" Foreground="#FFFFFF" BorderBrush="#3F3F46"
-                    Padding="6,3" Margin="0,0,6,0" />
-            <Button x:Name="QuoteReplyButton" Grid.Column="3" Content="{DynamicResource QuoteReply}"
-                    Click="QuoteReplyButton_Click" Background="#14532D" Foreground="#FFFFFF"
-                    BorderBrush="#22C55E" Padding="6,3" />
+                    Padding="6,3" />
         </Grid>
 
         <Border Grid.Row="5" Background="#09090B" Padding="12,0">

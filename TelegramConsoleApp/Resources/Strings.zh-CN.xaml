@@ -79,7 +79,7 @@
     <sys:String x:Key="SaveChanges">保存修改</sys:String>
     <sys:String x:Key="Monday">周一</sys:String><sys:String x:Key="Tuesday">周二</sys:String><sys:String x:Key="Wednesday">周三</sys:String>
     <sys:String x:Key="Thursday">周四</sys:String><sys:String x:Key="Friday">周五</sys:String><sys:String x:Key="Saturday">周六</sys:String><sys:String x:Key="Sunday">周日</sys:String>
-    <sys:String x:Key="ConsoleHelp">enter 发送   ctrl+l 清屏   esc 关闭</sys:String>
+    <sys:String x:Key="ConsoleHelp">右键消息引用回复   enter 发送   ctrl+l 清屏   esc 取消引用/关闭</sys:String>
     <sys:String x:Key="SelfLegend">● 自己 </sys:String><sys:String x:Key="MessageLegend">● 消息 </sys:String><sys:String x:Key="MentionLegend">● @提及</sys:String>
     <sys:String x:Key="ConfigureTelegram">请配置 Telegram API 参数后点击“一键登录”</sys:String>
     <sys:String x:Key="ProxySaved">代理设置已加密保存：{0}</sys:String><sys:String x:Key="ProxyDisabled">代理已关闭，将使用直连</sys:String>

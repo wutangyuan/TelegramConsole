@@ -128,36 +128,40 @@
                     <Grid Margin="10">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*" />
-                            <RowDefinition Height="42" />
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="48" />
                         </Grid.RowDefinitions>
                         <local:BufferedTerminal x:Name="ChatConsole" FontFamily="Cascadia Mono, Consolas"
                                                 FontSize="14" Background="#090D12" Foreground="#F8FAFC"
                                                 BorderBrush="#1E293B" BorderThickness="1"
-                                                MaximumLines="1000" MaximumCharacters="500000" />
-                        <Grid Grid.Row="1" Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="92" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="{DynamicResource QuoteTargetLabel}" VerticalAlignment="Center" Margin="0,0,8,0" />
-                            <ComboBox x:Name="QuoteTargetBox" Grid.Column="1" DisplayMemberPath="DisplayText"
-                                      ToolTip="{DynamicResource QuoteTargetHint}" Margin="0,0,8,0" />
-                            <Button Grid.Column="2" Content="{DynamicResource ClearQuote}" Click="ClearQuoteButton_Click" Margin="0" />
-                        </Grid>
+                                                MaximumLines="1000" MaximumCharacters="500000"
+                                                ContextMenuOpening="ChatConsole_ContextMenuOpening">
+                            <local:BufferedTerminal.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem x:Name="ChatQuoteMenuItem" Header="{DynamicResource QuoteReply}"
+                                              Click="ChatQuoteMenuItem_Click" />
+                                </ContextMenu>
+                            </local:BufferedTerminal.ContextMenu>
+                        </local:BufferedTerminal>
+                        <Border x:Name="QuotePreviewPanel" Grid.Row="1" Visibility="Collapsed"
+                                Background="#EFF6FF" BorderBrush="#60A5FA" BorderThickness="3,0,0,0"
+                                Padding="10,4" Margin="0,8,0,0">
+                            <Grid>
+                                <TextBlock x:Name="QuotePreviewText" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" Foreground="#1E3A8A" />
+                                <Button Content="×" HorizontalAlignment="Right" Width="30" Padding="0"
+                                        ToolTip="{DynamicResource ClearQuote}" Click="ClearQuoteButton_Click" />
+                            </Grid>
+                        </Border>
                         <Grid Grid.Row="2" Margin="0,8,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="100" />
-                                <ColumnDefinition Width="110" />
                             </Grid.ColumnDefinitions>
                             <TextBox x:Name="MessageBox" AcceptsReturn="True" KeyDown="MessageBox_KeyDown"
                                      ToolTip="Enter 发送，Shift+Enter 换行" Margin="0,0,8,0" />
                             <Button x:Name="SendButton" Grid.Column="1" Content="{DynamicResource Send}" Click="SendButton_Click"
-                                    Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,0" />
-                            <Button x:Name="QuoteReplyButton" Grid.Column="2" Content="{DynamicResource QuoteReply}"
-                                    Click="QuoteReplyButton_Click" Style="{StaticResource PrimaryButtonStyle}" Margin="0" />
+                                    Style="{StaticResource PrimaryButtonStyle}" Margin="0" />
                         </Grid>
                     </Grid>
                 </TabItem>

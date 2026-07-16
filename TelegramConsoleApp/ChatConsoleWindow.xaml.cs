@@ -2,7 +2,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Collections.ObjectModel;
 
 namespace TelegramConsoleApp;
 
@@ -11,14 +10,14 @@ public partial class ChatConsoleWindow : Window
     private const int QuoteHistoryLimit = 300;
     private readonly ITelegramService _telegram;
     private readonly DialogItem _dialog;
-    private readonly ObservableCollection<QuoteTargetItem> _quoteTargets = [];
+    private QuoteTargetItem? _selectedQuoteTarget;
+    private QuoteTargetItem? _contextQuoteTarget;
 
     public ChatConsoleWindow(ITelegramService telegram, DialogItem dialog)
     {
         InitializeComponent();
         _telegram = telegram;
         _dialog = dialog;
-        QuoteTargetBox.ItemsSource = _quoteTargets;
         Title = $"Console - {dialog.Name}";
         PeerTitle.Text = dialog.Name;
         Loaded += Window_Loaded;
@@ -45,33 +44,29 @@ public partial class ChatConsoleWindow : Window
         Dispatcher.BeginInvoke(() => Append(line));
     }
 
-    private async void SendButton_Click(object sender, RoutedEventArgs e) => await SendAsync(false);
+    private async void SendButton_Click(object sender, RoutedEventArgs e) => await SendAsync();
 
-    private async void QuoteReplyButton_Click(object sender, RoutedEventArgs e) => await SendAsync(true);
-
-    private void ClearQuoteButton_Click(object sender, RoutedEventArgs e) => QuoteTargetBox.SelectedItem = null;
+    private void ClearQuoteButton_Click(object sender, RoutedEventArgs e) => ClearQuoteSelection();
 
     private async void InputBox_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter) return;
         e.Handled = true;
-        await SendAsync(false);
+        await SendAsync();
     }
 
-    private async Task SendAsync(bool quoteReply)
+    private async Task SendAsync()
     {
         var text = InputBox.Text.Trim();
         if (text.Length == 0) return;
         try
         {
-            if (quoteReply && QuoteTargetBox.SelectedItem is not QuoteTargetItem)
-                throw new InvalidOperationException(LocalizationManager.Text("SelectQuoteTarget"));
             SetSendEnabled(false);
-            if (quoteReply && QuoteTargetBox.SelectedItem is QuoteTargetItem target)
+            var quoteTarget = _selectedQuoteTarget;
+            if (quoteTarget is not null)
             {
-                await _telegram.SendReplyAsync(_dialog, target.MessageId, text, target.Text);
-                AppendText($"[{DateTime.Now:HH:mm:ss}] 我 ↪ #{target.MessageId} {target.Sender}: {text}", Brushes.LimeGreen);
-                QuoteTargetBox.SelectedItem = null;
+                await _telegram.SendReplyAsync(_dialog, quoteTarget.MessageId, text, quoteTarget.Text);
+                AppendText($"[{DateTime.Now:HH:mm:ss}] 我 ↪ #{quoteTarget.MessageId} {quoteTarget.Sender}: {text}", Brushes.LimeGreen);
             }
             else
             {
@@ -79,6 +74,7 @@ public partial class ChatConsoleWindow : Window
                 AppendText($"[{DateTime.Now:HH:mm:ss}] 我: {text}", Brushes.LimeGreen);
             }
             InputBox.Clear();
+            ClearQuoteSelection();
         }
         catch (Exception ex)
         {
@@ -95,39 +91,57 @@ public partial class ChatConsoleWindow : Window
     {
         AppendText(
             $"[{line.Time:HH:mm:ss}] {line.Sender}: {line.Text}",
-            line.IsMentioned ? Brushes.DodgerBlue : line.IsOutgoing ? Brushes.LimeGreen : Brushes.White);
-        AddQuoteTarget(line);
+            line.IsMentioned ? Brushes.DodgerBlue : line.IsOutgoing ? Brushes.LimeGreen : Brushes.White,
+            line.MessageId > 0 ? QuoteTargetItem.From(line) : null);
     }
 
-    private void AddQuoteTarget(ChatLine line)
+    private void ConsoleBox_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
-        if (line.MessageId <= 0) return;
-        var existing = _quoteTargets.FirstOrDefault(x => x.MessageId == line.MessageId);
-        if (existing is not null) _quoteTargets.Remove(existing);
-        _quoteTargets.Insert(0, QuoteTargetItem.From(line));
-        while (_quoteTargets.Count > QuoteHistoryLimit) _quoteTargets.RemoveAt(_quoteTargets.Count - 1);
+        _contextQuoteTarget = ConsoleBox.GetTagAtVisualPosition<QuoteTargetItem>(
+            Mouse.GetPosition(ConsoleBox.TextArea.TextView));
+        ConsoleQuoteMenuItem.IsEnabled = _contextQuoteTarget is not null;
+    }
+
+    private void ConsoleQuoteMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (_contextQuoteTarget is null) return;
+        _selectedQuoteTarget = _contextQuoteTarget;
+        QuotePreviewText.Text = $"↪ {_selectedQuoteTarget.DisplayText}";
+        QuotePreviewPanel.Visibility = Visibility.Visible;
+        InputBox.Focus();
+    }
+
+    private void ClearQuoteSelection()
+    {
+        _selectedQuoteTarget = null;
+        _contextQuoteTarget = null;
+        QuotePreviewText.Text = string.Empty;
+        QuotePreviewPanel.Visibility = Visibility.Collapsed;
     }
 
     private void SetSendEnabled(bool enabled)
     {
         InputBox.IsEnabled = enabled;
         SendButton.IsEnabled = enabled;
-        QuoteReplyButton.IsEnabled = enabled;
     }
 
-    private void AppendText(string text, Brush? color = null)
-        => ConsoleBox.AppendLine(text, color ?? Brushes.White);
+    private void AppendText(string text, Brush? color = null, object? tag = null)
+        => ConsoleBox.AppendLine(text, color ?? Brushes.White, tag);
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape)
         {
-            Close();
+            if (_selectedQuoteTarget is not null)
+                ClearQuoteSelection();
+            else
+                Close();
             e.Handled = true;
         }
         else if (e.Key == Key.L && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
         {
             ConsoleBox.ClearOutput();
+            ClearQuoteSelection();
             e.Handled = true;
         }
     }

@@ -55,12 +55,12 @@ public sealed class BufferedTerminal : TextEditor
         };
     }
 
-    public void AppendLine(string text, Brush? foreground = null)
+    public void AppendLine(string text, Brush? foreground = null, object? tag = null)
     {
         var color = Freeze(foreground ?? Foreground ?? Brushes.White);
         lock (_pendingSync)
         {
-            _pending.Enqueue(new PendingLine(Normalize(text), color));
+            _pending.Enqueue(new PendingLine(Normalize(text), color, tag));
             while (_pending.Count > Math.Max(1, MaximumPendingLines))
             {
                 _pending.Dequeue();
@@ -89,6 +89,22 @@ public sealed class BufferedTerminal : TextEditor
         _segments.Clear();
     }
 
+    public T? GetTagAtVisualPosition<T>(System.Windows.Point visualPosition) where T : class
+    {
+        var view = TextArea.TextView;
+        var documentPosition = new System.Windows.Point(
+            visualPosition.X + view.ScrollOffset.X,
+            visualPosition.Y + view.ScrollOffset.Y);
+        var position = view.GetPosition(documentPosition);
+        if (position is null || position.Value.Line < 1 || position.Value.Line > Document.LineCount) return null;
+        var line = Document.GetLineByNumber(position.Value.Line);
+        var length = Math.Max(1, line.TotalLength);
+        return _segments.FindOverlappingSegments(line.Offset, length)
+            .Select(x => x.Tag)
+            .OfType<T>()
+            .FirstOrDefault();
+    }
+
     private void RequestFlush()
     {
         if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished) return;
@@ -112,7 +128,7 @@ public sealed class BufferedTerminal : TextEditor
             {
                 batch.Add(new PendingLine(
                     $"[性能保护] 已跳过 {_droppedCount} 条积压消息",
-                    Freeze(Brushes.Goldenrod)));
+                    Freeze(Brushes.Goldenrod), null));
                 _droppedCount = 0;
             }
 
@@ -150,7 +166,8 @@ public sealed class BufferedTerminal : TextEditor
         {
             StartOffset = offset,
             Length = content.Length,
-            Foreground = line.Foreground
+            Foreground = line.Foreground,
+            Tag = line.Tag
         });
     }
 
@@ -183,11 +200,12 @@ public sealed class BufferedTerminal : TextEditor
         return clone;
     }
 
-    private sealed record PendingLine(string Text, Brush Foreground);
+    private sealed record PendingLine(string Text, Brush Foreground, object? Tag);
 
     private sealed class ColoredSegment : TextSegment
     {
         public required Brush Foreground { get; init; }
+        public object? Tag { get; init; }
     }
 
     private sealed class SegmentColorizer(TextSegmentCollection<ColoredSegment> segments)
