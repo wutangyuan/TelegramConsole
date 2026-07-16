@@ -1165,22 +1165,26 @@ public partial class MainWindow : Window
         _ => prompt
     };
 
-    private static void AppendChatLine(BufferedTerminal box, ChatLine line) =>
-        AppendConsole(
-            box,
-            FormatChatLine(line, includeChat: true),
-            line.IsMentioned ? Brushes.DodgerBlue : line.IsOutgoing ? Brushes.LimeGreen : Brushes.White,
-            line.MessageId > 0 ? QuoteTargetItem.From(line) : null,
-            line.MessageId > 0 ? (line.ChatKind, line.ChatId, line.MessageId, line.Text) : null);
-
-    private static string FormatChatLine(ChatLine line, bool includeChat)
+    private static void AppendChatLine(BufferedTerminal box, ChatLine line)
     {
-        var prefix = includeChat
-            ? $"[{line.Time:HH:mm:ss}] [{line.Chat}] {line.Sender}: "
-            : $"[{line.Time:HH:mm:ss}] {line.Sender}: ";
-        if (line.ReplyToMessageId is not int replyId) return prefix + line.Text;
+        var body = $"[{line.Time:HH:mm:ss}] [{line.Chat}] {line.Sender}: {line.Text}";
+        var color = line.IsMentioned ? Brushes.DodgerBlue : line.IsOutgoing ? Brushes.LimeGreen : Brushes.White;
+        var messageTag = line.MessageId > 0 ? QuoteTargetItem.From(line) : null;
+        object? deduplicationKey = line.MessageId > 0
+            ? (line.ChatKind, line.ChatId, line.MessageId, line.Text)
+            : null;
+        if (line.ReplyToMessageId is not int replyId)
+        {
+            AppendConsole(box, body, color, messageTag, deduplicationKey);
+            return;
+        }
         var sender = string.IsNullOrWhiteSpace(line.ReplySender) ? $"消息 #{replyId}" : line.ReplySender;
-        return $"↪ {sender}: {PreviewReply(line.ReplyText)}{Environment.NewLine}{prefix}{line.Text}";
+        box.AppendLines(
+        [
+            ($"↪ {sender}: {PreviewReply(line.ReplyText)}", Brushes.Gray,
+                new QuoteTargetItem(replyId, sender, line.ReplyText)),
+            (body, color, messageTag)
+        ], deduplicationKey);
     }
 
     private static string PreviewReply(string text)

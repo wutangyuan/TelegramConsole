@@ -61,9 +61,18 @@ public sealed class BufferedTerminal : TextEditor
         string text,
         Brush? foreground = null,
         object? tag = null,
+        object? deduplicationKey = null) =>
+        AppendLines([(text, foreground, tag)], deduplicationKey);
+
+    public void AppendLines(
+        IReadOnlyList<(string Text, Brush? Foreground, object? Tag)> lines,
         object? deduplicationKey = null)
     {
-        var color = Freeze(foreground ?? Foreground ?? Brushes.White);
+        if (lines.Count == 0) return;
+        var pendingLines = lines
+            .Select(x => new PendingLine(
+                Normalize(x.Text), Freeze(x.Foreground ?? Foreground ?? Brushes.White), x.Tag))
+            .ToArray();
         lock (_pendingSync)
         {
             if (deduplicationKey is not null)
@@ -74,7 +83,7 @@ public sealed class BufferedTerminal : TextEditor
                 while (_recentKeyOrder.Count > maximumRecentKeys)
                     _recentKeys.Remove(_recentKeyOrder.Dequeue());
             }
-            _pending.Enqueue(new PendingLine(Normalize(text), color, tag));
+            foreach (var line in pendingLines) _pending.Enqueue(line);
             while (_pending.Count > Math.Max(1, MaximumPendingLines))
             {
                 _pending.Dequeue();

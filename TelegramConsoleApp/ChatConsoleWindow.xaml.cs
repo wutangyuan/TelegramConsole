@@ -90,21 +90,25 @@ public partial class ChatConsoleWindow : Window
 
     private void Append(ChatLine line)
     {
-        AppendText(
-            FormatChatLine(line),
-            line.IsMentioned ? Brushes.DodgerBlue : line.IsOutgoing ? Brushes.LimeGreen : Brushes.White,
-            line.MessageId > 0 ? QuoteTargetItem.From(line) : null,
-            line.MessageId > 0 ? (line.ChatKind, line.ChatId, line.MessageId, line.Text) : null);
-    }
-
-    private static string FormatChatLine(ChatLine line)
-    {
         var body = $"[{line.Time:HH:mm:ss}] {line.Sender}: {line.Text}";
-        if (line.ReplyToMessageId is not int replyId) return body;
+        var color = line.IsMentioned ? Brushes.DodgerBlue : line.IsOutgoing ? Brushes.LimeGreen : Brushes.White;
+        var messageTag = line.MessageId > 0 ? QuoteTargetItem.From(line) : null;
+        object? deduplicationKey = line.MessageId > 0
+            ? (line.ChatKind, line.ChatId, line.MessageId, line.Text)
+            : null;
+        if (line.ReplyToMessageId is not int replyId)
+        {
+            AppendText(body, color, messageTag, deduplicationKey);
+            return;
+        }
         var sender = string.IsNullOrWhiteSpace(line.ReplySender) ? $"消息 #{replyId}" : line.ReplySender;
         var value = line.ReplyText.Replace('\r', ' ').Replace('\n', ' ').Trim();
         if (value.Length > 120) value = value[..117] + "...";
-        return $"↪ {sender}: {value}{Environment.NewLine}{body}";
+        ConsoleBox.AppendLines(
+        [
+            ($"↪ {sender}: {value}", Brushes.Gray, new QuoteTargetItem(replyId, sender, line.ReplyText)),
+            (body, color, messageTag)
+        ], deduplicationKey);
     }
 
     private void ConsoleBox_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
