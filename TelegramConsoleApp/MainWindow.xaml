@@ -128,6 +128,7 @@
                     <Grid Margin="10">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*" />
+                            <RowDefinition Height="42" />
                             <RowDefinition Height="48" />
                         </Grid.RowDefinitions>
                         <local:BufferedTerminal x:Name="ChatConsole" FontFamily="Cascadia Mono, Consolas"
@@ -136,13 +137,27 @@
                                                 MaximumLines="1000" MaximumCharacters="500000" />
                         <Grid Grid.Row="1" Margin="0,8,0,0">
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="92" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{DynamicResource QuoteTargetLabel}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <ComboBox x:Name="QuoteTargetBox" Grid.Column="1" DisplayMemberPath="DisplayText"
+                                      ToolTip="{DynamicResource QuoteTargetHint}" Margin="0,0,8,0" />
+                            <Button Grid.Column="2" Content="{DynamicResource ClearQuote}" Click="ClearQuoteButton_Click" Margin="0" />
+                        </Grid>
+                        <Grid Grid.Row="2" Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="100" />
+                                <ColumnDefinition Width="110" />
                             </Grid.ColumnDefinitions>
                             <TextBox x:Name="MessageBox" AcceptsReturn="True" KeyDown="MessageBox_KeyDown"
                                      ToolTip="Enter 发送，Shift+Enter 换行" Margin="0,0,8,0" />
                             <Button x:Name="SendButton" Grid.Column="1" Content="{DynamicResource Send}" Click="SendButton_Click"
-                                    Style="{StaticResource PrimaryButtonStyle}" Margin="0" />
+                                    Style="{StaticResource PrimaryButtonStyle}" Margin="0,0,8,0" />
+                            <Button x:Name="QuoteReplyButton" Grid.Column="2" Content="{DynamicResource QuoteReply}"
+                                    Click="QuoteReplyButton_Click" Style="{StaticResource PrimaryButtonStyle}" Margin="0" />
                         </Grid>
                     </Grid>
                 </TabItem>

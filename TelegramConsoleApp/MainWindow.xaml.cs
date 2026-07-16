@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Diagnostics;
 using System.IO;
+using System.Collections.ObjectModel;
 
 namespace TelegramConsoleApp;
 
@@ -22,6 +23,7 @@ public partial class MainWindow : Window
     private bool _exitRequested;
     private bool _trayHintShown;
     private List<DialogItem> _allDialogs = [];
+    private readonly ObservableCollection<QuoteTargetItem> _quoteTargets = [];
     private bool _loadingHistory;
     private bool _initialized;
     private int _exceptionQueryLimit = 10;
@@ -30,6 +32,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        QuoteTargetBox.ItemsSource = _quoteTargets;
         InitializeTrayIcon();
         _settings = _store.Load();
         _telegram = new TelegramService(_store, _logger);
@@ -174,6 +177,7 @@ public partial class MainWindow : Window
         ExceptionList.ItemsSource = null;
         MentionList.ItemsSource = null;
         OutboxList.ItemsSource = null;
+        _quoteTargets.Clear();
         ChatConsole.ClearOutput();
         MonitorConsole.ClearOutput();
     }
@@ -398,6 +402,7 @@ public partial class MainWindow : Window
     private void BlankConsole_Click(object sender, RoutedEventArgs e)
     {
         DialogsList.SelectedItem = null;
+        _quoteTargets.Clear();
         ChatConsole.ClearOutput();
         SetStatus(L("BlankStatus"));
     }
@@ -446,8 +451,13 @@ public partial class MainWindow : Window
             try
             {
                 ChatConsole.ClearOutput();
+                _quoteTargets.Clear();
                 AppendConsole(ChatConsole, $"--- {dialog.Name} ---");
-                foreach (var line in await _telegram.LoadHistoryAsync(dialog)) AppendChatLine(ChatConsole, line);
+                foreach (var line in await _telegram.LoadHistoryAsync(dialog))
+                {
+                    AppendChatLine(ChatConsole, line);
+                    AddQuoteTarget(line);
+                }
             }
             finally
             {
@@ -458,6 +468,11 @@ public partial class MainWindow : Window
 
     private async void SendButton_Click(object sender, RoutedEventArgs e) =>
         await RunUiAsync(SendMessageAsync);
+
+    private async void QuoteReplyButton_Click(object sender, RoutedEventArgs e) =>
+        await RunUiAsync(SendQuoteReplyAsync);
+
+    private void ClearQuoteButton_Click(object sender, RoutedEventArgs e) => QuoteTargetBox.SelectedItem = null;
 
     private async void MessageBox_KeyDown(object sender, KeyEventArgs e)
     {
@@ -472,8 +487,7 @@ public partial class MainWindow : Window
             throw new InvalidOperationException(L("SelectChatFirst"));
         var text = MessageBox.Text.Trim();
         if (text.Length == 0) return;
-        SendButton.IsEnabled = false;
-        MessageBox.IsEnabled = false;
+        SetChatSendEnabled(false);
         try
         {
             await _telegram.SendAsync(dialog, text);
@@ -483,17 +497,61 @@ public partial class MainWindow : Window
         }
         finally
         {
-            MessageBox.IsEnabled = true;
-            SendButton.IsEnabled = true;
+            SetChatSendEnabled(true);
             MessageBox.Focus();
         }
+    }
+
+    private async Task SendQuoteReplyAsync()
+    {
+        if (DialogsList.SelectedItem is not DialogItem dialog)
+            throw new InvalidOperationException(L("SelectChatFirst"));
+        if (QuoteTargetBox.SelectedItem is not QuoteTargetItem target)
+            throw new InvalidOperationException(L("SelectQuoteTarget"));
+        var text = MessageBox.Text.Trim();
+        if (text.Length == 0) return;
+        SetChatSendEnabled(false);
+        try
+        {
+            await _telegram.SendReplyAsync(dialog, target.MessageId, text, target.Text);
+            MessageBox.Clear();
+            QuoteTargetBox.SelectedItem = null;
+            AppendConsole(ChatConsole,
+                $"[{DateTime.Now:HH:mm:ss}] 我 ↪ #{target.MessageId} {target.Sender}: {text}",
+                Brushes.LimeGreen);
+            SetStatus(LF("QuoteReplySent", dialog.Name));
+        }
+        finally
+        {
+            SetChatSendEnabled(true);
+            MessageBox.Focus();
+        }
+    }
+
+    private void SetChatSendEnabled(bool enabled)
+    {
+        MessageBox.IsEnabled = enabled;
+        SendButton.IsEnabled = enabled;
+        QuoteReplyButton.IsEnabled = enabled;
     }
 
     private void HandleIncoming(ChatLine line)
     {
         if (_settings.MonitorEnabled && line.IsGroup) AppendChatLine(MonitorConsole, line);
         if (DialogsList.SelectedItem is DialogItem current && current.Id == line.ChatId)
+        {
             AppendChatLine(ChatConsole, line);
+            AddQuoteTarget(line);
+        }
+    }
+
+    private void AddQuoteTarget(ChatLine line)
+    {
+        if (line.MessageId <= 0) return;
+        var existing = _quoteTargets.FirstOrDefault(x => x.MessageId == line.MessageId);
+        if (existing is not null) _quoteTargets.Remove(existing);
+        _quoteTargets.Insert(0, QuoteTargetItem.From(line));
+        while (_quoteTargets.Count > 100) _quoteTargets.RemoveAt(_quoteTargets.Count - 1);
     }
 
     private void MonitorEnabledBox_Changed(object sender, RoutedEventArgs e)
