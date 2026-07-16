@@ -13,4 +13,7 @@ public sealed record ChatLine(
     bool IsGroup,
     long ChatId,
     bool IsOutgoing,
-    bool IsMentioned);
+    bool IsMentioned,
+    int MessageId = 0,
+    string ChatKind = "",
+    int? TopicId = null);

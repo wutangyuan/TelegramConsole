@@ -18,6 +18,7 @@ public interface ITelegramService : IDisposable
     event Action<string>? Log;
     event Action<TelegramConnectionState>? ConnectionStateChanged;
     event Action? OutboxChanged;
+    event Action<string>? AutomationActivity;
     string OutboxDatabasePath { get; }
     Task<string?> BeginLoginAsync(AppSettings settings);
     Task<string?> ContinueLoginAsync(string value);
@@ -28,6 +29,21 @@ public interface ITelegramService : IDisposable
     Task SendConfirmationAsync(ScheduledMessage schedule, string text);
     Task<IReadOnlyList<OutgoingMessageRecord>> QueryOutboxAsync(int limit = 200);
     Task RetryOutboxAsync(long recordId);
+    void ConfigureAutomationRules(IReadOnlyList<AutomationRule> rules);
+    Task<IReadOnlyList<MessageSearchResult>> SearchMessagesAsync(string query, DialogItem? dialog = null, int limit = 100);
+    Task<IReadOnlyList<ForumTopicItem>> LoadForumTopicsAsync(DialogItem dialog);
+    Task<ServerScheduledMessage> ScheduleServerMessageAsync(DialogItem dialog, string text, DateTime sendAt);
+    Task<IReadOnlyList<ServerScheduledMessage>> LoadServerScheduledMessagesAsync(DialogItem dialog);
+    Task DeleteServerScheduledMessagesAsync(DialogItem dialog, IReadOnlyCollection<int> messageIds);
+    Task SendReplyAsync(DialogItem dialog, int replyToMessageId, string text, string quote = "");
+    Task EditMessageAsync(DialogItem dialog, int messageId, string text);
+    Task DeleteMessagesAsync(DialogItem dialog, IReadOnlyCollection<int> messageIds, bool revoke = true);
+    Task ForwardMessagesAsync(DialogItem source, IReadOnlyCollection<int> messageIds, DialogItem target);
+    string GetMessageLink(DialogItem dialog, int messageId);
+    Task SaveCloudDraftAsync(DialogItem dialog, string text, int? replyToMessageId = null);
+    Task<string> LoadCloudDraftAsync(DialogItem dialog);
+    Task<IReadOnlyList<DialogFolderItem>> LoadDialogFoldersAsync();
+    Task CreateDialogFolderAsync(string title, IReadOnlyCollection<DialogItem> dialogs);
 }
 
 public enum TelegramConnectionStatus

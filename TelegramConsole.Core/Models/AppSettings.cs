@@ -22,6 +22,7 @@ public sealed class AccountProfile
     public List<ScheduledMessage> Schedules { get; set; } = [];
     public ExceptionAlertSettings ExceptionAlerts { get; set; } = new();
     public MentionAlertSettings MentionAlerts { get; set; } = new();
+    public List<AutomationRule> AutomationRules { get; set; } = [];
 }
 
 public sealed class MentionAlertSettings

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using TelegramConsole.Core;
 using TL;
 using TLMessage = TL.Message;
@@ -13,6 +14,7 @@ public sealed class TelegramService : ITelegramService
     private readonly ISettingsStore _store;
     private readonly IAppLogger _logger;
     private readonly OutgoingMessageStore _outbox;
+    private readonly MessageIndexStore _messageIndex;
     private readonly Dictionary<string, InputPeer> _peers = [];
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private readonly SemaphoreSlim _sendLock = new(1, 1);
@@ -22,6 +24,7 @@ public sealed class TelegramService : ITelegramService
     private Task? _recoveryTask;
     private bool _suppressDisconnectLogging;
     private bool _disposed;
+    private IReadOnlyList<AutomationRule> _automationRules = [];
 
     public bool IsLoggedIn => _client?.User is not null && !_client.Disconnected;
     public string OutboxDatabasePath => _outbox.DatabasePath;
@@ -31,12 +34,14 @@ public sealed class TelegramService : ITelegramService
     public event Action<string>? Log;
     public event Action<TelegramConnectionState>? ConnectionStateChanged;
     public event Action? OutboxChanged;
+    public event Action<string>? AutomationActivity;
 
     public TelegramService(ISettingsStore store, IAppLogger logger)
     {
         _store = store;
         _logger = logger;
         _outbox = new OutgoingMessageStore(store);
+        _messageIndex = new MessageIndexStore(store);
         WTelegram.Helpers.Log = (level, message) =>
         {
             _logger.Write(level >= 4 ? AppLogLevel.Warning : AppLogLevel.Debug, "WTelegram", message);
@@ -272,15 +277,186 @@ public sealed class TelegramService : ITelegramService
         _logger.Write(AppLogLevel.Debug, "Telegram", $"加载会话历史：{dialog.Kind}/{dialog.Id}，数量上限 {limit}");
         var history = await _client!.Messages_GetHistory(ResolvePeer(dialog.Id, dialog.Kind), limit: limit);
         history.CollectUsersChats(_manager!.Users, _manager.Chats);
-        return history.Messages
+        var lines = history.Messages
             .OfType<TLMessage>()
             .OrderBy(x => x.date)
             .Select(m => new ChatLine(
                 m.date.ToLocalTime(), dialog.Name, NameOf(m.from_id),
                 string.IsNullOrWhiteSpace(m.message) ? "[媒体消息]" : m.message,
                 dialog.IsGroup, dialog.Id,
-                m.flags.HasFlag(TLMessage.Flags.out_), IsMentioned(m)))
+                m.flags.HasFlag(TLMessage.Flags.out_), IsMentioned(m), m.id, dialog.Kind,
+                TopicIdOf(m)))
             .ToList();
+        await IndexMessagesAsync(lines);
+        return lines;
+    }
+
+    public void ConfigureAutomationRules(IReadOnlyList<AutomationRule> rules) =>
+        _automationRules = rules.Where(x => x.Enabled).ToArray();
+
+    public async Task<IReadOnlyList<MessageSearchResult>> SearchMessagesAsync(
+        string query, DialogItem? dialog = null, int limit = 100)
+    {
+        EnsureLogin();
+        if (string.IsNullOrWhiteSpace(query)) return [];
+        limit = Math.Clamp(limit, 1, 500);
+        var local = await _messageIndex.SearchAsync(CurrentUserId, query, dialog, limit);
+        var remote = dialog is null
+            ? await _client!.Messages_SearchGlobal(q: query, filter: null!, limit: limit)
+            : await _client!.Messages_Search(
+                peer: ResolvePeer(dialog.Id, dialog.Kind), q: query, filter: null!, limit: limit);
+        remote.CollectUsersChats(_manager!.Users, _manager.Chats);
+        var mapped = remote.Messages.OfType<TLMessage>()
+            .Select(ToSearchResult)
+            .Where(x => dialog is null || x.ChatId == dialog.Id)
+            .ToList();
+        await _messageIndex.IndexAsync(CurrentUserId, mapped);
+        return mapped.Concat(local)
+            .GroupBy(x => (x.ChatId, x.MessageId))
+            .Select(x => x.First())
+            .OrderByDescending(x => x.Time)
+            .Take(limit)
+            .ToArray();
+    }
+
+    public async Task<IReadOnlyList<ForumTopicItem>> LoadForumTopicsAsync(DialogItem dialog)
+    {
+        EnsureLogin();
+        if (dialog.Kind != "Channel") return [];
+        var topics = await _client!.Channels_GetAllForumTopics(ResolvePeer(dialog.Id, dialog.Kind), "");
+        return topics.topics.OfType<ForumTopic>()
+            .Select(x => new ForumTopicItem(x.id, x.title, x.unread_count))
+            .OrderBy(x => x.Title)
+            .ToArray();
+    }
+
+    public async Task<ServerScheduledMessage> ScheduleServerMessageAsync(
+        DialogItem dialog, string text, DateTime sendAt)
+    {
+        EnsureLogin();
+        if (sendAt <= DateTime.Now.AddSeconds(10))
+            throw new InvalidOperationException("服务器定时发送时间至少应晚于当前时间 10 秒");
+        await _client!.Messages_SendMessage(
+            ResolvePeer(dialog.Id, dialog.Kind), text, Random.Shared.NextInt64(),
+            schedule_date: sendAt.ToUniversalTime());
+        var items = await LoadServerScheduledMessagesAsync(dialog);
+        var result = items.OrderBy(x => Math.Abs((x.SendAt - sendAt).TotalSeconds))
+            .FirstOrDefault(x => x.Text == text)
+            ?? throw new InvalidOperationException("Telegram 已接受任务，但未能读取计划消息编号");
+        _logger.Info("Telegram.Schedule", $"已创建服务器定时消息：{dialog.Name} / {result.MessageId} / {sendAt:O}");
+        return result;
+    }
+
+    public async Task<IReadOnlyList<ServerScheduledMessage>> LoadServerScheduledMessagesAsync(DialogItem dialog)
+    {
+        EnsureLogin();
+        var history = await _client!.Messages_GetScheduledHistory(ResolvePeer(dialog.Id, dialog.Kind), 0);
+        return history.Messages.OfType<TLMessage>()
+            .OrderBy(x => x.date)
+            .Select(x => new ServerScheduledMessage(
+                dialog.Id, dialog.Kind, dialog.Name, x.id, x.date.ToLocalTime(),
+                string.IsNullOrWhiteSpace(x.message) ? "[媒体消息]" : x.message))
+            .ToArray();
+    }
+
+    public async Task DeleteServerScheduledMessagesAsync(
+        DialogItem dialog, IReadOnlyCollection<int> messageIds)
+    {
+        EnsureLogin();
+        if (messageIds.Count == 0) return;
+        await _client!.Messages_DeleteScheduledMessages(ResolvePeer(dialog.Id, dialog.Kind), messageIds.ToArray());
+        _logger.Info("Telegram.Schedule", $"已删除 {messageIds.Count} 条服务器定时消息：{dialog.Name}");
+    }
+
+    public async Task SendReplyAsync(DialogItem dialog, int replyToMessageId, string text, string quote = "")
+    {
+        EnsureLogin();
+        var reply = new InputReplyToMessage { reply_to_msg_id = replyToMessageId };
+        if (!string.IsNullOrWhiteSpace(quote)) reply.quote_text = quote;
+        await _client!.Messages_SendMessage(
+            ResolvePeer(dialog.Id, dialog.Kind), text, Random.Shared.NextInt64(), reply_to: reply);
+    }
+
+    public async Task EditMessageAsync(DialogItem dialog, int messageId, string text)
+    {
+        EnsureLogin();
+        await _client!.Messages_EditMessage(ResolvePeer(dialog.Id, dialog.Kind), messageId, message: text);
+    }
+
+    public async Task DeleteMessagesAsync(
+        DialogItem dialog, IReadOnlyCollection<int> messageIds, bool revoke = true)
+    {
+        EnsureLogin();
+        if (messageIds.Count == 0) return;
+        if (dialog.Kind == "Channel" && _manager!.Chats.TryGetValue(dialog.Id, out var chat) && chat is Channel channel)
+            await _client!.Channels_DeleteMessages(new InputChannel(channel.id, channel.access_hash), messageIds.ToArray());
+        else
+            await _client!.Messages_DeleteMessages(messageIds.ToArray(), revoke);
+    }
+
+    public async Task ForwardMessagesAsync(
+        DialogItem source, IReadOnlyCollection<int> messageIds, DialogItem target)
+    {
+        EnsureLogin();
+        if (messageIds.Count == 0) return;
+        await _client!.ForwardMessagesAsync(
+            ResolvePeer(source.Id, source.Kind), messageIds.ToArray(), ResolvePeer(target.Id, target.Kind));
+    }
+
+    public string GetMessageLink(DialogItem dialog, int messageId)
+    {
+        if (dialog.Kind != "Channel") return "";
+        if (_manager?.Chats.TryGetValue(dialog.Id, out var chat) == true &&
+            chat is Channel channel && !string.IsNullOrWhiteSpace(channel.MainUsername))
+            return $"https://t.me/{channel.MainUsername}/{messageId}";
+        return $"https://t.me/c/{dialog.Id}/{messageId}";
+    }
+
+    public async Task SaveCloudDraftAsync(DialogItem dialog, string text, int? replyToMessageId = null)
+    {
+        EnsureLogin();
+        var reply = replyToMessageId is int id ? new InputReplyToMessage { reply_to_msg_id = id } : null;
+        await _client!.Messages_SaveDraft(ResolvePeer(dialog.Id, dialog.Kind), text, reply_to: reply);
+    }
+
+    public async Task<string> LoadCloudDraftAsync(DialogItem dialog)
+    {
+        EnsureLogin();
+        var result = await _client!.Messages_GetPeerDialogs([
+            new InputDialogPeer { peer = ResolvePeer(dialog.Id, dialog.Kind) }
+        ]);
+        return result.dialogs.OfType<Dialog>().FirstOrDefault()?.draft is DraftMessage draft
+            ? draft.message
+            : "";
+    }
+
+    public async Task<IReadOnlyList<DialogFolderItem>> LoadDialogFoldersAsync()
+    {
+        EnsureLogin();
+        var filters = await _client!.Messages_GetDialogFilters();
+        return filters.filters
+            .Select(x => new DialogFolderItem(x.ID, x.Title?.text ?? $"#{x.ID}", x.IncludePeers?.Length ?? 0))
+            .ToArray();
+    }
+
+    public async Task CreateDialogFolderAsync(string title, IReadOnlyCollection<DialogItem> dialogs)
+    {
+        EnsureLogin();
+        if (string.IsNullOrWhiteSpace(title)) throw new InvalidOperationException("文件夹名称不能为空");
+        if (dialogs.Count == 0) throw new InvalidOperationException("请至少选择一个会话");
+        var existing = await _client!.Messages_GetDialogFilters();
+        var id = Enumerable.Range(2, 8).FirstOrDefault(x => existing.filters.All(f => f.ID != x));
+        if (id == 0) throw new InvalidOperationException("Telegram 自定义文件夹数量已达到当前账号限制");
+        var peers = dialogs.Select(x => ResolvePeer(x.Id, x.Kind)).ToArray();
+        var filter = new DialogFilter
+        {
+            id = id,
+            title = new TextWithEntities { text = title.Trim(), entities = [] },
+            pinned_peers = [],
+            include_peers = peers,
+            exclude_peers = []
+        };
+        await _client.Messages_UpdateDialogFilter(id, filter);
     }
 
     public async Task SendAsync(DialogItem dialog, string text)
@@ -416,7 +592,7 @@ public sealed class TelegramService : ITelegramService
         throw new InvalidOperationException($"找不到会话 {id}，请刷新会话后再试");
     }
 
-    private Task OnUpdate(Update update)
+    private async Task OnUpdate(Update update)
     {
         TLMessage? message = update switch
         {
@@ -424,7 +600,7 @@ public sealed class TelegramService : ITelegramService
             UpdateEditMessage x => x.message as TLMessage,
             _ => null
         };
-        if (message is null) return Task.CompletedTask;
+        if (message is null) return;
 
         var peerInfo = _manager?.UserOrChat(message.peer_id);
         var isGroup = peerInfo is ChatBase;
@@ -434,12 +610,118 @@ public sealed class TelegramService : ITelegramService
             User user => DisplayName(user),
             _ => $"ID {message.peer_id.ID}"
         };
-        MessageReceived?.Invoke(new(
+        var chatKind = peerInfo switch
+        {
+            Channel => "Channel",
+            Chat => "Chat",
+            _ => "User"
+        };
+        var line = new ChatLine(
             message.date.ToLocalTime(), chatName, NameOf(message.from_id),
             string.IsNullOrWhiteSpace(message.message) ? "[媒体消息]" : message.message,
             isGroup, message.peer_id.ID,
-            message.flags.HasFlag(TLMessage.Flags.out_), IsMentioned(message)));
-        return Task.CompletedTask;
+            message.flags.HasFlag(TLMessage.Flags.out_), IsMentioned(message), message.id, chatKind,
+            TopicIdOf(message));
+        MessageReceived?.Invoke(line);
+        await IndexMessagesAsync([line]);
+        if (!line.IsOutgoing) await ProcessAutomationRulesAsync(line);
+    }
+
+    private async Task IndexMessagesAsync(IEnumerable<ChatLine> lines)
+    {
+        if (CurrentUserId == 0) return;
+        var items = lines.Where(x => x.MessageId != 0).Select(x => new MessageSearchResult(
+            x.ChatId, x.ChatKind, x.Chat, x.MessageId, x.Time, x.Sender, x.Text,
+            x.IsOutgoing, x.TopicId, "本地索引"));
+        await _messageIndex.IndexAsync(CurrentUserId, items);
+    }
+
+    private MessageSearchResult ToSearchResult(TLMessage message)
+    {
+        var info = _manager?.UserOrChat(message.peer_id);
+        var kind = info switch { Channel => "Channel", Chat => "Chat", _ => "User" };
+        var title = info switch
+        {
+            ChatBase chat => chat.Title ?? chat.ID.ToString(),
+            User user => DisplayName(user),
+            _ => message.peer_id.ID.ToString()
+        };
+        return new(
+            message.peer_id.ID, kind, title, message.id, message.date.ToLocalTime(),
+            NameOf(message.from_id), string.IsNullOrWhiteSpace(message.message) ? "[媒体消息]" : message.message,
+            message.flags.HasFlag(TLMessage.Flags.out_), TopicIdOf(message));
+    }
+
+    private static int? TopicIdOf(TLMessage message) =>
+        message.reply_to is MessageReplyHeader header && header.TopicID != 0 ? header.TopicID : null;
+
+    private async Task ProcessAutomationRulesAsync(ChatLine line)
+    {
+        foreach (var rule in _automationRules.Where(x => MatchesSafely(x, line)))
+        {
+            var text = rule.MessageTemplate
+                .Replace("{规则}", rule.Name)
+                .Replace("{Rule}", rule.Name)
+                .Replace("{群聊}", line.Chat)
+                .Replace("{Chat}", line.Chat)
+                .Replace("{发送人}", line.Sender)
+                .Replace("{Sender}", line.Sender)
+                .Replace("{内容}", line.Text)
+                .Replace("{Content}", line.Text)
+                .Replace("{时间}", line.Time.ToString("yyyy-MM-dd HH:mm:ss"))
+                .Replace("{Time}", line.Time.ToString("yyyy-MM-dd HH:mm:ss"));
+            try
+            {
+                switch (rule.Action)
+                {
+                    case AutomationAction.Telegram when rule.TargetPeerId is long targetId:
+                        await SendReliableAsync(
+                            targetId, rule.TargetPeerKind, rule.TargetPeerTitle, "Automation", text,
+                            $"automation:{rule.Id:N}:{line.ChatId}:{line.MessageId}",
+                            allowFailedRetry: true, allowUnknownRetry: false);
+                        break;
+                    case AutomationAction.Email when !string.IsNullOrWhiteSpace(rule.EmailRecipient):
+                        if (_connectionSettings is null) throw new InvalidOperationException("尚未加载邮件配置");
+                        await EmailNotificationService.SendAsync(
+                            _connectionSettings.Email, rule.EmailRecipient, $"Telegram 规则：{rule.Name}", text);
+                        break;
+                    default:
+                        _logger.Info("Automation", text);
+                        break;
+                }
+                AutomationActivity?.Invoke($"规则“{rule.Name}”已执行");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("Automation", $"规则“{rule.Name}”执行失败", ex);
+                AutomationActivity?.Invoke($"规则“{rule.Name}”执行失败：{ex.Message}");
+            }
+        }
+    }
+
+    private static bool Matches(AutomationRule rule, ChatLine line)
+    {
+        if (rule.ChatId is long chatId && line.ChatId != chatId) return false;
+        return rule.Trigger switch
+        {
+            AutomationTrigger.Mention => line.IsMentioned,
+            AutomationTrigger.Chat => rule.ChatId is null || line.ChatId == rule.ChatId,
+            AutomationTrigger.Sender => line.Sender.Contains(rule.Pattern, StringComparison.OrdinalIgnoreCase),
+            AutomationTrigger.RegularExpression => Regex.IsMatch(
+                line.Text, rule.Pattern, RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(500)),
+            _ => line.Text.Contains(rule.Pattern, StringComparison.OrdinalIgnoreCase)
+        };
+    }
+
+    private bool MatchesSafely(AutomationRule rule, ChatLine line)
+    {
+        try { return Matches(rule, line); }
+        catch (Exception ex)
+        {
+            _logger.Error("Automation", $"规则“{rule.Name}”的匹配表达式无效", ex);
+            AutomationActivity?.Invoke($"规则“{rule.Name}”匹配失败：{ex.Message}");
+            return false;
+        }
     }
 
     private string NameOf(Peer? peer)
