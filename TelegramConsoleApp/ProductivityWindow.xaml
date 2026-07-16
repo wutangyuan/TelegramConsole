@@ -27,12 +27,12 @@
                             <ColumnDefinition Width="240"/><ColumnDefinition Width="*"/><ColumnDefinition Width="90"/>
                             <ColumnDefinition Width="150"/><ColumnDefinition Width="90"/>
                         </Grid.ColumnDefinitions>
-                        <ComboBox x:Name="SearchScopeBox" DisplayMemberPath="Name"/>
+                        <ComboBox x:Name="SearchScopeBox" DisplayMemberPath="Name" SelectionChanged="SearchScopeBox_SelectionChanged"/>
                         <TextBox x:Name="SearchTextBox" Grid.Column="1" Margin="8,0" ToolTip="{DynamicResource SearchHint}"/>
                         <Button Grid.Column="2" Content="{DynamicResource Search}" Click="Search_Click"/>
                         <ComboBox x:Name="TopicBox" Grid.Column="3" Margin="8,0" DisplayMemberPath="Title"
                                   ToolTip="{DynamicResource ForumTopic}"/>
-                        <Button Grid.Column="4" Content="{DynamicResource LoadTopics}" Click="LoadTopics_Click"/>
+                        <Button x:Name="LoadTopicsButton" Grid.Column="4" Content="{DynamicResource LoadTopics}" Click="LoadTopics_Click" IsEnabled="False"/>
                     </Grid>
                     <ListView x:Name="SearchResultList" Grid.Row="1" SelectionMode="Extended">
                         <ListView.View><GridView>

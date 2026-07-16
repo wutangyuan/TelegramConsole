@@ -1,6 +1,6 @@
 namespace TelegramConsole.Core;
 
-public sealed record DialogItem(string Name, long Id, string Kind, bool IsGroup)
+public sealed record DialogItem(string Name, long Id, string Kind, bool IsGroup, bool IsForum = false)
 {
     public override string ToString() => $"{(IsGroup ? "#" : "@")} {Name}";
 }

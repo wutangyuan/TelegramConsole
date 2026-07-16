@@ -260,7 +260,9 @@ public sealed class TelegramService : ITelegramService
                     break;
                 case ChatBase chat when chat.IsActive:
                     var kind = chat is Channel ? "Channel" : "Chat";
-                    var chatItem = new DialogItem(chat.Title ?? chat.ID.ToString(), chat.ID, kind, true);
+                    var chatItem = new DialogItem(
+                        chat.Title ?? chat.ID.ToString(), chat.ID, kind, true,
+                        chat is Channel channel && channel.flags.HasFlag(Channel.Flags.forum));
                     _peers[PeerKey(chatItem.Id, chatItem.Kind)] = chat.ToInputPeer();
                     result.Add(chatItem);
                     break;
@@ -322,7 +324,11 @@ public sealed class TelegramService : ITelegramService
     public async Task<IReadOnlyList<ForumTopicItem>> LoadForumTopicsAsync(DialogItem dialog)
     {
         EnsureLogin();
-        if (dialog.Kind != "Channel") return [];
+        if (dialog.Kind != "Channel" ||
+            !_manager!.Chats.TryGetValue(dialog.Id, out var chat) ||
+            chat is not Channel channel ||
+            !channel.flags.HasFlag(Channel.Flags.forum))
+            throw new InvalidOperationException("CHANNEL_FORUM_MISSING");
         var topics = await _client!.Channels_GetAllForumTopics(ResolvePeer(dialog.Id, dialog.Kind), "");
         return topics.topics.OfType<ForumTopic>()
             .Select(x => new ForumTopicItem(x.id, x.title, x.unread_count))

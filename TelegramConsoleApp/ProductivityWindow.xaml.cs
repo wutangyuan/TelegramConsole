@@ -77,9 +77,19 @@ public partial class ProductivityWindow : Window
     {
         var dialog = (SearchScopeBox.SelectedItem as SearchScope)?.Dialog
                      ?? throw new InvalidOperationException(LocalizationManager.Get("SelectSpecificChat"));
+        if (!dialog.IsForum) throw new InvalidOperationException(LocalizationManager.Get("ChatIsNotForum"));
         TopicBox.ItemsSource = await _telegram.LoadForumTopicsAsync(dialog);
         if (TopicBox.Items.Count > 0) TopicBox.SelectedIndex = 0;
     });
+
+    private void SearchScopeBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (LoadTopicsButton is null || TopicBox is null) return;
+        var isForum = (SearchScopeBox.SelectedItem as SearchScope)?.Dialog?.IsForum == true;
+        LoadTopicsButton.IsEnabled = isForum;
+        TopicBox.IsEnabled = isForum;
+        if (!isForum) TopicBox.ItemsSource = null;
+    }
 
     private async void Reply_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
     {
@@ -338,9 +348,12 @@ public partial class ProductivityWindow : Window
         {
             if (ex is not InvalidOperationException)
                 _logger.Error("Productivity", "效率工具操作失败", ex);
-            ShowError(ex is NullReferenceException
-                ? LocalizationManager.Get("UnexpectedDataError")
-                : ex.Message);
+            var message = ex.Message.Contains("CHANNEL_FORUM_MISSING", StringComparison.OrdinalIgnoreCase)
+                ? LocalizationManager.Get("ChatIsNotForum")
+                : ex is NullReferenceException
+                    ? LocalizationManager.Get("UnexpectedDataError")
+                    : ex.Message;
+            ShowError(message);
         }
     }
 

@@ -136,4 +136,5 @@
     <sys:String x:Key="UnexpectedDataError">Telegram 返回的数据不完整，详细信息已写入运行日志，请刷新后重试。</sys:String>
     <sys:String x:Key="OpenGuide">打开使用说明</sys:String><sys:String x:Key="ProductivityGuideHint">字段说明、操作步骤和自动化规则示例</sys:String><sys:String x:Key="GuideNotFound">没有找到效率工具使用说明文件</sys:String><sys:String x:Key="SpecificChatRuleRequired">触发条件为“指定会话”时，必须在“限定会话”中选择一个具体会话</sys:String>
     <sys:String x:Key="CloudDraftEmpty">“{0}”当前没有云草稿</sys:String><sys:String x:Key="CloudDraftLoaded">已读取“{0}”的云草稿，共 {1} 个字符</sys:String><sys:String x:Key="CloudDraftSaved">“{0}”的云草稿已保存</sys:String><sys:String x:Key="CloudDraftCleared">“{0}”的云草稿已清除</sys:String>
+    <sys:String x:Key="ChatIsNotForum">当前会话没有启用 Telegram 话题（Forum Topic）功能，请选择带话题的 Forum 群组。</sys:String>
 </ResourceDictionary>
