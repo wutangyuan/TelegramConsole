@@ -91,10 +91,20 @@ public partial class ChatConsoleWindow : Window
     private void Append(ChatLine line)
     {
         AppendText(
-            $"[{line.Time:HH:mm:ss}] {line.Sender}: {line.Text}",
+            FormatChatLine(line),
             line.IsMentioned ? Brushes.DodgerBlue : line.IsOutgoing ? Brushes.LimeGreen : Brushes.White,
             line.MessageId > 0 ? QuoteTargetItem.From(line) : null,
             line.MessageId > 0 ? (line.ChatKind, line.ChatId, line.MessageId, line.Text) : null);
+    }
+
+    private static string FormatChatLine(ChatLine line)
+    {
+        var body = $"[{line.Time:HH:mm:ss}] {line.Sender}: {line.Text}";
+        if (line.ReplyToMessageId is not int replyId) return body;
+        var sender = string.IsNullOrWhiteSpace(line.ReplySender) ? $"消息 #{replyId}" : line.ReplySender;
+        var value = line.ReplyText.Replace('\r', ' ').Replace('\n', ' ').Trim();
+        if (value.Length > 120) value = value[..117] + "...";
+        return $"↪ {sender}: {value}{Environment.NewLine}{body}";
     }
 
     private void ConsoleBox_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)

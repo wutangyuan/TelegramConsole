@@ -16,6 +16,9 @@ public sealed class TelegramService : ITelegramService
     private readonly OutgoingMessageStore _outbox;
     private readonly MessageIndexStore _messageIndex;
     private readonly Dictionary<string, InputPeer> _peers = [];
+    private readonly Dictionary<(string Kind, long ChatId, int MessageId), TLMessage> _messageCache = [];
+    private readonly Queue<(string Kind, long ChatId, int MessageId)> _messageCacheOrder = [];
+    private readonly object _messageCacheSync = new();
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     private readonly object _recoverySync = new();
@@ -110,7 +113,15 @@ public sealed class TelegramService : ITelegramService
             _suppressDisconnectLogging = false;
         }
         _manager = null;
-        if (clearPeers) _peers.Clear();
+        if (clearPeers)
+        {
+            _peers.Clear();
+            lock (_messageCacheSync)
+            {
+                _messageCache.Clear();
+                _messageCacheOrder.Clear();
+            }
+        }
     }
 
     private Task OnOther(IObject notification)
@@ -293,14 +304,21 @@ public sealed class TelegramService : ITelegramService
             if (nextOffsetId <= 0 || nextOffsetId == offsetId) break;
             offsetId = nextOffsetId;
         }
+        foreach (var message in messages.Values) CacheMessage(dialog.Kind, dialog.Id, message);
+        var missingReplyIds = messages.Values
+            .Select(ReplyToMessageIdOf)
+            .Where(x => x is not null && !messages.ContainsKey(x.Value))
+            .Select(x => x!.Value)
+            .Distinct()
+            .ToArray();
+        var fetchedReplies = await FetchMessagesAsync(dialog, missingReplyIds);
         var lines = messages.Values
             .OrderBy(x => x.date)
-            .Select(m => new ChatLine(
-                m.date.ToLocalTime(), dialog.Name, NameOf(m.from_id),
-                string.IsNullOrWhiteSpace(m.message) ? "[媒体消息]" : m.message,
-                dialog.IsGroup, dialog.Id,
-                m.flags.HasFlag(TLMessage.Flags.out_), IsMentioned(m), m.id, dialog.Kind,
-                TopicIdOf(m)))
+            .Select(m => ToChatLine(
+                m, dialog,
+                ReplyToMessageIdOf(m) is int replyId
+                    ? messages.GetValueOrDefault(replyId) ?? fetchedReplies.GetValueOrDefault(replyId)
+                    : null))
             .ToList();
         await IndexMessagesAsync(lines);
         return lines;
@@ -670,12 +688,10 @@ public sealed class TelegramService : ITelegramService
             User => "User",
             _ => fallback?.Kind ?? "User"
         };
-        var line = new ChatLine(
-            message.date.ToLocalTime(), chatName, NameOf(message.from_id),
-            string.IsNullOrWhiteSpace(message.message) ? "[媒体消息]" : message.message,
-            isGroup, message.peer_id.ID,
-            message.flags.HasFlag(TLMessage.Flags.out_), IsMentioned(message), message.id, chatKind,
-            TopicIdOf(message));
+        var dialog = new DialogItem(chatName, message.peer_id.ID, chatKind, isGroup);
+        var replyMessage = await ResolveReplyMessageAsync(message, dialog);
+        CacheMessage(chatKind, message.peer_id.ID, message);
+        var line = ToChatLine(message, dialog, replyMessage);
         MessageReceived?.Invoke(line);
         await IndexMessagesAsync([line]);
         if (!line.IsOutgoing) await ProcessAutomationRulesAsync(line);
@@ -720,6 +736,88 @@ public sealed class TelegramService : ITelegramService
 
     private static int? TopicIdOf(TLMessage message) =>
         message.reply_to is MessageReplyHeader header && header.TopicID != 0 ? header.TopicID : null;
+
+    private static int? ReplyToMessageIdOf(TLMessage message) =>
+        message.reply_to is MessageReplyHeader header &&
+        header.flags.HasFlag(MessageReplyHeader.Flags.has_reply_to_msg_id) &&
+        header.reply_to_msg_id > 0
+            ? header.reply_to_msg_id
+            : null;
+
+    private ChatLine ToChatLine(TLMessage message, DialogItem dialog, TLMessage? replyMessage)
+    {
+        var replyId = ReplyToMessageIdOf(message);
+        var header = message.reply_to as MessageReplyHeader;
+        var replyText = !string.IsNullOrWhiteSpace(header?.quote_text)
+            ? header.quote_text
+            : replyMessage is null
+                ? replyId is null ? "" : "[原消息不可用]"
+                : MessageText(replyMessage);
+        return new ChatLine(
+            message.date.ToLocalTime(), dialog.Name, NameOf(message.from_id), MessageText(message),
+            dialog.IsGroup, dialog.Id,
+            message.flags.HasFlag(TLMessage.Flags.out_), IsMentioned(message), message.id, dialog.Kind,
+            TopicIdOf(message), replyId,
+            replyMessage is null ? "" : NameOf(replyMessage.from_id), replyText);
+    }
+
+    private async Task<TLMessage?> ResolveReplyMessageAsync(TLMessage message, DialogItem dialog)
+    {
+        if (ReplyToMessageIdOf(message) is not int replyId) return null;
+        lock (_messageCacheSync)
+        {
+            if (_messageCache.TryGetValue((dialog.Kind, dialog.Id, replyId), out var cached)) return cached;
+        }
+        var fetched = await FetchMessagesAsync(dialog, [replyId]);
+        return fetched.GetValueOrDefault(replyId);
+    }
+
+    private async Task<Dictionary<int, TLMessage>> FetchMessagesAsync(DialogItem dialog, int[] messageIds)
+    {
+        var result = new Dictionary<int, TLMessage>();
+        if (messageIds.Length == 0) return result;
+        try
+        {
+            var ids = messageIds.Select(x => (InputMessage)new InputMessageID { id = x }).ToArray();
+            Messages_MessagesBase response;
+            if (dialog.Kind == "Channel" &&
+                _manager!.Chats.TryGetValue(dialog.Id, out var chat) && chat is Channel channel)
+            {
+                response = await _client!.Channels_GetMessages((InputChannel)channel, ids);
+            }
+            else
+            {
+                response = await _client!.Messages_GetMessages(ids);
+            }
+            response.CollectUsersChats(_manager!.Users, _manager.Chats);
+            foreach (var message in response.Messages.OfType<TLMessage>())
+            {
+                result[message.id] = message;
+                CacheMessage(dialog.Kind, dialog.Id, message);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Write(AppLogLevel.Warning, "Telegram", $"读取引用原消息失败：{dialog.Kind}/{dialog.Id}", ex);
+        }
+        return result;
+    }
+
+    private void CacheMessage(string kind, long chatId, TLMessage message)
+    {
+        const int cacheLimit = 5000;
+        var key = (kind, chatId, message.id);
+        lock (_messageCacheSync)
+        {
+            if (!_messageCache.ContainsKey(key)) _messageCacheOrder.Enqueue(key);
+            _messageCache[key] = message;
+            while (_messageCacheOrder.Count > cacheLimit)
+                _messageCache.Remove(_messageCacheOrder.Dequeue());
+        }
+    }
+
+    private static string MessageText(TLMessage message) =>
+        string.IsNullOrWhiteSpace(message.message) ? "[媒体消息]" : message.message;
 
     private async Task ProcessAutomationRulesAsync(ChatLine line)
     {

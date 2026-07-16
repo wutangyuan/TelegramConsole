@@ -1168,10 +1168,26 @@ public partial class MainWindow : Window
     private static void AppendChatLine(BufferedTerminal box, ChatLine line) =>
         AppendConsole(
             box,
-            $"[{line.Time:HH:mm:ss}] [{line.Chat}] {line.Sender}: {line.Text}",
+            FormatChatLine(line, includeChat: true),
             line.IsMentioned ? Brushes.DodgerBlue : line.IsOutgoing ? Brushes.LimeGreen : Brushes.White,
             line.MessageId > 0 ? QuoteTargetItem.From(line) : null,
             line.MessageId > 0 ? (line.ChatKind, line.ChatId, line.MessageId, line.Text) : null);
+
+    private static string FormatChatLine(ChatLine line, bool includeChat)
+    {
+        var prefix = includeChat
+            ? $"[{line.Time:HH:mm:ss}] [{line.Chat}] {line.Sender}: "
+            : $"[{line.Time:HH:mm:ss}] {line.Sender}: ";
+        if (line.ReplyToMessageId is not int replyId) return prefix + line.Text;
+        var sender = string.IsNullOrWhiteSpace(line.ReplySender) ? $"消息 #{replyId}" : line.ReplySender;
+        return $"↪ {sender}: {PreviewReply(line.ReplyText)}{Environment.NewLine}{prefix}{line.Text}";
+    }
+
+    private static string PreviewReply(string text)
+    {
+        var value = text.Replace('\r', ' ').Replace('\n', ' ').Trim();
+        return value.Length <= 120 ? value : value[..117] + "...";
+    }
 
     private static void AppendConsole(
         BufferedTerminal box,

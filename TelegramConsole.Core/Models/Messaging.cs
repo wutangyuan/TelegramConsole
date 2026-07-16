@@ -16,4 +16,7 @@ public sealed record ChatLine(
     bool IsMentioned,
     int MessageId = 0,
     string ChatKind = "",
-    int? TopicId = null);
+    int? TopicId = null,
+    int? ReplyToMessageId = null,
+    string ReplySender = "",
+    string ReplyText = "");
