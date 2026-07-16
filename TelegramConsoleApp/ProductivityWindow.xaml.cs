@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Input;
 
@@ -178,6 +180,9 @@ public partial class ProductivityWindow : Window
             if (name.Length == 0) throw new InvalidOperationException(LocalizationManager.Get("RuleNameRequired"));
             var trigger = ((EnumOption<AutomationTrigger>)RuleTriggerBox.SelectedItem).Value;
             var pattern = RulePatternBox.Text.Trim();
+            var scope = RuleChatBox.SelectedItem as SearchScope;
+            if (trigger == AutomationTrigger.Chat && scope?.Dialog is null)
+                throw new InvalidOperationException(LocalizationManager.Get("SpecificChatRuleRequired"));
             if (trigger is not AutomationTrigger.Mention and not AutomationTrigger.Chat && pattern.Length == 0)
                 throw new InvalidOperationException(LocalizationManager.Get("RulePatternRequired"));
             if (trigger == AutomationTrigger.RegularExpression)
@@ -195,7 +200,7 @@ public partial class ProductivityWindow : Window
             rule.Name = name;
             rule.Trigger = trigger;
             rule.Pattern = pattern;
-            rule.ChatId = (RuleChatBox.SelectedItem as SearchScope)?.Dialog?.Id;
+            rule.ChatId = scope?.Dialog?.Id;
             rule.Action = action;
             rule.TargetPeerId = target?.Id;
             rule.TargetPeerKind = target?.Kind ?? "";
@@ -292,6 +297,17 @@ public partial class ProductivityWindow : Window
     private async void RefreshFolders_Click(object sender, RoutedEventArgs e) => await RunAsync(RefreshFoldersAsync);
 
     private async Task RefreshFoldersAsync() => FolderList.ItemsSource = await _telegram.LoadDialogFoldersAsync();
+
+    private void OpenGuide_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, "docs", "EFFICIENCY_TOOLS.md");
+            if (!File.Exists(path)) throw new FileNotFoundException(LocalizationManager.Get("GuideNotFound"), path);
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        catch (Exception ex) { ShowError(ex.Message); }
+    }
 
     private SearchRow SelectedMessage() => SearchResultList.SelectedItem as SearchRow
         ?? throw new InvalidOperationException(LocalizationManager.Get("SelectMessage"));

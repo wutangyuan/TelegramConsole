@@ -31,6 +31,8 @@
 
 ## 构建
 
+详细使用方法见 [效率工具使用说明](docs/EFFICIENCY_TOOLS.md)。
+
 ```powershell
 dotnet build .\TelegramConsole.sln
 ```

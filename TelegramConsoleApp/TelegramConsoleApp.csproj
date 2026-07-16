@@ -17,5 +17,7 @@
   <ItemGroup>
     <Resource Include="Assets\AppIcon.ico" />
     <Resource Include="Assets\AppIcon.png" />
+    <Content Include="..\docs\EFFICIENCY_TOOLS.md" Link="docs\EFFICIENCY_TOOLS.md"
+             CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

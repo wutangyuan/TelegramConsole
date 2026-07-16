@@ -40,6 +40,8 @@
 
 ## 运行
 
+效率工具的字段说明、操作步骤和自动化规则示例见 [效率工具使用说明](../docs/EFFICIENCY_TOOLS.md)。
+
 ```powershell
 dotnet run --project .\TelegramConsoleApp\TelegramConsoleApp.csproj
 ```

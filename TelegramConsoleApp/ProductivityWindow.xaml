@@ -6,7 +6,13 @@
         WindowStartupLocation="CenterOwner" Background="{StaticResource PageBrush}"
         FontFamily="Microsoft YaHei UI" FontSize="13">
     <Grid Margin="14">
-        <TabControl>
+        <Grid.RowDefinitions><RowDefinition Height="40"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+        <Grid>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock Text="{DynamicResource ProductivityGuideHint}" Foreground="#64748B" VerticalAlignment="Center"/>
+            <Button Grid.Column="1" Content="{DynamicResource OpenGuide}" Click="OpenGuide_Click"/>
+        </Grid>
+        <TabControl Grid.Row="1">
             <TabItem Header="{DynamicResource MessageSearch}">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>

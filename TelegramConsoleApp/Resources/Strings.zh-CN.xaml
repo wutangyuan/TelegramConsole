@@ -134,4 +134,5 @@
     <sys:String x:Key="AutomationTriggerKeyword">关键词</sys:String><sys:String x:Key="AutomationTriggerRegularExpression">正则表达式</sys:String><sys:String x:Key="AutomationTriggerMention">@我的消息</sys:String><sys:String x:Key="AutomationTriggerChat">指定会话</sys:String><sys:String x:Key="AutomationTriggerSender">发送人</sys:String>
     <sys:String x:Key="AutomationActionTelegram">发送到 Telegram</sys:String><sys:String x:Key="AutomationActionEmail">发送邮件</sys:String><sys:String x:Key="AutomationActionLogOnly">仅记录日志</sys:String><sys:String x:Key="DefaultRuleTemplate">规则 {规则} 命中：[{群聊}] {发送人}: {内容}</sys:String><sys:String x:Key="DefaultCheckInMessage">今日签到</sys:String>
     <sys:String x:Key="UnexpectedDataError">Telegram 返回的数据不完整，详细信息已写入运行日志，请刷新后重试。</sys:String>
+    <sys:String x:Key="OpenGuide">打开使用说明</sys:String><sys:String x:Key="ProductivityGuideHint">字段说明、操作步骤和自动化规则示例</sys:String><sys:String x:Key="GuideNotFound">没有找到效率工具使用说明文件</sys:String><sys:String x:Key="SpecificChatRuleRequired">触发条件为“指定会话”时，必须在“限定会话”中选择一个具体会话</sys:String>
 </ResourceDictionary>
