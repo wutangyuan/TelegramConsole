@@ -116,6 +116,7 @@
         <local:BufferedTerminal x:Name="ConsoleBox" Grid.Row="1"
                                 Background="#000000" Foreground="#FFFFFF" BorderThickness="0"
                                 MaximumLines="1000" MaximumCharacters="500000"
+                                PreviewMouseRightButtonDown="ConsoleBox_PreviewMouseRightButtonDown"
                                 ContextMenuOpening="ConsoleBox_ContextMenuOpening">
             <local:BufferedTerminal.ContextMenu>
                 <ContextMenu Background="#18181B" Foreground="#FFFFFF">

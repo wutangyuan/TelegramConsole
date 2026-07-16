@@ -505,10 +505,14 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ChatConsole_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    private void ChatConsole_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
         _contextQuoteTarget = ChatConsole.GetTagAtVisualPosition<QuoteTargetItem>(
-            Mouse.GetPosition(ChatConsole.TextArea.TextView));
+            e.GetPosition(ChatConsole.TextArea.TextView));
+    }
+
+    private void ChatConsole_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
         ChatQuoteMenuItem.IsEnabled = _contextQuoteTarget is not null;
     }
 

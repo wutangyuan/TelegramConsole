@@ -95,10 +95,14 @@ public partial class ChatConsoleWindow : Window
             line.MessageId > 0 ? QuoteTargetItem.From(line) : null);
     }
 
-    private void ConsoleBox_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    private void ConsoleBox_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
         _contextQuoteTarget = ConsoleBox.GetTagAtVisualPosition<QuoteTargetItem>(
-            Mouse.GetPosition(ConsoleBox.TextArea.TextView));
+            e.GetPosition(ConsoleBox.TextArea.TextView));
+    }
+
+    private void ConsoleBox_ContextMenuOpening(object sender, ContextMenuEventArgs e)
+    {
         ConsoleQuoteMenuItem.IsEnabled = _contextQuoteTarget is not null;
     }
 

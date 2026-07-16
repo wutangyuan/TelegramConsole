@@ -94,7 +94,17 @@ public sealed class BufferedTerminal : TextEditor
         var view = TextArea.TextView;
         var position = view.GetPosition(visualPosition);
         if (position is null || position.Value.Line < 1 || position.Value.Line > Document.LineCount) return null;
-        var line = Document.GetLineByNumber(position.Value.Line);
+        var offset = Document.GetOffset(position.Value.Location);
+        if (SelectionLength > 0 && offset >= SelectionStart && offset <= SelectionStart + SelectionLength)
+            offset = SelectionStart;
+        return GetTagAtOffset<T>(offset);
+    }
+
+    public T? GetTagAtOffset<T>(int offset) where T : class
+    {
+        if (Document.TextLength == 0) return null;
+        offset = Math.Clamp(offset, 0, Document.TextLength - 1);
+        var line = Document.GetLineByOffset(offset);
         var length = Math.Max(1, line.TotalLength);
         return _segments.FindOverlappingSegments(line.Offset, length)
             .Select(x => x.Tag)
