@@ -16,23 +16,31 @@
             </StackPanel>
             <Button Grid.Column="1" Content="{DynamicResource OpenGuide}" Click="OpenGuide_Click"/>
         </Grid>
-        <TabControl Grid.Row="1">
+        <TabControl x:Name="ProductivityTabs" Grid.Row="1">
             <TabItem Header="{DynamicResource MessageSearch}">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="44"/><RowDefinition Height="*"/><RowDefinition Height="90"/>
+                        <RowDefinition Height="64"/><RowDefinition Height="*"/><RowDefinition Height="112"/>
                     </Grid.RowDefinitions>
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="240"/><ColumnDefinition Width="*"/><ColumnDefinition Width="90"/>
-                            <ColumnDefinition Width="150"/><ColumnDefinition Width="90"/>
+                            <ColumnDefinition Width="230"/><ColumnDefinition Width="90"/>
                         </Grid.ColumnDefinitions>
-                        <ComboBox x:Name="SearchScopeBox" DisplayMemberPath="Name" SelectionChanged="SearchScopeBox_SelectionChanged"/>
-                        <TextBox x:Name="SearchTextBox" Grid.Column="1" Margin="8,0" ToolTip="{DynamicResource SearchHint}"/>
-                        <Button Grid.Column="2" Content="{DynamicResource Search}" Click="Search_Click"/>
-                        <ComboBox x:Name="TopicBox" Grid.Column="3" Margin="8,0" DisplayMemberPath="Title"
-                                  ToolTip="{DynamicResource ForumTopic}"/>
-                        <Button x:Name="LoadTopicsButton" Grid.Column="4" Content="{DynamicResource LoadTopics}" Click="LoadTopics_Click" IsEnabled="False"/>
+                        <StackPanel>
+                            <TextBlock Text="{DynamicResource SearchScopeLabel}" Foreground="#475569" Margin="4,0"/>
+                            <ComboBox x:Name="SearchScopeBox" DisplayMemberPath="Name" SelectionChanged="SearchScopeBox_SelectionChanged"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Margin="8,0">
+                            <TextBlock Text="{DynamicResource SearchKeywordLabel}" Foreground="#475569" Margin="4,0"/>
+                            <TextBox x:Name="SearchTextBox" ToolTip="{DynamicResource SearchHint}"/>
+                        </StackPanel>
+                        <Button Grid.Column="2" Content="{DynamicResource Search}" Click="Search_Click" VerticalAlignment="Bottom"/>
+                        <StackPanel Grid.Column="3" Margin="8,0">
+                            <TextBlock Text="{DynamicResource TopicFilterLabel}" Foreground="#475569" Margin="4,0"/>
+                            <ComboBox x:Name="TopicBox" DisplayMemberPath="Title" ToolTip="{DynamicResource ForumTopic}" IsEnabled="False"/>
+                        </StackPanel>
+                        <Button x:Name="LoadTopicsButton" Grid.Column="4" Content="{DynamicResource LoadTopics}" Click="LoadTopics_Click" IsEnabled="False" VerticalAlignment="Bottom"/>
                     </Grid>
                     <ListView x:Name="SearchResultList" Grid.Row="1" SelectionMode="Extended">
                         <ListView.View><GridView>
@@ -45,35 +53,43 @@
                         </GridView></ListView.View>
                     </ListView>
                     <Grid Grid.Row="2" Margin="0,8,0,0">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="600"/></Grid.ColumnDefinitions>
-                        <TextBox x:Name="OperationTextBox" AcceptsReturn="True" TextWrapping="Wrap"
-                                 ToolTip="{DynamicResource OperationTextHint}"/>
-                        <WrapPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
-                            <ComboBox x:Name="ForwardTargetBox" Width="150" DisplayMemberPath="Name" ToolTip="{DynamicResource ForwardTarget}"/>
-                            <Button Content="{DynamicResource Reply}" Click="Reply_Click"/>
-                            <Button Content="{DynamicResource QuoteReply}" Click="QuoteReply_Click"/>
-                            <Button Content="{DynamicResource Edit}" Click="EditMessage_Click"/>
-                            <Button Content="{DynamicResource Delete}" Click="DeleteMessage_Click"/>
-                            <Button Content="{DynamicResource Forward}" Click="ForwardMessage_Click"/>
-                            <Button Content="{DynamicResource CopyLink}" Click="CopyLink_Click"/>
-                        </WrapPanel>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="650"/></Grid.ColumnDefinitions>
+                        <Grid>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                            <TextBlock Text="{DynamicResource OperationContentLabel}" Foreground="#1D4ED8" FontWeight="SemiBold" Margin="4,0,4,2"/>
+                            <TextBox x:Name="OperationTextBox" Grid.Row="1" AcceptsReturn="True" TextWrapping="Wrap"
+                                     ToolTip="{DynamicResource OperationTextHint}"/>
+                        </Grid>
+                        <Grid Grid.Column="1">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                            <TextBlock Text="{DynamicResource MessageActionsHelp}" Foreground="#64748B" Margin="8,0,4,2"/>
+                            <WrapPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                                <ComboBox x:Name="ForwardTargetBox" Width="170" DisplayMemberPath="Name" ToolTip="{DynamicResource ForwardTarget}"/>
+                                <Button Content="{DynamicResource Reply}" Click="Reply_Click"/>
+                                <Button Content="{DynamicResource QuoteReply}" Click="QuoteReply_Click"/>
+                                <Button Content="{DynamicResource Edit}" Click="EditMessage_Click"/>
+                                <Button Content="{DynamicResource Delete}" Click="DeleteMessage_Click"/>
+                                <Button Content="{DynamicResource Forward}" Click="ForwardMessage_Click"/>
+                                <Button Content="{DynamicResource CopyLink}" Click="CopyLink_Click"/>
+                            </WrapPanel>
+                        </Grid>
                     </Grid>
                 </Grid>
             </TabItem>
 
             <TabItem Header="{DynamicResource ServerSchedules}">
                 <Grid Margin="10">
-                    <Grid.RowDefinitions><RowDefinition Height="44"/><RowDefinition Height="44"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="64"/><RowDefinition Height="44"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="250"/><ColumnDefinition Width="170"/><ColumnDefinition Width="100"/>
+                            <ColumnDefinition Width="240"/><ColumnDefinition Width="190"/><ColumnDefinition Width="120"/>
                             <ColumnDefinition Width="*"/><ColumnDefinition Width="100"/>
                         </Grid.ColumnDefinitions>
-                        <ComboBox x:Name="ServerScheduleDialogBox" DisplayMemberPath="Name"/>
-                        <DatePicker x:Name="ServerScheduleDatePicker" Grid.Column="1" Margin="8,0"/>
-                        <TextBox x:Name="ServerScheduleTimeBox" Grid.Column="2" Text="08:00"/>
-                        <TextBox x:Name="ServerScheduleTextBox" Grid.Column="3" Margin="8,0" Text="{DynamicResource DefaultCheckInMessage}"/>
-                        <Button Grid.Column="4" Content="{DynamicResource Create}" Click="CreateServerSchedule_Click"/>
+                        <StackPanel><TextBlock Text="{DynamicResource ScheduleTargetLabel}" Foreground="#475569" Margin="4,0"/><ComboBox x:Name="ServerScheduleDialogBox" DisplayMemberPath="Name"/></StackPanel>
+                        <StackPanel Grid.Column="1" Margin="8,0"><TextBlock Text="{DynamicResource SendDateLabel}" Foreground="#475569" Margin="4,0"/><DatePicker x:Name="ServerScheduleDatePicker"/></StackPanel>
+                        <StackPanel Grid.Column="2"><TextBlock Text="{DynamicResource SendTimeLabel}" Foreground="#475569" Margin="4,0"/><TextBox x:Name="ServerScheduleTimeBox" Text="08:00"/></StackPanel>
+                        <StackPanel Grid.Column="3" Margin="8,0"><TextBlock Text="{DynamicResource ScheduledMessageLabel}" Foreground="#475569" Margin="4,0"/><TextBox x:Name="ServerScheduleTextBox" Text="{DynamicResource DefaultCheckInMessage}"/></StackPanel>
+                        <Button Grid.Column="4" Content="{DynamicResource Create}" Click="CreateServerSchedule_Click" VerticalAlignment="Bottom"/>
                     </Grid>
                     <StackPanel Grid.Row="1" Orientation="Horizontal">
                         <Button Content="{DynamicResource Refresh}" Click="RefreshServerSchedules_Click"/>
@@ -93,30 +109,31 @@
 
             <TabItem Header="{DynamicResource AutomationRules}">
                 <Grid Margin="10">
-                    <Grid.RowDefinitions><RowDefinition Height="44"/><RowDefinition Height="44"/><RowDefinition Height="44"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="44"/><RowDefinition Height="44"/><RowDefinition Height="44"/><RowDefinition Height="28"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="200"/><ColumnDefinition Width="90"/><ColumnDefinition Width="180"/><ColumnDefinition Width="80"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                         <TextBlock Text="{DynamicResource Name}" VerticalAlignment="Center"/><TextBox x:Name="RuleNameBox" Grid.Column="1"/>
                         <TextBlock Grid.Column="2" Text="{DynamicResource Trigger}" VerticalAlignment="Center" Margin="8,0"/>
                         <ComboBox x:Name="RuleTriggerBox" Grid.Column="3" DisplayMemberPath="Name"/>
                         <TextBlock Grid.Column="4" Text="{DynamicResource Pattern}" VerticalAlignment="Center" Margin="8,0"/>
-                        <TextBox x:Name="RulePatternBox" Grid.Column="5"/>
+                        <TextBox x:Name="RulePatternBox" Grid.Column="5" ToolTip="{DynamicResource RulePatternHint}"/>
                     </Grid>
                     <Grid Grid.Row="1">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="240"/><ColumnDefinition Width="80"/><ColumnDefinition Width="240"/><ColumnDefinition Width="80"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                         <TextBlock Text="{DynamicResource LimitChat}" VerticalAlignment="Center"/><ComboBox x:Name="RuleChatBox" Grid.Column="1" DisplayMemberPath="Name"/>
                         <TextBlock Grid.Column="2" Text="{DynamicResource Action}" VerticalAlignment="Center" Margin="8,0"/><ComboBox x:Name="RuleActionBox" Grid.Column="3" DisplayMemberPath="Name"/>
-                        <TextBlock Grid.Column="4" Text="{DynamicResource Target}" VerticalAlignment="Center" Margin="8,0"/><ComboBox x:Name="RuleTargetBox" Grid.Column="5" DisplayMemberPath="Name"/>
+                        <TextBlock Grid.Column="4" Text="{DynamicResource Target}" VerticalAlignment="Center" Margin="8,0"/><ComboBox x:Name="RuleTargetBox" Grid.Column="5" DisplayMemberPath="Name" ToolTip="{DynamicResource RuleTargetHint}"/>
                     </Grid>
                     <Grid Grid.Row="2">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="80"/><ColumnDefinition Width="220"/><ColumnDefinition Width="80"/><ColumnDefinition Width="*"/><ColumnDefinition Width="100"/><ColumnDefinition Width="100"/><ColumnDefinition Width="100"/></Grid.ColumnDefinitions>
-                        <TextBlock Text="{DynamicResource Email}" VerticalAlignment="Center"/><TextBox x:Name="RuleEmailBox" Grid.Column="1"/>
-                        <TextBlock Grid.Column="2" Text="{DynamicResource Template}" VerticalAlignment="Center" Margin="8,0"/><TextBox x:Name="RuleTemplateBox" Grid.Column="3" Text="{DynamicResource DefaultRuleTemplate}"/>
+                        <TextBlock Text="{DynamicResource Email}" VerticalAlignment="Center"/><TextBox x:Name="RuleEmailBox" Grid.Column="1" ToolTip="{DynamicResource RuleEmailHint}"/>
+                        <TextBlock Grid.Column="2" Text="{DynamicResource Template}" VerticalAlignment="Center" Margin="8,0"/><TextBox x:Name="RuleTemplateBox" Grid.Column="3" Text="{DynamicResource DefaultRuleTemplate}" ToolTip="{DynamicResource RuleTemplateHint}"/>
                         <Button Grid.Column="4" Content="{DynamicResource Save}" Click="SaveRule_Click"/>
                         <Button Grid.Column="5" Content="{DynamicResource LoadSelected}" Click="LoadRule_Click"/>
                         <Button Grid.Column="6" Content="{DynamicResource DeleteSelected}" Click="DeleteRule_Click"/>
                     </Grid>
-                    <ListView x:Name="RuleList" Grid.Row="3" SelectionMode="Extended" MouseDoubleClick="ToggleRule_DoubleClick">
+                    <TextBlock Grid.Row="3" Text="{DynamicResource AutomationHelp}" Foreground="#64748B" VerticalAlignment="Center" Margin="4,0"/>
+                    <ListView x:Name="RuleList" Grid.Row="4" SelectionMode="Extended" MouseDoubleClick="ToggleRule_DoubleClick">
                         <ListView.View><GridView>
                             <GridViewColumn Header="{DynamicResource Status}" Width="70" DisplayMemberBinding="{Binding EnabledText}"/>
                             <GridViewColumn Header="{DynamicResource Name}" Width="180" DisplayMemberBinding="{Binding Name}"/>
@@ -133,10 +150,11 @@
                 <Grid Margin="10">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="12"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <GroupBox Header="{DynamicResource CloudDraft}" Padding="10">
-                        <Grid><Grid.RowDefinitions><RowDefinition Height="44"/><RowDefinition Height="*"/><RowDefinition Height="44"/></Grid.RowDefinitions>
-                            <ComboBox x:Name="DraftDialogBox" DisplayMemberPath="Name"/>
-                            <TextBox x:Name="DraftTextBox" Grid.Row="1" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
-                            <StackPanel Grid.Row="2" Orientation="Horizontal">
+                        <Grid><Grid.RowDefinitions><RowDefinition Height="64"/><RowDefinition Height="24"/><RowDefinition Height="*"/><RowDefinition Height="44"/></Grid.RowDefinitions>
+                            <StackPanel><TextBlock Text="{DynamicResource DraftDialogLabel}" Foreground="#475569" Margin="4,0"/><ComboBox x:Name="DraftDialogBox" DisplayMemberPath="Name"/></StackPanel>
+                            <TextBlock Grid.Row="1" Text="{DynamicResource DraftContentLabel}" Foreground="#475569" Margin="4,2"/>
+                            <TextBox x:Name="DraftTextBox" Grid.Row="2" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"/>
+                            <StackPanel Grid.Row="3" Orientation="Horizontal">
                                 <Button Content="{DynamicResource LoadCloudDraft}" Click="LoadDraft_Click"/>
                                 <Button Content="{DynamicResource SaveCloudDraft}" Click="SaveDraft_Click"/>
                                 <Button Content="{DynamicResource ClearCloudDraft}" Click="ClearDraft_Click"/>
@@ -144,14 +162,15 @@
                         </Grid>
                     </GroupBox>
                     <GroupBox Grid.Column="2" Header="{DynamicResource DialogFolders}" Padding="10">
-                        <Grid><Grid.RowDefinitions><RowDefinition Height="44"/><RowDefinition Height="180"/><RowDefinition Height="44"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                            <TextBox x:Name="FolderNameBox" ToolTip="{DynamicResource FolderName}"/>
-                            <ListBox x:Name="FolderDialogsList" Grid.Row="1" SelectionMode="Extended" DisplayMemberPath="Name"/>
-                            <StackPanel Grid.Row="2" Orientation="Horizontal">
+                        <Grid><Grid.RowDefinitions><RowDefinition Height="64"/><RowDefinition Height="24"/><RowDefinition Height="180"/><RowDefinition Height="44"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                            <StackPanel><TextBlock Text="{DynamicResource FolderName}" Foreground="#475569" Margin="4,0"/><TextBox x:Name="FolderNameBox" ToolTip="{DynamicResource FolderName}"/></StackPanel>
+                            <TextBlock Grid.Row="1" Text="{DynamicResource FolderDialogsHelp}" Foreground="#475569" Margin="4,2"/>
+                            <ListBox x:Name="FolderDialogsList" Grid.Row="2" SelectionMode="Extended" DisplayMemberPath="Name"/>
+                            <StackPanel Grid.Row="3" Orientation="Horizontal">
                                 <Button Content="{DynamicResource CreateFolder}" Click="CreateFolder_Click"/>
                                 <Button Content="{DynamicResource RefreshFolders}" Click="RefreshFolders_Click"/>
                             </StackPanel>
-                            <ListView x:Name="FolderList" Grid.Row="3">
+                            <ListView x:Name="FolderList" Grid.Row="4">
                                 <ListView.View><GridView>
                                     <GridViewColumn Header="ID" Width="70" DisplayMemberBinding="{Binding Id}"/>
                                     <GridViewColumn Header="{DynamicResource FolderName}" Width="240" DisplayMemberBinding="{Binding Title}"/>
