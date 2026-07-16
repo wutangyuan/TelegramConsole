@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     private readonly IMentionMonitorService _mentionMonitor;
     private AccountProfile? _activeAccount;
     private System.Windows.Forms.NotifyIcon? _trayIcon;
+    private System.Windows.Forms.ToolStripMenuItem? _trayAccountItem;
     private bool _exitRequested;
     private bool _trayHintShown;
     private List<DialogItem> _allDialogs = [];
@@ -85,6 +86,14 @@ public partial class MainWindow : Window
             ?? throw new InvalidOperationException("找不到应用图标资源");
         using var sourceIcon = new System.Drawing.Icon(resource.Stream);
         var trayMenu = new System.Windows.Forms.ContextMenuStrip();
+        _trayAccountItem = new System.Windows.Forms.ToolStripMenuItem
+        {
+            Enabled = false,
+            Text = LF("TrayCurrentAccount", L("NotLoggedIn")),
+            Font = new System.Drawing.Font(trayMenu.Font, System.Drawing.FontStyle.Bold)
+        };
+        trayMenu.Items.Add(_trayAccountItem);
+        trayMenu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
         trayMenu.Items.Add(L("ShowMainWindow"), null, (_, _) => Dispatcher.BeginInvoke(ShowMainWindow));
         trayMenu.Items.Add(L("ExitApplication"), null, (_, _) => Dispatcher.BeginInvoke(ExitApplication));
         _trayIcon = new System.Windows.Forms.NotifyIcon
@@ -95,6 +104,7 @@ public partial class MainWindow : Window
             Visible = true
         };
         _trayIcon.DoubleClick += (_, _) => Dispatcher.BeginInvoke(ShowMainWindow);
+        UpdateTrayAccount();
     }
 
     private void ShowMainWindow()
@@ -159,6 +169,7 @@ public partial class MainWindow : Window
     private async Task DeactivateAccountAsync()
     {
         _activeAccount = null;
+        UpdateTrayAccount();
         _exceptionMonitor.DeactivateAccount();
         _mentionMonitor.DeactivateAccount();
         _telegram.ConfigureAutomationRules([]);
@@ -226,6 +237,7 @@ public partial class MainWindow : Window
     private void ShowAuthenticatedAccount()
     {
         LoggedInAccountText.Text = _telegram.CurrentUser;
+        UpdateTrayAccount(_telegram.CurrentUser);
         ConnectionStatusText.Text = L("Online");
         ConnectionStatusText.Foreground = Brushes.ForestGreen;
         ConnectionStatusDot.Background = Brushes.LimeGreen;
@@ -271,6 +283,7 @@ public partial class MainWindow : Window
 
     private void ShowDisconnectedLogin(string message)
     {
+        UpdateTrayAccount();
         LoggedInPanel.Visibility = Visibility.Collapsed;
         LoginFormPanel.Visibility = Visibility.Visible;
         LoginPromptLabel.Visibility = LoginValueBox.Visibility = LoginPasswordBox.Visibility =
@@ -283,6 +296,18 @@ public partial class MainWindow : Window
                 L("ConnectionErrorTitle"),
                 L("ConnectionErrorBody"),
                 System.Windows.Forms.ToolTipIcon.Error);
+    }
+
+    private void UpdateTrayAccount(string? accountName = null)
+    {
+        if (_trayAccountItem is null) return;
+        var displayName = string.IsNullOrWhiteSpace(accountName) ? L("NotLoggedIn") : accountName;
+        _trayAccountItem.Text = LF("TrayCurrentAccount", displayName);
+        if (_trayIcon is not null)
+        {
+            var text = $"Telegram - {displayName}";
+            _trayIcon.Text = text.Length <= 63 ? text : text[..63];
+        }
     }
 
     private async Task ActivateAccountAsync()

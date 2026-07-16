@@ -47,7 +47,7 @@
     <sys:String x:Key="ConnectingTelegram">Connecting to Telegram...</sys:String><sys:String x:Key="LoginInputRequired">Enter the requested login information.</sys:String>
     <sys:String x:Key="TelegramRequires">Telegram requires: {0}</sys:String><sys:String x:Key="LoggedIn">Signed in: {0}</sys:String>
     <sys:String x:Key="ConnectionErrorTitle">Telegram Connection Error</sys:String><sys:String x:Key="ConnectionErrorBody">Internal recovery and automatic connection rebuild both failed. Check the network or proxy, then sign in again.</sys:String>
-    <sys:String x:Key="ShowMainWindow">Show Main Window</sys:String><sys:String x:Key="ExitApplication">Exit</sys:String>
+    <sys:String x:Key="ShowMainWindow">Show Main Window</sys:String><sys:String x:Key="ExitApplication">Exit</sys:String><sys:String x:Key="TrayCurrentAccount">Current account: {0}</sys:String><sys:String x:Key="NotLoggedIn">Not signed in</sys:String>
     <sys:String x:Key="SelectDialogFirst">Select a private chat or group first.</sys:String><sys:String x:Key="SelectChatFirst">Select a private chat or group on the left first.</sys:String>
     <sys:String x:Key="BlankStatus">The terminal is blank. Select a chat to resume displaying messages.</sys:String><sys:String x:Key="ExpandDialogs">Expand chat list</sys:String><sys:String x:Key="CollapseDialogs">Collapse chat list</sys:String>
     <sys:String x:Key="MessageSent">Message sent to {0}</sys:String><sys:String x:Key="LoginFirst">Sign in to Telegram first.</sys:String>

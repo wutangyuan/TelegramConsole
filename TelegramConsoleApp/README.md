@@ -37,7 +37,7 @@
 - “运行日志”页实时显示应用、Telegram 和 Quartz 日志；底层使用 log4net 3.3.2，文件按天保存在 `%LOCALAPPDATA%\TelegramConsoleApp\logs`，保留 30 天并自动脱敏。
 - “异常中心”仅将带 Exception/堆栈的 Error/Critical 日志写入 `%LOCALAPPDATA%\TelegramConsoleApp\exceptions.db`；界面主动抛出的业务提示不会入库。支持按日期、级别和关键字查询，可将异常通知发送到 Telegram 用户/群聊或 SMTP 邮箱，并支持多选重发。
 - Telegram 主连接断开会在界面提示并记录异常日志，底部状态栏只显示简洁中文提示，原始 WTelegram 诊断信息保留在日志/异常详情里。
-- 主窗口关闭时默认隐藏到系统托盘，定时任务和消息监控继续运行；托盘菜单支持恢复窗口和彻底退出。
+- 主窗口关闭时默认隐藏到系统托盘，定时任务和消息监控继续运行；托盘右键显示当前登录账号，并支持恢复窗口和彻底退出。
 
 ## 运行
 
