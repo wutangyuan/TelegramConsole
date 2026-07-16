@@ -73,4 +73,12 @@
     <sys:String x:Key="SmtpPortInvalid">SMTP port must be an integer from 1 to 65535.</sys:String>
     <sys:String x:Key="EmailConfigIncomplete">Email settings are incomplete. Enter at least the SMTP server and sender address.</sys:String>
     <sys:String x:Key="EmailNotConfigured">A recipient email was selected, but email delivery is not configured. Open Settings → Email SMTP first.</sys:String>
+    <sys:String x:Key="Outbox">Outbox</sys:String><sys:String x:Key="Refresh">Refresh</sys:String><sys:String x:Key="RetrySelected">Retry Selected</sys:String>
+    <sys:String x:Key="OutboxHint">Message bodies are encrypted with Windows DPAPI. Unknown deliveries are never retried automatically; verify in Telegram first.</sys:String>
+    <sys:String x:Key="Target">Target</sys:String><sys:String x:Key="Purpose">Purpose</sys:String><sys:String x:Key="Attempts">Attempts</sys:String><sys:String x:Key="Error">Error</sys:String>
+    <sys:String x:Key="SelectOutboxRecord">Select at least one outbox record.</sys:String><sys:String x:Key="OutboxRetryComplete">Retried {0} outbox record(s).</sys:String>
+    <sys:String x:Key="ConfirmRetryUnknownOutbox">The selection contains messages with an unknown delivery result. Verify in Telegram that they were not delivered, otherwise retrying may send duplicates. Retry anyway?</sys:String>
+    <sys:String x:Key="ConfirmTitle">Confirmation</sys:String>
+    <sys:String x:Key="OutboxQueued">Queued</sys:String><sys:String x:Key="OutboxSending">Sending</sys:String><sys:String x:Key="OutboxSent">Sent</sys:String><sys:String x:Key="OutboxFailed">Failed</sys:String><sys:String x:Key="OutboxUnknown">Unknown</sys:String>
+    <sys:String x:Key="OutboxSchedule">Schedule</sys:String><sys:String x:Key="OutboxConfirmation">Confirmation</sys:String><sys:String x:Key="OutboxManual">Manual</sys:String>
 </ResourceDictionary>

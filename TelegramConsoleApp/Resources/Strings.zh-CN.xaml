@@ -113,4 +113,12 @@
     <sys:String x:Key="SmtpPortInvalid">SMTP 端口必须是 1 到 65535 之间的整数</sys:String>
     <sys:String x:Key="EmailConfigIncomplete">邮件配置不完整，请至少填写 SMTP 服务器和发件地址</sys:String>
     <sys:String x:Key="EmailNotConfigured">已填写收件邮箱，但尚未配置邮件发送服务。请先进入“设置 → 邮件 SMTP”完成配置。</sys:String>
+    <sys:String x:Key="Outbox">发件箱</sys:String><sys:String x:Key="Refresh">刷新</sys:String><sys:String x:Key="RetrySelected">重试选中</sys:String>
+    <sys:String x:Key="OutboxHint">正文使用 Windows DPAPI 加密保存；“结果未知”不会自动重发，请确认 Telegram 后再手动处理。</sys:String>
+    <sys:String x:Key="Target">目标</sys:String><sys:String x:Key="Purpose">用途</sys:String><sys:String x:Key="Attempts">尝试</sys:String><sys:String x:Key="Error">错误</sys:String>
+    <sys:String x:Key="SelectOutboxRecord">请先选择至少一条发件箱记录</sys:String><sys:String x:Key="OutboxRetryComplete">已重试 {0} 条发件箱记录</sys:String>
+    <sys:String x:Key="ConfirmRetryUnknownOutbox">所选记录中包含“发送结果未知”的消息。请先在 Telegram 中确认消息确实未送达，否则重试可能造成重复发送。仍要重试吗？</sys:String>
+    <sys:String x:Key="ConfirmTitle">请确认</sys:String>
+    <sys:String x:Key="OutboxQueued">待发送</sys:String><sys:String x:Key="OutboxSending">发送中</sys:String><sys:String x:Key="OutboxSent">已发送</sys:String><sys:String x:Key="OutboxFailed">失败</sys:String><sys:String x:Key="OutboxUnknown">结果未知</sys:String>
+    <sys:String x:Key="OutboxSchedule">定时任务</sys:String><sys:String x:Key="OutboxConfirmation">完成确认</sys:String><sys:String x:Key="OutboxManual">手动消息</sys:String>
 </ResourceDictionary>

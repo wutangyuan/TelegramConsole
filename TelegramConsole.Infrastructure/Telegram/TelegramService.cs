@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using TelegramConsole.Core;
 using TL;
 using TLMessage = TL.Message;
@@ -10,8 +12,10 @@ public sealed class TelegramService : ITelegramService
     private WTelegram.UpdateManager? _manager;
     private readonly ISettingsStore _store;
     private readonly IAppLogger _logger;
+    private readonly OutgoingMessageStore _outbox;
     private readonly Dictionary<string, InputPeer> _peers = [];
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
+    private readonly SemaphoreSlim _sendLock = new(1, 1);
     private readonly object _recoverySync = new();
     private TelegramConnectionStatus? _lastConnectionStatus;
     private AppSettings? _connectionSettings;
@@ -20,16 +24,19 @@ public sealed class TelegramService : ITelegramService
     private bool _disposed;
 
     public bool IsLoggedIn => _client?.User is not null && !_client.Disconnected;
+    public string OutboxDatabasePath => _outbox.DatabasePath;
     public long CurrentUserId => _client?.User?.id ?? 0;
     public string CurrentUser => _client?.User?.ToString() ?? "未登录";
     public event Action<ChatLine>? MessageReceived;
     public event Action<string>? Log;
     public event Action<TelegramConnectionState>? ConnectionStateChanged;
+    public event Action? OutboxChanged;
 
     public TelegramService(ISettingsStore store, IAppLogger logger)
     {
         _store = store;
         _logger = logger;
+        _outbox = new OutgoingMessageStore(store);
         WTelegram.Helpers.Log = (level, message) =>
         {
             _logger.Write(level >= 4 ? AppLogLevel.Warning : AppLogLevel.Debug, "WTelegram", message);
@@ -278,24 +285,126 @@ public sealed class TelegramService : ITelegramService
 
     public async Task SendAsync(DialogItem dialog, string text)
     {
-        EnsureLogin();
-        await _client!.SendMessageAsync(ResolvePeer(dialog.Id, dialog.Kind), text);
-        _logger.Info("Telegram", $"消息发送成功：{dialog.Kind}/{dialog.Id}，字符数 {text.Length}");
+        var key = BuildManualIdempotencyKey(dialog.Id, dialog.Kind, text);
+        await SendReliableAsync(
+            dialog.Id, dialog.Kind, dialog.Name, "Manual", text, key,
+            allowFailedRetry: false, allowUnknownRetry: false);
     }
 
     public async Task SendScheduledAsync(ScheduledMessage schedule)
     {
-        EnsureLogin();
-        await _client!.SendMessageAsync(ResolvePeer(schedule.ChatId, schedule.ChatKind), schedule.Message);
-        _logger.Info("Telegram", $"定时消息发送成功：{schedule.ChatKind}/{schedule.ChatId}，任务 {schedule.Id}");
+        var key = $"schedule:{schedule.Id:N}:{DateOnly.FromDateTime(DateTime.Now):yyyyMMdd}";
+        await SendReliableAsync(
+            schedule.ChatId, schedule.ChatKind, schedule.ChatTitle, "Schedule", schedule.Message, key,
+            allowFailedRetry: true, allowUnknownRetry: false);
     }
 
     public async Task SendConfirmationAsync(ScheduledMessage schedule, string text)
     {
         EnsureLogin();
         if (schedule.ConfirmationPeerId is not long id) return;
-        await _client!.SendMessageAsync(ResolvePeer(id, schedule.ConfirmationPeerKind), text);
-        _logger.Info("Telegram", $"完成确认发送成功：{schedule.ConfirmationPeerKind}/{id}，任务 {schedule.Id}");
+        var key = $"confirmation:{schedule.Id:N}:{DateOnly.FromDateTime(DateTime.Now):yyyyMMdd}:{id}";
+        await SendReliableAsync(
+            id, schedule.ConfirmationPeerKind, schedule.ConfirmationPeerTitle,
+            "Confirmation", text, key, allowFailedRetry: true, allowUnknownRetry: false);
+    }
+
+    public async Task<IReadOnlyList<OutgoingMessageRecord>> QueryOutboxAsync(int limit = 200) =>
+        CurrentUserId == 0 ? [] : await _outbox.QueryAsync(CurrentUserId, limit);
+
+    public async Task RetryOutboxAsync(long recordId)
+    {
+        EnsureLogin();
+        var record = await _outbox.GetAsync(CurrentUserId, recordId)
+                     ?? throw new InvalidOperationException("找不到发件箱记录");
+        if (record.Status == OutgoingMessageStatus.Sent)
+            throw new InvalidOperationException("消息已经发送成功，无需重试");
+        await SendReliableAsync(
+            record.TargetId, record.TargetKind, record.TargetTitle, record.Purpose,
+            record.Message, record.IdempotencyKey,
+            allowFailedRetry: true, allowUnknownRetry: true);
+    }
+
+    private async Task SendReliableAsync(
+        long targetId,
+        string targetKind,
+        string targetTitle,
+        string purpose,
+        string message,
+        string idempotencyKey,
+        bool allowFailedRetry,
+        bool allowUnknownRetry)
+    {
+        EnsureLogin();
+        await _sendLock.WaitAsync();
+        try
+        {
+            EnsureLogin();
+            var accountId = CurrentUserId;
+            var record = await _outbox.GetOrCreateAsync(
+                accountId, idempotencyKey, targetId, targetKind, targetTitle,
+                purpose, message);
+            if (record.Status == OutgoingMessageStatus.Sent)
+            {
+                _logger.Warning("Telegram.Outbox", $"已阻止重复发送：记录 {record.Id}，目标 {targetKind}/{targetId}");
+                return;
+            }
+            if (record.Status == OutgoingMessageStatus.Unknown && !allowUnknownRetry)
+                throw new InvalidOperationException("上一笔相同消息的发送结果未知，请在发件箱确认后手动重试");
+            if (record.Status == OutgoingMessageStatus.Failed && !allowFailedRetry)
+                throw new InvalidOperationException("上一笔相同消息发送失败，请在发件箱中重试");
+
+            var attempt = record.AttemptCount + 1;
+            await _outbox.UpdateAsync(record.Id, OutgoingMessageStatus.Sending, attempt);
+            OutboxChanged?.Invoke();
+            try
+            {
+                var sent = await _client!.SendMessageAsync(ResolvePeer(targetId, targetKind), message);
+                await _outbox.UpdateAsync(
+                    record.Id, OutgoingMessageStatus.Sent, attempt, sent.id);
+                _logger.Info(
+                    "Telegram.Outbox",
+                    $"消息发送成功：记录 {record.Id}，{targetKind}/{targetId}，消息 ID {sent.id}，字符数 {message.Length}");
+                OutboxChanged?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                var status = IsUnknownDelivery(ex)
+                    ? OutgoingMessageStatus.Unknown
+                    : OutgoingMessageStatus.Failed;
+                await _outbox.UpdateAsync(record.Id, status, attempt, error: ex.Message);
+                _logger.Error(
+                    "Telegram.Outbox",
+                    status == OutgoingMessageStatus.Unknown
+                        ? $"消息发送结果未知：记录 {record.Id}，不会自动重发"
+                        : $"消息发送明确失败：记录 {record.Id}",
+                    ex);
+                OutboxChanged?.Invoke();
+                throw;
+            }
+        }
+        finally
+        {
+            _sendLock.Release();
+        }
+    }
+
+    private static string BuildManualIdempotencyKey(long targetId, string targetKind, string message)
+    {
+        var bucket = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 3000;
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{targetKind}:{targetId}:{message}"));
+        return $"manual:{bucket}:{Convert.ToHexString(bytes)[..20]}";
+    }
+
+    private static bool IsUnknownDelivery(Exception exception)
+    {
+        if (exception is IOException or TimeoutException or OperationCanceledException) return true;
+        var text = exception.ToString();
+        return text.Contains("Connection shut down", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("Could not read payload", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("connection lost", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("reactor", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("transport", StringComparison.OrdinalIgnoreCase);
     }
 
     private InputPeer ResolvePeer(long id, string kind)
@@ -390,5 +499,6 @@ public sealed class TelegramService : ITelegramService
         _disposed = true;
         _logger.Info("Telegram", "Telegram 服务正在关闭");
         DisposeClientForReconnect(clearPeers: true);
+        _sendLock.Dispose();
     }
 }

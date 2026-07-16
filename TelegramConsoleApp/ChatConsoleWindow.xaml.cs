@@ -56,6 +56,8 @@ public partial class ChatConsoleWindow : Window
         if (text.Length == 0) return;
         try
         {
+            SendButton.IsEnabled = false;
+            InputBox.IsEnabled = false;
             await _telegram.SendAsync(_dialog, text);
             AppendText($"[{DateTime.Now:HH:mm:ss}] 我: {text}", Brushes.LimeGreen);
             InputBox.Clear();
@@ -63,6 +65,12 @@ public partial class ChatConsoleWindow : Window
         catch (Exception ex)
         {
             AppendText("[ERROR] " + ex.Message, Brushes.OrangeRed);
+        }
+        finally
+        {
+            InputBox.IsEnabled = true;
+            SendButton.IsEnabled = true;
+            InputBox.Focus();
         }
     }
 

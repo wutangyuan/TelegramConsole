@@ -139,7 +139,7 @@
                             </Grid.ColumnDefinitions>
                             <TextBox x:Name="MessageBox" AcceptsReturn="True" KeyDown="MessageBox_KeyDown"
                                      ToolTip="Enter 发送，Shift+Enter 换行" Margin="0,0,8,0" />
-                            <Button Grid.Column="1" Content="{DynamicResource Send}" Click="SendButton_Click"
+                            <Button x:Name="SendButton" Grid.Column="1" Content="{DynamicResource Send}" Click="SendButton_Click"
                                     Style="{StaticResource PrimaryButtonStyle}" Margin="0" />
                         </Grid>
                     </Grid>
@@ -393,6 +393,37 @@
                                     <GridViewColumn Header="{DynamicResource ExceptionMessage}" Width="360" DisplayMemberBinding="{Binding Message}" />
                                     <GridViewColumn Header="Telegram" Width="170" DisplayMemberBinding="{Binding TelegramStatus}" />
                                     <GridViewColumn Header="{DynamicResource Email}" Width="170" DisplayMemberBinding="{Binding EmailStatus}" />
+                                </GridView>
+                            </ListView.View>
+                        </ListView>
+                    </Grid>
+                </TabItem>
+                <TabItem Header="{DynamicResource Outbox}">
+                    <Grid Margin="10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="44" />
+                            <RowDefinition Height="30" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="{DynamicResource Refresh}" Click="RefreshOutbox_Click" />
+                            <Button Content="{DynamicResource RetrySelected}" Click="RetryOutbox_Click" />
+                            <Button Content="{DynamicResource OpenDatabaseDirectory}" Click="OpenOutboxDatabase_Click" />
+                        </StackPanel>
+                        <TextBlock Grid.Row="1" Foreground="#64748B" VerticalAlignment="Center"
+                                   Text="{DynamicResource OutboxHint}" />
+                        <ListView x:Name="OutboxList" Grid.Row="2" SelectionMode="Extended">
+                            <ListView.View>
+                                <GridView>
+                                    <GridViewColumn Header="{DynamicResource Number}" Width="70" DisplayMemberBinding="{Binding Id}" />
+                                    <GridViewColumn Header="{DynamicResource OccurredAt}" Width="170" DisplayMemberBinding="{Binding CreatedAtText}" />
+                                    <GridViewColumn Header="{DynamicResource Status}" Width="100" DisplayMemberBinding="{Binding StatusText}" />
+                                    <GridViewColumn Header="{DynamicResource Target}" Width="210" DisplayMemberBinding="{Binding TargetTitle}" />
+                                    <GridViewColumn Header="{DynamicResource Purpose}" Width="110" DisplayMemberBinding="{Binding PurposeText}" />
+                                    <GridViewColumn Header="{DynamicResource MessageContent}" Width="360" DisplayMemberBinding="{Binding MessagePreview}" />
+                                    <GridViewColumn Header="{DynamicResource Attempts}" Width="80" DisplayMemberBinding="{Binding AttemptCount}" />
+                                    <GridViewColumn Header="Telegram ID" Width="100" DisplayMemberBinding="{Binding TelegramMessageId}" />
+                                    <GridViewColumn Header="{DynamicResource Error}" Width="280" DisplayMemberBinding="{Binding Error}" />
                                 </GridView>
                             </ListView.View>
                         </ListView>

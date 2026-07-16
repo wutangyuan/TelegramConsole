@@ -56,6 +56,7 @@ public partial class MainWindow : Window
         _telegram.MessageReceived += line => Dispatcher.BeginInvoke(() => HandleIncoming(line));
         _telegram.Log += text => Dispatcher.BeginInvoke(() => SetStatus(text));
         _telegram.ConnectionStateChanged += state => Dispatcher.BeginInvoke(() => HandleConnectionState(state));
+        _telegram.OutboxChanged += Telegram_OutboxChanged;
         _scheduler.Status += text => Dispatcher.BeginInvoke(() =>
         {
             SetStatus(text);
@@ -157,6 +158,7 @@ public partial class MainWindow : Window
         ScheduleList.ItemsSource = null;
         ExceptionList.ItemsSource = null;
         MentionList.ItemsSource = null;
+        OutboxList.ItemsSource = null;
         ChatConsole.ClearOutput();
         MonitorConsole.ClearOutput();
     }
@@ -307,6 +309,7 @@ public partial class MainWindow : Window
         RenderSchedules();
         await RefreshExceptionsAsync();
         await RefreshMentionsAsync();
+        await RefreshOutboxAsync();
     }
 
     private async void LoginValueBox_KeyDown(object sender, KeyEventArgs e)
@@ -453,10 +456,21 @@ public partial class MainWindow : Window
             throw new InvalidOperationException(L("SelectChatFirst"));
         var text = MessageBox.Text.Trim();
         if (text.Length == 0) return;
-        await _telegram.SendAsync(dialog, text);
-        MessageBox.Clear();
-        AppendConsole(ChatConsole, $"[{DateTime.Now:HH:mm:ss}] 我: {text}", Brushes.LimeGreen);
-        SetStatus(LF("MessageSent", dialog.Name));
+        SendButton.IsEnabled = false;
+        MessageBox.IsEnabled = false;
+        try
+        {
+            await _telegram.SendAsync(dialog, text);
+            MessageBox.Clear();
+            AppendConsole(ChatConsole, $"[{DateTime.Now:HH:mm:ss}] 我: {text}", Brushes.LimeGreen);
+            SetStatus(LF("MessageSent", dialog.Name));
+        }
+        finally
+        {
+            MessageBox.IsEnabled = true;
+            SendButton.IsEnabled = true;
+            MessageBox.Focus();
+        }
     }
 
     private void HandleIncoming(ChatLine line)
@@ -729,6 +743,7 @@ public partial class MainWindow : Window
         _exceptionMonitor.Dispose();
         _mentionMonitor.RecordsChanged -= MentionMonitor_RecordsChanged;
         _mentionMonitor.Dispose();
+        _telegram.OutboxChanged -= Telegram_OutboxChanged;
         _scheduler.Dispose();
         _telegram.Dispose();
         Application.Current.DispatcherUnhandledException -= Application_DispatcherUnhandledException;
@@ -780,6 +795,69 @@ public partial class MainWindow : Window
     }
 
     private void ClearLogDisplay_Click(object sender, RoutedEventArgs e) => LogConsole.ClearOutput();
+
+    private void Telegram_OutboxChanged() => Dispatcher.BeginInvoke(async () =>
+    {
+        try { await RefreshOutboxAsync(); }
+        catch (Exception ex) { _logger.Error("Outbox", "刷新发件箱失败", ex); }
+    });
+
+    private async void RefreshOutbox_Click(object sender, RoutedEventArgs e) =>
+        await RunUiAsync(RefreshOutboxAsync);
+
+    private async Task RefreshOutboxAsync()
+    {
+        var records = await _telegram.QueryOutboxAsync();
+        OutboxList.ItemsSource = records.Select(x => new OutboxRow(
+            x.Id,
+            x.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
+            x.Status,
+            OutboxStatusText(x.Status),
+            x.TargetTitle,
+            OutboxPurposeText(x.Purpose),
+            x.MessagePreview,
+            x.AttemptCount,
+            x.TelegramMessageId?.ToString() ?? "-",
+            x.Error)).ToList();
+    }
+
+    private async void RetryOutbox_Click(object sender, RoutedEventArgs e) => await RunUiAsync(async () =>
+    {
+        var selected = OutboxList.SelectedItems.Cast<OutboxRow>().ToArray();
+        if (selected.Length == 0) throw new InvalidOperationException(L("SelectOutboxRecord"));
+        if (selected.Any(x => x.Status == OutgoingMessageStatus.Unknown) &&
+            System.Windows.MessageBox.Show(
+                L("ConfirmRetryUnknownOutbox"),
+                L("ConfirmTitle"),
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning) != MessageBoxResult.Yes)
+            return;
+        foreach (var row in selected) await _telegram.RetryOutboxAsync(row.Id);
+        await RefreshOutboxAsync();
+        SetStatus(LF("OutboxRetryComplete", selected.Length));
+    });
+
+    private void OpenOutboxDatabase_Click(object sender, RoutedEventArgs e)
+    {
+        var directory = Path.GetDirectoryName(_telegram.OutboxDatabasePath)!;
+        Process.Start(new ProcessStartInfo(directory) { UseShellExecute = true });
+    }
+
+    private static string OutboxStatusText(OutgoingMessageStatus status) => status switch
+    {
+        OutgoingMessageStatus.Queued => L("OutboxQueued"),
+        OutgoingMessageStatus.Sending => L("OutboxSending"),
+        OutgoingMessageStatus.Sent => L("OutboxSent"),
+        OutgoingMessageStatus.Failed => L("OutboxFailed"),
+        _ => L("OutboxUnknown")
+    };
+
+    private static string OutboxPurposeText(string purpose) => purpose switch
+    {
+        "Schedule" => L("OutboxSchedule"),
+        "Confirmation" => L("OutboxConfirmation"),
+        _ => L("OutboxManual")
+    };
 
     private async void SaveMentionSettings_Click(object sender, RoutedEventArgs e) =>
         await RunUiAsync(() =>
@@ -1063,4 +1141,16 @@ public partial class MainWindow : Window
         string Details,
         string TelegramStatus,
         string EmailStatus);
+
+    private sealed record OutboxRow(
+        long Id,
+        string CreatedAtText,
+        OutgoingMessageStatus Status,
+        string StatusText,
+        string TargetTitle,
+        string PurposeText,
+        string MessagePreview,
+        int AttemptCount,
+        string TelegramMessageId,
+        string Error);
 }

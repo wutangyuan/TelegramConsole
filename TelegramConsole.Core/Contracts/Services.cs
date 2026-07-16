@@ -17,6 +17,8 @@ public interface ITelegramService : IDisposable
     event Action<ChatLine>? MessageReceived;
     event Action<string>? Log;
     event Action<TelegramConnectionState>? ConnectionStateChanged;
+    event Action? OutboxChanged;
+    string OutboxDatabasePath { get; }
     Task<string?> BeginLoginAsync(AppSettings settings);
     Task<string?> ContinueLoginAsync(string value);
     Task<List<DialogItem>> LoadDialogsAsync();
@@ -24,6 +26,8 @@ public interface ITelegramService : IDisposable
     Task SendAsync(DialogItem dialog, string text);
     Task SendScheduledAsync(ScheduledMessage schedule);
     Task SendConfirmationAsync(ScheduledMessage schedule, string text);
+    Task<IReadOnlyList<OutgoingMessageRecord>> QueryOutboxAsync(int limit = 200);
+    Task RetryOutboxAsync(long recordId);
 }
 
 public enum TelegramConnectionStatus
