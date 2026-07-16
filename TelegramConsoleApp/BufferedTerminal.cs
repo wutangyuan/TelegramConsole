@@ -15,6 +15,8 @@ public sealed class BufferedTerminal : TextEditor
     private const int DefaultMaximumPendingLines = 3000;
     private const int DefaultMaximumBatchLines = 200;
     private readonly Queue<PendingLine> _pending = new();
+    private readonly Queue<object> _recentKeyOrder = new();
+    private readonly HashSet<object> _recentKeys = [];
     private readonly object _pendingSync = new();
     private readonly DispatcherTimer _flushTimer;
     private readonly TextSegmentCollection<ColoredSegment> _segments;
@@ -55,11 +57,23 @@ public sealed class BufferedTerminal : TextEditor
         };
     }
 
-    public void AppendLine(string text, Brush? foreground = null, object? tag = null)
+    public void AppendLine(
+        string text,
+        Brush? foreground = null,
+        object? tag = null,
+        object? deduplicationKey = null)
     {
         var color = Freeze(foreground ?? Foreground ?? Brushes.White);
         lock (_pendingSync)
         {
+            if (deduplicationKey is not null)
+            {
+                if (!_recentKeys.Add(deduplicationKey)) return;
+                _recentKeyOrder.Enqueue(deduplicationKey);
+                var maximumRecentKeys = Math.Max(100, MaximumLines * 2);
+                while (_recentKeyOrder.Count > maximumRecentKeys)
+                    _recentKeys.Remove(_recentKeyOrder.Dequeue());
+            }
             _pending.Enqueue(new PendingLine(Normalize(text), color, tag));
             while (_pending.Count > Math.Max(1, MaximumPendingLines))
             {
@@ -83,6 +97,8 @@ public sealed class BufferedTerminal : TextEditor
         lock (_pendingSync)
         {
             _pending.Clear();
+            _recentKeyOrder.Clear();
+            _recentKeys.Clear();
             _droppedCount = 0;
         }
         Document.Text = string.Empty;

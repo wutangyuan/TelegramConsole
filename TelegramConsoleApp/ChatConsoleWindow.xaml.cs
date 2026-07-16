@@ -90,7 +90,8 @@ public partial class ChatConsoleWindow : Window
         AppendText(
             $"[{line.Time:HH:mm:ss}] {line.Sender}: {line.Text}",
             line.IsMentioned ? Brushes.DodgerBlue : line.IsOutgoing ? Brushes.LimeGreen : Brushes.White,
-            line.MessageId > 0 ? QuoteTargetItem.From(line) : null);
+            line.MessageId > 0 ? QuoteTargetItem.From(line) : null,
+            line.MessageId > 0 ? (line.ChatKind, line.ChatId, line.MessageId, line.Text) : null);
     }
 
     private void ConsoleBox_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
@@ -127,8 +128,12 @@ public partial class ChatConsoleWindow : Window
         SendButton.IsEnabled = enabled;
     }
 
-    private void AppendText(string text, Brush? color = null, object? tag = null)
-        => ConsoleBox.AppendLine(text, color ?? Brushes.White, tag);
+    private void AppendText(
+        string text,
+        Brush? color = null,
+        object? tag = null,
+        object? deduplicationKey = null)
+        => ConsoleBox.AppendLine(text, color ?? Brushes.White, tag, deduplicationKey);
 
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {

@@ -1169,10 +1169,16 @@ public partial class MainWindow : Window
             box,
             $"[{line.Time:HH:mm:ss}] [{line.Chat}] {line.Sender}: {line.Text}",
             line.IsMentioned ? Brushes.DodgerBlue : line.IsOutgoing ? Brushes.LimeGreen : Brushes.White,
-            line.MessageId > 0 ? QuoteTargetItem.From(line) : null);
+            line.MessageId > 0 ? QuoteTargetItem.From(line) : null,
+            line.MessageId > 0 ? (line.ChatKind, line.ChatId, line.MessageId, line.Text) : null);
 
-    private static void AppendConsole(BufferedTerminal box, string text, Brush? color = null, object? tag = null) =>
-        box.AppendLine(text, color ?? Brushes.White, tag);
+    private static void AppendConsole(
+        BufferedTerminal box,
+        string text,
+        Brush? color = null,
+        object? tag = null,
+        object? deduplicationKey = null) =>
+        box.AppendLine(text, color ?? Brushes.White, tag, deduplicationKey);
 
     private sealed class ScheduleRow(
         Guid id,
