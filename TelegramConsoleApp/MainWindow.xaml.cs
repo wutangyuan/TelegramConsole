@@ -490,11 +490,6 @@ public partial class MainWindow : Window
             else
                 await _telegram.SendReplyAsync(dialog, quoteTarget.MessageId, text, quoteTarget.Text);
             MessageBox.Clear();
-            AppendConsole(ChatConsole,
-                quoteTarget is null
-                    ? $"[{DateTime.Now:HH:mm:ss}] 我: {text}"
-                    : $"[{DateTime.Now:HH:mm:ss}] 我 ↪ #{quoteTarget.MessageId} {quoteTarget.Sender}: {text}",
-                Brushes.LimeGreen);
             SetStatus(quoteTarget is null ? LF("MessageSent", dialog.Name) : LF("QuoteReplySent", dialog.Name));
             ClearQuoteSelection();
         }

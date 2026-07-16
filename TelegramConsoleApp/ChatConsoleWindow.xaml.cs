@@ -66,12 +66,10 @@ public partial class ChatConsoleWindow : Window
             if (quoteTarget is not null)
             {
                 await _telegram.SendReplyAsync(_dialog, quoteTarget.MessageId, text, quoteTarget.Text);
-                AppendText($"[{DateTime.Now:HH:mm:ss}] 我 ↪ #{quoteTarget.MessageId} {quoteTarget.Sender}: {text}", Brushes.LimeGreen);
             }
             else
             {
                 await _telegram.SendAsync(_dialog, text);
-                AppendText($"[{DateTime.Now:HH:mm:ss}] 我: {text}", Brushes.LimeGreen);
             }
             InputBox.Clear();
             ClearQuoteSelection();
