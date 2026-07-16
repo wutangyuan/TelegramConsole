@@ -23,7 +23,7 @@ public interface ITelegramService : IDisposable
     Task<string?> BeginLoginAsync(AppSettings settings);
     Task<string?> ContinueLoginAsync(string value);
     Task<List<DialogItem>> LoadDialogsAsync();
-    Task<List<ChatLine>> LoadHistoryAsync(DialogItem dialog, int limit = 50);
+    Task<List<ChatLine>> LoadHistoryAsync(DialogItem dialog, int limit = 300);
     Task SendAsync(DialogItem dialog, string text);
     Task SendScheduledAsync(ScheduledMessage schedule);
     Task SendConfirmationAsync(ScheduledMessage schedule, string text);

@@ -11,6 +11,7 @@ namespace TelegramConsoleApp;
 
 public partial class MainWindow : Window
 {
+    private const int QuoteHistoryLimit = 300;
     private readonly ISettingsStore _store = new SettingsStore();
     private readonly IAppLogger _logger = new Log4NetAppLogger();
     private readonly AppSettings _settings;
@@ -453,7 +454,7 @@ public partial class MainWindow : Window
                 ChatConsole.ClearOutput();
                 _quoteTargets.Clear();
                 AppendConsole(ChatConsole, $"--- {dialog.Name} ---");
-                foreach (var line in await _telegram.LoadHistoryAsync(dialog))
+                foreach (var line in await _telegram.LoadHistoryAsync(dialog, QuoteHistoryLimit))
                 {
                     AppendChatLine(ChatConsole, line);
                     AddQuoteTarget(line);
@@ -551,7 +552,7 @@ public partial class MainWindow : Window
         var existing = _quoteTargets.FirstOrDefault(x => x.MessageId == line.MessageId);
         if (existing is not null) _quoteTargets.Remove(existing);
         _quoteTargets.Insert(0, QuoteTargetItem.From(line));
-        while (_quoteTargets.Count > 100) _quoteTargets.RemoveAt(_quoteTargets.Count - 1);
+        while (_quoteTargets.Count > QuoteHistoryLimit) _quoteTargets.RemoveAt(_quoteTargets.Count - 1);
     }
 
     private void MonitorEnabledBox_Changed(object sender, RoutedEventArgs e)

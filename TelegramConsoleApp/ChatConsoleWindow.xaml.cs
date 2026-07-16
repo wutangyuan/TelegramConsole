@@ -8,6 +8,7 @@ namespace TelegramConsoleApp;
 
 public partial class ChatConsoleWindow : Window
 {
+    private const int QuoteHistoryLimit = 300;
     private readonly ITelegramService _telegram;
     private readonly DialogItem _dialog;
     private readonly ObservableCollection<QuoteTargetItem> _quoteTargets = [];
@@ -29,7 +30,7 @@ public partial class ChatConsoleWindow : Window
     {
         try
         {
-            foreach (var line in await _telegram.LoadHistoryAsync(_dialog)) Append(line);
+            foreach (var line in await _telegram.LoadHistoryAsync(_dialog, QuoteHistoryLimit)) Append(line);
             InputBox.Focus();
         }
         catch (Exception ex)
@@ -104,7 +105,7 @@ public partial class ChatConsoleWindow : Window
         var existing = _quoteTargets.FirstOrDefault(x => x.MessageId == line.MessageId);
         if (existing is not null) _quoteTargets.Remove(existing);
         _quoteTargets.Insert(0, QuoteTargetItem.From(line));
-        while (_quoteTargets.Count > 100) _quoteTargets.RemoveAt(_quoteTargets.Count - 1);
+        while (_quoteTargets.Count > QuoteHistoryLimit) _quoteTargets.RemoveAt(_quoteTargets.Count - 1);
     }
 
     private void SetSendEnabled(bool enabled)

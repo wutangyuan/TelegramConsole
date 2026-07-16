@@ -273,14 +273,27 @@ public sealed class TelegramService : ITelegramService
         return sorted;
     }
 
-    public async Task<List<ChatLine>> LoadHistoryAsync(DialogItem dialog, int limit = 50)
+    public async Task<List<ChatLine>> LoadHistoryAsync(DialogItem dialog, int limit = 300)
     {
         EnsureLogin();
+        limit = Math.Clamp(limit, 1, 500);
         _logger.Write(AppLogLevel.Debug, "Telegram", $"加载会话历史：{dialog.Kind}/{dialog.Id}，数量上限 {limit}");
-        var history = await _client!.Messages_GetHistory(ResolvePeer(dialog.Id, dialog.Kind), limit: limit);
-        history.CollectUsersChats(_manager!.Users, _manager.Chats);
-        var lines = history.Messages
-            .OfType<TLMessage>()
+        var peer = ResolvePeer(dialog.Id, dialog.Kind);
+        var messages = new Dictionary<int, TLMessage>();
+        var offsetId = 0;
+        while (messages.Count < limit)
+        {
+            var batchLimit = Math.Min(100, limit - messages.Count);
+            var history = await _client!.Messages_GetHistory(peer, offset_id: offsetId, limit: batchLimit);
+            history.CollectUsersChats(_manager!.Users, _manager.Chats);
+            var batch = history.Messages.OfType<TLMessage>().ToArray();
+            if (batch.Length == 0) break;
+            foreach (var message in batch) messages[message.id] = message;
+            var nextOffsetId = batch.Min(x => x.id);
+            if (nextOffsetId <= 0 || nextOffsetId == offsetId) break;
+            offsetId = nextOffsetId;
+        }
+        var lines = messages.Values
             .OrderBy(x => x.date)
             .Select(m => new ChatLine(
                 m.date.ToLocalTime(), dialog.Name, NameOf(m.from_id),
