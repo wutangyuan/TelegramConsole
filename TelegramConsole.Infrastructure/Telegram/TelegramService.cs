@@ -392,7 +392,7 @@ public sealed class TelegramService : ITelegramService
             .OrderBy(x => x.date)
             .Select(x => new ServerScheduledMessage(
                 dialog.Id, dialog.Kind, dialog.Name, x.id, x.date.ToLocalTime(),
-                string.IsNullOrWhiteSpace(x.message) ? "[媒体消息]" : x.message))
+                MessageText(x)))
             .ToArray();
     }
 
@@ -713,7 +713,7 @@ public sealed class TelegramService : ITelegramService
     {
         if (CurrentUserId == 0) return;
         var items = lines.Where(x => x.MessageId != 0).Select(x => new MessageSearchResult(
-            x.ChatId, x.ChatKind, x.Chat, x.MessageId, x.Time, x.Sender, x.Text,
+            x.ChatId, x.ChatKind, x.Chat, x.MessageId, x.Time, x.Sender, x.DisplayText,
             x.IsOutgoing, x.TopicId, "本地索引"));
         await _messageIndex.IndexAsync(CurrentUserId, items);
     }
@@ -730,7 +730,7 @@ public sealed class TelegramService : ITelegramService
         };
         return new(
             message.peer_id.ID, kind, title, message.id, message.date.ToLocalTime(),
-            NameOf(message.from_id), string.IsNullOrWhiteSpace(message.message) ? "[媒体消息]" : message.message,
+            NameOf(message.from_id), MessageText(message),
             message.flags.HasFlag(TLMessage.Flags.out_), TopicIdOf(message));
     }
 
@@ -754,11 +754,12 @@ public sealed class TelegramService : ITelegramService
                 ? replyId is null ? "" : "[原消息不可用]"
                 : MessageText(replyMessage);
         return new ChatLine(
-            message.date.ToLocalTime(), dialog.Name, NameOf(message.from_id), MessageText(message),
+            message.date.ToLocalTime(), dialog.Name, NameOf(message.from_id), MessageContent(message),
             dialog.IsGroup, dialog.Id,
             message.flags.HasFlag(TLMessage.Flags.out_), IsMentioned(message), message.id, dialog.Kind,
             TopicIdOf(message), replyId,
-            replyMessage is null ? "" : NameOf(replyMessage.from_id), replyText);
+            replyMessage is null ? "" : NameOf(replyMessage.from_id), replyText,
+            MediaLabel(message.media) ?? "");
     }
 
     private async Task<TLMessage?> ResolveReplyMessageAsync(TLMessage message, DialogItem dialog)
@@ -816,8 +817,71 @@ public sealed class TelegramService : ITelegramService
         }
     }
 
-    private static string MessageText(TLMessage message) =>
-        string.IsNullOrWhiteSpace(message.message) ? "[媒体消息]" : message.message;
+    private static string MessageText(TLMessage message)
+    {
+        var text = message.message?.Trim() ?? string.Empty;
+        var media = MediaLabel(message.media);
+        if (media is null) return text.Length == 0 ? "[空消息]" : text;
+        return text.Length == 0 ? media : $"{media} {text}";
+    }
+
+    private static string MessageContent(TLMessage message)
+    {
+        var text = message.message?.Trim() ?? string.Empty;
+        if (text.Length > 0) return text;
+        return MediaLabel(message.media) ?? "[空消息]";
+    }
+
+    private static string? MediaLabel(MessageMedia? media) => media switch
+    {
+        null => null,
+        MessageMediaPhoto => "[图片]",
+        MessageMediaDocument document => DocumentLabel(document.document),
+        MessageMediaPoll => "[投票]",
+        MessageMediaGeoLive => "[实时位置]",
+        MessageMediaGeo => "[位置]",
+        MessageMediaVenue => "[地点]",
+        MessageMediaContact => "[联系人]",
+        MessageMediaDice => "[Dice]",
+        MessageMediaGame => "[游戏]",
+        MessageMediaInvoice => "[发票]",
+        MessageMediaStory => "[Story]",
+        MessageMediaGiveaway => "[赠送活动]",
+        MessageMediaGiveawayResults => "[赠送结果]",
+        MessageMediaPaidMedia => "[付费媒体]",
+        MessageMediaToDo => "[待办事项]",
+        MessageMediaVideoStream => "[视频直播]",
+        MessageMediaWebPage => "[网页预览]",
+        MessageMediaUnsupported => "[不支持的媒体]",
+        _ => "[媒体消息]"
+    };
+
+    private static string DocumentLabel(DocumentBase? documentBase)
+    {
+        if (documentBase is not Document document) return "[文件]";
+        var attributes = document.attributes ?? [];
+        var sticker = attributes.OfType<DocumentAttributeSticker>().FirstOrDefault();
+        if (attributes.Any(x => x is DocumentAttributeCustomEmoji)) return "[自定义表情]";
+        if (sticker is not null)
+            return attributes.Any(x => x is DocumentAttributeAnimated) ? "[动态贴纸]" : "[贴纸]";
+
+        var audio = attributes.OfType<DocumentAttributeAudio>().FirstOrDefault();
+        if (audio is not null)
+            return audio.flags.HasFlag(DocumentAttributeAudio.Flags.voice) ? "[语音]" : "[音频]";
+
+        var video = attributes.OfType<DocumentAttributeVideo>().FirstOrDefault();
+        if (video is not null)
+        {
+            if (video.flags.HasFlag(DocumentAttributeVideo.Flags.round_message)) return "[圆形视频]";
+            if (attributes.Any(x => x is DocumentAttributeAnimated)) return "[GIF 动图]";
+            return "[视频]";
+        }
+
+        if (attributes.Any(x => x is DocumentAttributeAnimated)) return "[GIF 动图]";
+        if (document.mime_type?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true) return "[图片]";
+        var fileName = attributes.OfType<DocumentAttributeFilename>().FirstOrDefault()?.file_name;
+        return string.IsNullOrWhiteSpace(fileName) ? "[文件]" : $"[文件: {fileName}]";
+    }
 
     private async Task ProcessAutomationRulesAsync(ChatLine line)
     {

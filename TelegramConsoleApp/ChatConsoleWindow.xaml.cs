@@ -90,11 +90,11 @@ public partial class ChatConsoleWindow : Window
 
     private void Append(ChatLine line)
     {
-        var body = $"[{line.Time:HH:mm:ss}] {line.Sender}: {line.Text}";
+        var body = $"[{line.Time:HH:mm:ss}] {line.Sender}: {line.DisplayText}";
         var color = line.IsMentioned ? Brushes.DodgerBlue : line.IsOutgoing ? Brushes.LimeGreen : Brushes.White;
         var messageTag = line.MessageId > 0 ? QuoteTargetItem.From(line) : null;
         object? deduplicationKey = line.MessageId > 0
-            ? (line.ChatKind, line.ChatId, line.MessageId, line.Text)
+            ? (line.ChatKind, line.ChatId, line.MessageId, line.DisplayText)
             : null;
         if (line.ReplyToMessageId is not int replyId)
         {

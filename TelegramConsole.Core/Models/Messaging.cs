@@ -19,4 +19,10 @@ public sealed record ChatLine(
     int? TopicId = null,
     int? ReplyToMessageId = null,
     string ReplySender = "",
-    string ReplyText = "");
+    string ReplyText = "",
+    string MediaLabel = "")
+{
+    public string DisplayText => string.IsNullOrWhiteSpace(MediaLabel) || Text == MediaLabel
+        ? Text
+        : $"{MediaLabel} {Text}";
+}

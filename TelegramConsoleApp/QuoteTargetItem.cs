@@ -4,7 +4,7 @@ internal sealed record QuoteTargetItem(int MessageId, string Sender, string Text
 {
     public string DisplayText => $"#{MessageId} {Sender}: {Preview(Text)}";
 
-    public static QuoteTargetItem From(ChatLine line) => new(line.MessageId, line.Sender, line.Text);
+    public static QuoteTargetItem From(ChatLine line) => new(line.MessageId, line.Sender, line.DisplayText);
 
     private static string Preview(string text)
     {
