@@ -104,9 +104,8 @@ public sealed class BufferedTerminal : TextEditor
     {
         if (Document.TextLength == 0) return null;
         offset = Math.Clamp(offset, 0, Document.TextLength - 1);
-        var line = Document.GetLineByOffset(offset);
-        var length = Math.Max(1, line.TotalLength);
-        return _segments.FindOverlappingSegments(line.Offset, length)
+        return _segments.FindSegmentsContaining(offset)
+            .OrderByDescending(x => x.StartOffset)
             .Select(x => x.Tag)
             .OfType<T>()
             .FirstOrDefault();
@@ -172,7 +171,7 @@ public sealed class BufferedTerminal : TextEditor
         _segments.Add(new ColoredSegment
         {
             StartOffset = offset,
-            Length = content.Length,
+            Length = line.Text.Length,
             Foreground = line.Foreground,
             Tag = line.Tag
         });
