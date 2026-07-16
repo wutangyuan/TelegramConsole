@@ -58,10 +58,12 @@ public partial class ChatConsoleWindow : Window
     private async Task SendAsync()
     {
         var text = InputBox.Text.Trim();
-        if (text.Length == 0) return;
         try
         {
+            if (text.Length == 0)
+                throw new InvalidOperationException(LocalizationManager.Text("MessageRequired"));
             SetSendEnabled(false);
+            SendButton.Content = LocalizationManager.Text("SendingMessage");
             var quoteTarget = _selectedQuoteTarget;
             if (quoteTarget is not null)
             {
@@ -81,6 +83,7 @@ public partial class ChatConsoleWindow : Window
         finally
         {
             SetSendEnabled(true);
+            SendButton.Content = "SEND ↵";
             InputBox.Focus();
         }
     }

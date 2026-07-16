@@ -390,10 +390,10 @@ public sealed class TelegramService : ITelegramService
     public async Task SendReplyAsync(DialogItem dialog, int replyToMessageId, string text, string quote = "")
     {
         EnsureLogin();
-        var reply = new InputReplyToMessage { reply_to_msg_id = replyToMessageId };
-        if (!string.IsNullOrWhiteSpace(quote)) reply.quote_text = quote;
-        await _client!.Messages_SendMessage(
-            ResolvePeer(dialog.Id, dialog.Kind), text, Random.Shared.NextInt64(), reply_to: reply);
+        var sent = await _client!.SendMessageAsync(
+            ResolvePeer(dialog.Id, dialog.Kind), text, reply_to_msg_id: replyToMessageId);
+        await TryPublishConfirmedMessageAsync(sent, dialog);
+        _logger.Info("Telegram", $"引用回复发送成功：{dialog.Kind}/{dialog.Id}，消息 ID {sent.id}，回复 {replyToMessageId}");
     }
 
     public async Task EditMessageAsync(DialogItem dialog, int messageId, string text)
@@ -586,6 +586,9 @@ public sealed class TelegramService : ITelegramService
                 _logger.Info(
                     "Telegram.Outbox",
                     $"消息发送成功：记录 {record.Id}，{targetKind}/{targetId}，消息 ID {sent.id}，字符数 {message.Length}");
+                await TryPublishConfirmedMessageAsync(
+                    sent,
+                    new DialogItem(targetTitle, targetId, targetKind, targetKind != "User"));
                 OutboxChanged?.Invoke();
             }
             catch (Exception ex)
@@ -647,19 +650,25 @@ public sealed class TelegramService : ITelegramService
         };
         if (message is null) return;
 
+        await PublishMessageAsync(message);
+    }
+
+    private async Task PublishMessageAsync(TLMessage message, DialogItem? fallback = null)
+    {
         var peerInfo = _manager?.UserOrChat(message.peer_id);
-        var isGroup = peerInfo is ChatBase;
+        var isGroup = peerInfo is ChatBase || fallback?.IsGroup == true;
         var chatName = peerInfo switch
         {
             ChatBase chat => chat.Title ?? chat.ID.ToString(),
             User user => DisplayName(user),
-            _ => $"ID {message.peer_id.ID}"
+            _ => fallback?.Name ?? $"ID {message.peer_id.ID}"
         };
         var chatKind = peerInfo switch
         {
             Channel => "Channel",
             Chat => "Chat",
-            _ => "User"
+            User => "User",
+            _ => fallback?.Kind ?? "User"
         };
         var line = new ChatLine(
             message.date.ToLocalTime(), chatName, NameOf(message.from_id),
@@ -670,6 +679,18 @@ public sealed class TelegramService : ITelegramService
         MessageReceived?.Invoke(line);
         await IndexMessagesAsync([line]);
         if (!line.IsOutgoing) await ProcessAutomationRulesAsync(line);
+    }
+
+    private async Task TryPublishConfirmedMessageAsync(TLMessage message, DialogItem fallback)
+    {
+        try
+        {
+            await PublishMessageAsync(message, fallback);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error("Telegram", $"消息已发送，但本地显示处理失败：消息 ID {message.id}", ex);
+        }
     }
 
     private async Task IndexMessagesAsync(IEnumerable<ChatLine> lines)

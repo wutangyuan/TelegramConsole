@@ -107,12 +107,15 @@ public sealed class BufferedTerminal : TextEditor
 
     public T? GetTagAtVisualPosition<T>(System.Windows.Point visualPosition) where T : class
     {
+        if (SelectionLength > 0)
+            return GetTagAtOffset<T>(SelectionStart);
         var view = TextArea.TextView;
-        var position = view.GetPosition(visualPosition);
+        var documentPosition = new System.Windows.Point(
+            visualPosition.X + view.ScrollOffset.X,
+            visualPosition.Y + view.ScrollOffset.Y);
+        var position = view.GetPosition(documentPosition);
         if (position is null || position.Value.Line < 1 || position.Value.Line > Document.LineCount) return null;
         var offset = Document.GetOffset(position.Value.Location);
-        if (SelectionLength > 0 && offset >= SelectionStart && offset <= SelectionStart + SelectionLength)
-            offset = SelectionStart;
         return GetTagAtOffset<T>(offset);
     }
 

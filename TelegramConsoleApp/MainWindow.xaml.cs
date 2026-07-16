@@ -480,8 +480,9 @@ public partial class MainWindow : Window
         if (DialogsList.SelectedItem is not DialogItem dialog)
             throw new InvalidOperationException(L("SelectChatFirst"));
         var text = MessageBox.Text.Trim();
-        if (text.Length == 0) return;
+        if (text.Length == 0) throw new InvalidOperationException(L("MessageRequired"));
         SetChatSendEnabled(false);
+        SetStatus(L("SendingMessage"));
         try
         {
             var quoteTarget = _selectedQuoteTarget;
