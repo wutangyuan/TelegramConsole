@@ -26,7 +26,7 @@ public sealed class ForwardTargetWindow : Window
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(52) });
         root.Children.Add(new TextBlock
         {
-            Text = Application.Current.TryFindResource("SelectForwardTarget") as string ?? "选择转发目标",
+            Text = Application.Current.TryFindResource("SelectForwardTargetHint") as string ?? "选择转发目标",
             Margin = new Thickness(0, 0, 0, 8),
             Foreground = System.Windows.Media.Brushes.SlateGray
         });

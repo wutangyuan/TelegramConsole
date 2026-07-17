@@ -36,7 +36,7 @@
     <sys:String x:Key="ForwardedFrom">转发自</sys:String>
     <sys:String x:Key="Edited">已编辑</sys:String>
     <sys:String x:Key="ForwardMessage">转发消息</sys:String>
-    <sys:String x:Key="SelectForwardTarget">选择转发目标（下拉列表支持搜索）</sys:String>
+    <sys:String x:Key="SelectForwardTargetHint">选择转发目标（下拉列表支持搜索）</sys:String>
     <sys:String x:Key="Today">今天</sys:String>
     <sys:String x:Key="GroupMonitor">◉ 群消息监控</sys:String>
     <sys:String x:Key="Schedules">◷ 定时签到</sys:String>
