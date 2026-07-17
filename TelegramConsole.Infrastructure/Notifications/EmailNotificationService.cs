@@ -4,7 +4,7 @@ using TelegramConsole.Core;
 
 namespace TelegramConsole.Infrastructure;
 
-internal static class EmailNotificationService
+public static class EmailNotificationService
 {
     public static async Task SendAsync(EmailSettings settings, string recipient, string subject, string body)
     {

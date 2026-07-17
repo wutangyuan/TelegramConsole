@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace TelegramConsoleApp;
 
@@ -12,8 +13,13 @@ public partial class ChatConsoleWindow : Window
     private readonly DialogItem _dialog;
     private readonly MainWindow _sourceWorkspace;
     private readonly string _accountLabel;
+    private readonly List<ChatLine> _timeline = [];
+    private readonly List<TimelineNotice> _notices = [];
+    private readonly DispatcherTimer _timelineRenderTimer;
     private QuoteTargetItem? _selectedQuoteTarget;
     private QuoteTargetItem? _contextQuoteTarget;
+    private bool _historyLoaded;
+    private bool _suppressWorkspaceRestore;
 
     public ChatConsoleWindow(
         ITelegramService telegram,
@@ -30,20 +36,34 @@ public partial class ChatConsoleWindow : Window
         PeerTitle.Text = dialog.Name;
         AccountTitle.Text = $"账户：{_accountLabel}";
         AccountStatusText.Text = $"账户：{_accountLabel}";
+        _timelineRenderTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
+        {
+            Interval = TimeSpan.FromMilliseconds(80)
+        };
+        _timelineRenderTimer.Tick += (_, _) =>
+        {
+            _timelineRenderTimer.Stop();
+            RenderTimeline();
+        };
         Loaded += Window_Loaded;
         Closed += Window_Closed;
         _telegram.MessageReceived += Telegram_MessageReceived;
+        _telegram.MessageDeleted += Telegram_MessageDeleted;
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
         try
         {
-            foreach (var line in await _telegram.LoadHistoryAsync(_dialog, QuoteHistoryLimit)) Append(line);
+            MergeTimeline(await _telegram.LoadHistoryAsync(_dialog, QuoteHistoryLimit));
+            _historyLoaded = true;
+            RenderTimeline();
             InputBox.Focus();
         }
         catch (Exception ex)
         {
+            _historyLoaded = true;
+            RenderTimeline();
             AppendText("[ERROR] " + UserMessageFormatter.From(ex), Brushes.OrangeRed);
         }
     }
@@ -51,7 +71,85 @@ public partial class ChatConsoleWindow : Window
     private void Telegram_MessageReceived(ChatLine line)
     {
         if (line.ChatId != _dialog.Id) return;
-        Dispatcher.BeginInvoke(() => Append(line));
+        Dispatcher.BeginInvoke(() =>
+        {
+            var canAppend = MergeTimeline([line]);
+            if (!_historyLoaded) return;
+            if (canAppend) Append(line);
+            else if (!_timelineRenderTimer.IsEnabled) _timelineRenderTimer.Start();
+        });
+    }
+
+    private void Telegram_MessageDeleted(MessageDeletion deletion)
+    {
+        if (deletion.ChatId != _dialog.Id) return;
+        Dispatcher.BeginInvoke(() =>
+        {
+            foreach (var message in deletion.Messages)
+            {
+                var sender = string.IsNullOrWhiteSpace(message.Sender) ? "未知发送人" : message.Sender;
+                _notices.Add(new TimelineNotice(
+                    deletion.Time,
+                    message.MessageId,
+                    new TerminalBlock(
+                        [($"[{deletion.Time:HH:mm:ss}] ↩ 已撤回 #{message.MessageId} {sender}: {message.Text}",
+                            Brushes.Orange, null)])));
+            }
+            if (_notices.Count > 100) _notices.RemoveRange(0, _notices.Count - 100);
+            RenderTimeline();
+        });
+    }
+
+    private bool MergeTimeline(IEnumerable<ChatLine> lines)
+    {
+        var canAppend = true;
+        foreach (var line in lines)
+        {
+            var existingIndex = line.MessageId > 0
+                ? _timeline.FindIndex(x => x.MessageId == line.MessageId &&
+                                           x.ChatId == line.ChatId &&
+                                           string.Equals(x.ChatKind, line.ChatKind, StringComparison.Ordinal))
+                : -1;
+            if (existingIndex >= 0)
+            {
+                _timeline[existingIndex] = line;
+                canAppend = false;
+            }
+            else
+            {
+                var previous = _timeline.LastOrDefault();
+                if (previous is not null &&
+                    (line.Time < previous.Time ||
+                     line.Time == previous.Time && line.MessageId > 0 && previous.MessageId > line.MessageId))
+                    canAppend = false;
+                if (_notices.Count > 0 && line.Time < _notices.Max(x => x.Time))
+                    canAppend = false;
+                _timeline.Add(line);
+            }
+        }
+
+        var ordered = _timeline
+            .OrderBy(x => x.Time)
+            .ThenBy(x => x.MessageId > 0 ? x.MessageId : int.MaxValue)
+            .TakeLast(QuoteHistoryLimit)
+            .ToArray();
+        _timeline.Clear();
+        _timeline.AddRange(ordered);
+        return canAppend;
+    }
+
+    private void RenderTimeline()
+    {
+        var blocks = _timeline
+            .Select(x => new TimelineRenderItem(x.Time, x.MessageId, 0, CreateBlock(x)))
+            .Concat(_notices.Select((x, index) =>
+                new TimelineRenderItem(x.Time, x.MessageId, index + 1, x.Block)))
+            .OrderBy(x => x.Time)
+            .ThenBy(x => x.MessageId > 0 ? x.MessageId : int.MaxValue)
+            .ThenBy(x => x.Sequence)
+            .Select(x => x.Block)
+            .ToArray();
+        ConsoleBox.ReplaceBlocks(blocks);
     }
 
     private async void SendButton_Click(object sender, RoutedEventArgs e) => await SendAsync();
@@ -103,6 +201,12 @@ public partial class ChatConsoleWindow : Window
 
     private void Append(ChatLine line)
     {
+        var block = CreateBlock(line);
+        ConsoleBox.AppendLines(block.Lines, block.DeduplicationKey, block.InlineLinks);
+    }
+
+    private static TerminalBlock CreateBlock(ChatLine line)
+    {
         var body = $"[{line.Time:HH:mm:ss}] {line.Sender}: {line.DisplayText}";
         var color = line.IsMentioned ? Brushes.DodgerBlue : line.IsOutgoing ? Brushes.LimeGreen : Brushes.White;
         var messageTag = line.MessageId > 0 ? QuoteTargetItem.From(line) : null;
@@ -111,15 +215,14 @@ public partial class ChatConsoleWindow : Window
             : null;
         if (line.ReplyToMessageId is not int replyId)
         {
-            ConsoleBox.AppendLines(
+            return new TerminalBlock(
                 [(body, color, messageTag)], deduplicationKey,
                 MediaLinkFactory.Create(line, body, lineIndex: 0));
-            return;
         }
         var sender = string.IsNullOrWhiteSpace(line.ReplySender) ? $"消息 #{replyId}" : line.ReplySender;
         var value = line.ReplyText.Replace('\r', ' ').Replace('\n', ' ').Trim();
         if (value.Length > 120) value = value[..117] + "...";
-        ConsoleBox.AppendLines(
+        return new TerminalBlock(
         [
             ($"↪ {sender}: {value}", Brushes.Gray, new QuoteTargetItem(replyId, sender, line.ReplyText)),
             (body, color, messageTag)
@@ -199,7 +302,10 @@ public partial class ChatConsoleWindow : Window
             if (_selectedQuoteTarget is not null)
                 ClearQuoteSelection();
             else
+            {
+                _suppressWorkspaceRestore = true;
                 Close();
+            }
             e.Handled = true;
         }
         else if (e.Key == Key.L && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
@@ -246,11 +352,17 @@ public partial class ChatConsoleWindow : Window
 
     private void Window_Closed(object? sender, EventArgs e)
     {
+        _timelineRenderTimer.Stop();
         _telegram.MessageReceived -= Telegram_MessageReceived;
+        _telegram.MessageDeleted -= Telegram_MessageDeleted;
+        if (_suppressWorkspaceRestore) return;
         if (!_sourceWorkspace.IsLoaded) return;
         _sourceWorkspace.ShowWorkspace();
         _sourceWorkspace.Topmost = true;
         _sourceWorkspace.Topmost = false;
         _sourceWorkspace.Focus();
     }
+
+    private sealed record TimelineNotice(DateTime Time, int MessageId, TerminalBlock Block);
+    private sealed record TimelineRenderItem(DateTime Time, int MessageId, int Sequence, TerminalBlock Block);
 }

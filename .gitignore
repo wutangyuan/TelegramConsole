@@ -29,3 +29,5 @@ tg-sign-plus/
 Thumbs.db
 .idea/
 .vscode/
+.env
+docker-data/

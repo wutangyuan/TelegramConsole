@@ -1,0 +1,13 @@
+**/bin
+**/obj
+.git
+.vs
+output
+docker-data
+*.session
+*.dat
+*.db
+*.db-*
+*.log
+.env
+

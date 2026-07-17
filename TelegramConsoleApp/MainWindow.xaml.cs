@@ -18,6 +18,7 @@ public partial class MainWindow : Window
     private readonly bool _managedWorkspace;
     private readonly ITelegramService _telegram;
     private readonly ISchedulerService _scheduler;
+    private readonly IIntervalChatAutomationService _intervalChatAutomation;
     private readonly IExceptionMonitorService _exceptionMonitor;
     private readonly IMentionMonitorService _mentionMonitor;
     private AccountProfile? _activeAccount;
@@ -73,6 +74,7 @@ public partial class MainWindow : Window
         _exceptionMonitor = new ExceptionMonitorService(_store, _logger, _telegram, _settings);
         _mentionMonitor = new MentionMonitorService(_store, _telegram, _logger);
         _scheduler = new SchedulerService(_telegram, _store, _settings, _logger);
+        _intervalChatAutomation = new IntervalChatAutomationService(_telegram, _store, _logger);
 
         ApiIdBox.Text = _settings.ApiId == 0 ? "" : _settings.ApiId.ToString();
         ApiHashBox.Password = _settings.ApiHash;
@@ -91,6 +93,7 @@ public partial class MainWindow : Window
         SetStatus(L("ConfigureTelegram"));
 
         _telegram.MessageReceived += line => Dispatcher.BeginInvoke(() => HandleIncoming(line));
+        _telegram.MessageDeleted += Telegram_MessageDeleted;
         _telegram.Log += text => Dispatcher.BeginInvoke(() => SetStatus(text));
         _telegram.ConnectionStateChanged += state => Dispatcher.BeginInvoke(() => HandleConnectionState(state));
         _telegram.OutboxChanged += Telegram_OutboxChanged;
@@ -99,6 +102,14 @@ public partial class MainWindow : Window
         {
             SetStatus(text);
             AppendConsole(MonitorConsole, $"[{DateTime.Now:HH:mm:ss}] [任务] {text}");
+            MarkTabUnread(SchedulesTab);
+            MarkTabUnread(MonitorTab);
+        });
+        _intervalChatAutomation.Status += text => Dispatcher.BeginInvoke(() =>
+        {
+            SetStatus(text);
+            RenderIntervalChatRules();
+            MarkTabUnread(IntervalTab);
         });
         _logger.EntryWritten += Logger_EntryWritten;
         _exceptionMonitor.RecordsChanged += ExceptionMonitor_RecordsChanged;
@@ -260,9 +271,12 @@ public partial class MainWindow : Window
         _mentionMonitor.DeactivateAccount();
         _telegram.ConfigureAutomationRules([]);
         await _scheduler.DeactivateAccountAsync();
+        await _intervalChatAutomation.DeactivateAccountAsync();
         _allDialogs = [];
         DialogsList.ItemsSource = null;
         ScheduleChatBox.ItemsSource = null;
+        IntervalSourceBox.ItemsSource = null;
+        IntervalTargetBox.ItemsSource = null;
         ConfirmationPeerBox.ItemsSource = null;
         ExceptionPeerBox.ItemsSource = null;
         MentionTargetBox.ItemsSource = null;
@@ -271,6 +285,7 @@ public partial class MainWindow : Window
         ExceptionEmailBox.Clear();
         MentionNotifyEnabledBox.IsChecked = false;
         ScheduleList.ItemsSource = null;
+        IntervalRuleList.ItemsSource = null;
         ExceptionList.ItemsSource = null;
         MentionList.ItemsSource = null;
         OutboxList.ItemsSource = null;
@@ -486,7 +501,9 @@ public partial class MainWindow : Window
         _mentionMonitor.ActivateAccount(userId, account.MentionAlerts);
         _telegram.ConfigureAutomationRules(account.AutomationRules);
         await _scheduler.ActivateAccountAsync(account);
+        await _intervalChatAutomation.ActivateAccountAsync(account);
         RenderSchedules();
+        RenderIntervalChatRules();
         await RefreshExceptionsAsync();
         await RefreshMentionsAsync();
         await RefreshOutboxAsync();
@@ -534,6 +551,13 @@ public partial class MainWindow : Window
         var groups = _allDialogs.Where(x => x.IsGroup).ToList();
         ScheduleChatBox.ItemsSource = groups;
         if (groups.Count > 0) ScheduleChatBox.SelectedIndex = 0;
+        IntervalSourceBox.ItemsSource = _allDialogs;
+        IntervalTargetBox.ItemsSource = _allDialogs;
+        if (_allDialogs.Count > 0)
+        {
+            IntervalSourceBox.SelectedIndex = 0;
+            IntervalTargetBox.SelectedIndex = 0;
+        }
         var confirmationTargets = new List<ConfirmationTarget>
         {
             new(null, "", "（不发送 Telegram 确认）")
@@ -741,9 +765,46 @@ public partial class MainWindow : Window
 
     private void HandleIncoming(ChatLine line)
     {
-        if (_settings.MonitorEnabled && line.IsGroup) AppendChatLine(MonitorConsole, line);
+        if (_settings.MonitorEnabled && line.IsGroup)
+        {
+            AppendChatLine(MonitorConsole, line);
+            MarkTabUnread(MonitorTab);
+        }
         if (DialogsList.SelectedItem is DialogItem current && current.Id == line.ChatId)
+        {
             AppendChatLine(ChatConsole, line);
+            MarkTabUnread(ChatTab);
+        }
+    }
+
+    private void Telegram_MessageDeleted(MessageDeletion deletion) => Dispatcher.BeginInvoke(() =>
+    {
+        foreach (var message in deletion.Messages)
+        {
+            var sender = string.IsNullOrWhiteSpace(message.Sender) ? "未知发送人" : message.Sender;
+            var marker = $"[{deletion.Time:HH:mm:ss}] [{deletion.Chat}] ↩ 已撤回 #{message.MessageId} {sender}: {message.Text}";
+            if (_settings.MonitorEnabled && deletion.ChatKind is "Chat" or "Channel")
+            {
+                AppendConsole(MonitorConsole, marker, Brushes.Orange);
+                MarkTabUnread(MonitorTab);
+            }
+            if (DialogsList.SelectedItem is DialogItem current && current.Id == deletion.ChatId)
+            {
+                AppendConsole(ChatConsole, marker, Brushes.Orange);
+                MarkTabUnread(ChatTab);
+            }
+        }
+    });
+
+    private void MainTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!ReferenceEquals(e.Source, MainTabs) || MainTabs.SelectedItem is not TabItem selected) return;
+        selected.Tag = Visibility.Collapsed;
+    }
+
+    private void MarkTabUnread(TabItem tab)
+    {
+        if (!ReferenceEquals(MainTabs.SelectedItem, tab)) tab.Tag = Visibility.Visible;
     }
 
     private void MonitorEnabledBox_Changed(object sender, RoutedEventArgs e)
@@ -819,6 +880,94 @@ public partial class MainWindow : Window
         RenderSchedules();
         SetStatus(LF("TasksDeleted", selected.Count));
     }
+
+    private async void AddIntervalRule_Click(object sender, RoutedEventArgs e) =>
+        await RunUiAsync(async () =>
+        {
+            if (_activeAccount is null) throw new InvalidOperationException(L("LoginFirst"));
+            if (IntervalSourceBox.SelectedItem is not DialogItem source)
+                throw new InvalidOperationException(L("SelectSourceChat"));
+            if (IntervalTargetBox.SelectedItem is not DialogItem target)
+                throw new InvalidOperationException(L("SelectTargetChat"));
+            if (!int.TryParse(IntervalMinutesBox.Text.Trim(), out var interval) || interval is < 1 or > 1440)
+                throw new InvalidOperationException(L("InvalidIntervalMinutes"));
+            if (!int.TryParse(IntervalMinimumBox.Text.Trim(), out var minimum) || minimum is < 1 or > 300)
+                throw new InvalidOperationException(L("InvalidMinimumMessages"));
+            if (!int.TryParse(IntervalSummaryLinesBox.Text.Trim(), out var summaryLines) || summaryLines is < 1 or > 30)
+                throw new InvalidOperationException(L("InvalidSummaryLines"));
+
+            var now = DateTimeOffset.Now;
+            var rule = new IntervalChatRule
+            {
+                Name = string.IsNullOrWhiteSpace(IntervalNameBox.Text) ? L("DefaultDigestName") : IntervalNameBox.Text.Trim(),
+                SourceChatId = source.Id,
+                SourceChatKind = source.Kind,
+                SourceChatTitle = source.Name,
+                TargetChatId = target.Id,
+                TargetChatKind = target.Kind,
+                TargetChatTitle = target.Name,
+                IntervalMinutes = interval,
+                MinimumMessageCount = minimum,
+                SummaryLineCount = summaryLines,
+                WindowStartedAt = now,
+                LastCheckedAt = now
+            };
+            _activeAccount.IntervalChatRules.Add(rule);
+            _store.SaveAccount(_activeAccount);
+            await _intervalChatAutomation.UpsertAsync(rule);
+            RenderIntervalChatRules();
+        });
+
+    private async void RunIntervalRuleNow_Click(object sender, RoutedEventArgs e) =>
+        await RunUiAsync(async () =>
+        {
+            var selected = GetCheckedIntervalRuleRows();
+            if (selected.Count == 0) throw new InvalidOperationException(L("SelectIntervalRule"));
+            foreach (var row in selected) await _intervalChatAutomation.ExecuteNowAsync(row.Id);
+            RenderIntervalChatRules();
+        });
+
+    private async void RemoveIntervalRule_Click(object sender, RoutedEventArgs e) =>
+        await RunUiAsync(async () =>
+        {
+            if (_activeAccount is null) throw new InvalidOperationException(L("LoginFirst"));
+            var selected = GetCheckedIntervalRuleRows();
+            if (selected.Count == 0) throw new InvalidOperationException(L("SelectIntervalRule"));
+            foreach (var row in selected) await _intervalChatAutomation.DeleteAsync(row.Id);
+            RenderIntervalChatRules();
+        });
+
+    private async void IntervalRuleList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (IntervalRuleList.SelectedItem is not IntervalRuleRow row || _activeAccount is null) return;
+        var rule = _activeAccount.IntervalChatRules.FirstOrDefault(x => x.Id == row.Id);
+        if (rule is null) return;
+        rule.Enabled = !rule.Enabled;
+        _store.SaveAccount(_activeAccount);
+        await _intervalChatAutomation.UpsertAsync(rule);
+        RenderIntervalChatRules();
+    }
+
+    private void RenderIntervalChatRules()
+    {
+        if (IntervalRuleList is null) return;
+        IntervalRuleList.ItemsSource = (_activeAccount?.IntervalChatRules ?? [])
+            .OrderBy(x => x.Name)
+            .Select(x => new IntervalRuleRow(
+                x.Id,
+                x.Enabled ? L("Enabled") : L("Disabled"),
+                x.Name,
+                x.SourceChatTitle,
+                x.TargetChatTitle,
+                LF("EveryMinutes", x.IntervalMinutes),
+                $"{x.LastObservedMessageCount}/{x.MinimumMessageCount}",
+                x.LastSentAt?.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss") ?? "-",
+                x.LastStatus))
+            .ToList();
+    }
+
+    private List<IntervalRuleRow> GetCheckedIntervalRuleRows() =>
+        IntervalRuleList.Items.Cast<IntervalRuleRow>().Where(x => x.IsChecked).ToList();
 
     private async void EditSchedule_Click(object sender, RoutedEventArgs e)
     {
@@ -1034,9 +1183,11 @@ public partial class MainWindow : Window
         _exceptionMonitor.Dispose();
         _mentionMonitor.RecordsChanged -= MentionMonitor_RecordsChanged;
         _mentionMonitor.Dispose();
+        _telegram.MessageDeleted -= Telegram_MessageDeleted;
         _telegram.OutboxChanged -= Telegram_OutboxChanged;
         _telegram.AutomationActivity -= Telegram_AutomationActivity;
         _scheduler.Dispose();
+        _intervalChatAutomation.Dispose();
         _telegram.Dispose();
         if (!_managedWorkspace)
         {
@@ -1061,7 +1212,11 @@ public partial class MainWindow : Window
     }
 
     private void Logger_EntryWritten(AppLogEntry entry) =>
-        Dispatcher.BeginInvoke(() => AppendLogEntry(entry));
+        Dispatcher.BeginInvoke(() =>
+        {
+            AppendLogEntry(entry);
+            MarkTabUnread(RuntimeLogsTab);
+        });
 
     private void AppendLogEntry(AppLogEntry entry)
     {
@@ -1094,6 +1249,7 @@ public partial class MainWindow : Window
 
     private void Telegram_OutboxChanged() => Dispatcher.BeginInvoke(async () =>
     {
+        MarkTabUnread(OutboxTab);
         try { await RefreshOutboxAsync(); }
         catch (Exception ex) { _logger.Error("Outbox", "刷新发件箱失败", ex); }
     });
@@ -1102,6 +1258,7 @@ public partial class MainWindow : Window
     {
         SetStatus(message);
         AppendConsole(MonitorConsole, $"[{DateTime.Now:HH:mm:ss}] [规则] {message}");
+        MarkTabUnread(MonitorTab);
     });
 
     private async void RefreshOutbox_Click(object sender, RoutedEventArgs e) =>
@@ -1217,6 +1374,7 @@ public partial class MainWindow : Window
     private void MentionMonitor_RecordsChanged() =>
         Dispatcher.BeginInvoke(async () =>
         {
+            MarkTabUnread(MentionsTab);
             try { await RefreshMentionsAsync(); }
             catch (Exception ex) { _logger.Error("MentionMonitor", "刷新@消息列表失败", ex); }
         });
@@ -1332,6 +1490,7 @@ public partial class MainWindow : Window
     private void ExceptionMonitor_RecordsChanged() =>
         Dispatcher.BeginInvoke(async () =>
         {
+            MarkTabUnread(ExceptionsTab);
             try { await RefreshExceptionsAsync(); }
             catch (Exception ex) { _logger.Error("ExceptionMonitor", "刷新异常列表失败", ex); }
         });
@@ -1446,6 +1605,29 @@ public partial class MainWindow : Window
         public string Message { get; } = message;
         public string Confirmation { get; } = confirmation;
         public string LastSentText { get; } = lastSentText;
+    }
+
+    private sealed class IntervalRuleRow(
+        Guid id,
+        string enabledText,
+        string name,
+        string sourceTitle,
+        string targetTitle,
+        string intervalText,
+        string messageCountText,
+        string lastSentText,
+        string lastStatus)
+    {
+        public bool IsChecked { get; set; }
+        public Guid Id { get; } = id;
+        public string EnabledText { get; } = enabledText;
+        public string Name { get; } = name;
+        public string SourceTitle { get; } = sourceTitle;
+        public string TargetTitle { get; } = targetTitle;
+        public string IntervalText { get; } = intervalText;
+        public string MessageCountText { get; } = messageCountText;
+        public string LastSentText { get; } = lastSentText;
+        public string LastStatus { get; } = lastStatus;
     }
 
     private static string L(string key) => LocalizationManager.Text(key);

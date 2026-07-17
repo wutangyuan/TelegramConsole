@@ -27,3 +27,15 @@ public sealed record ChatLine(
         ? Text
         : $"{MediaLabel} {Text}";
 }
+
+public sealed record DeletedMessageInfo(int MessageId, string Sender, string Text);
+
+public sealed record MessageDeletion(
+    DateTime Time,
+    long ChatId,
+    string ChatKind,
+    string Chat,
+    IReadOnlyList<DeletedMessageInfo> Messages)
+{
+    public IReadOnlyList<int> MessageIds => Messages.Select(x => x.MessageId).ToArray();
+}

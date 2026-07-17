@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>TelegramConsole NAS</title>
+  <link rel="stylesheet" href="/styles.css?v=20260717-settings">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">T</span><div><strong>TelegramConsole</strong><small>管理中心</small></div></div>
+    <div class="top-status"><span id="serviceDot" class="dot online"></span><span id="systemSummary">服务运行中</span><button id="addAccountButton" class="primary">＋ 添加账户</button><button id="logoutButton" class="secondary">退出</button></div>
+  </header>
+  <div class="layout">
+    <aside class="sidebar">
+      <nav>
+        <button class="nav-item active" data-page="dashboard">▦ <span>控制台</span></button>
+        <button class="nav-item" data-page="chat">▣ <span>消息终端</span></button>
+        <button class="nav-item" data-page="monitor">◉ <span>群消息监控</span></button>
+        <button class="nav-item" data-page="schedules">◷ <span>定时任务</span></button>
+        <button class="nav-item" data-page="intervals">◴ <span>间隔分析</span></button>
+        <button class="nav-item" data-page="mentions">＠ <span>@我的消息</span></button>
+        <button class="nav-item" data-page="exceptions">△ <span>异常中心</span></button>
+        <button class="nav-item" data-page="outbox">▤ <span>发件箱</span></button>
+        <button class="nav-item" data-page="logs">≡ <span>运行日志</span></button>
+        <button class="nav-item" data-page="settings">⚙ <span>系统设置</span></button>
+      </nav>
+      <div class="sidebar-footer">Docker 长期运行版<br><span id="version">v1.0</span></div>
+    </aside>
+    <main>
+      <section id="dashboardPage" class="page active">
+        <div class="page-title"><div><h1>运行概览</h1><p>所有 Telegram 账户独立运行，切换页面不会中断连接。</p></div><button class="secondary" onclick="refreshAll()">刷新状态</button></div>
+        <div class="stats">
+          <article><span>账户总数</span><strong id="accountCount">0</strong></article>
+          <article><span>在线账户</span><strong id="onlineCount">0</strong></article>
+          <article><span>等待验证</span><strong id="waitingCount">0</strong></article>
+          <article><span>连接异常</span><strong id="faultCount">0</strong></article>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><div><h2>账户工作区</h2><p>可同时运行多个账户，每个账户使用独立 Session。</p></div></div>
+          <div id="accountGrid" class="account-grid empty-state">尚未添加账户</div>
+        </div>
+      </section>
+
+      <section id="chatPage" class="page">
+        <div class="page-title"><div><h1>消息终端</h1><p>显示后台实时收到的最近 300 条消息。</p></div></div>
+        <div class="toolbar"><label>账户<select id="chatAccount"></select></label><label class="grow">会话<select id="chatDialog"></select></label><button id="loadDialogsButton" class="secondary">加载会话</button></div>
+        <div id="messageTerminal" class="terminal"><div class="terminal-empty">请选择在线账户并加载会话</div></div>
+        <div class="send-row"><input id="messageInput" placeholder="输入消息，按 Enter 发送" autocomplete="off"><button id="sendButton" class="primary" disabled>发送</button></div>
+      </section>
+
+      <section id="monitorPage" class="page">
+        <div class="page-title"><div><h1>群消息监控</h1><p>实时汇总所选账户收到的群组与频道消息，最多保留最近 300 条。</p></div><button id="clearMonitorButton" class="secondary">清空显示</button></div>
+        <div class="toolbar"><label>账户<select id="monitorAccount"></select></label><label class="grow">群聊筛选<select id="monitorDialog"><option value="">全部群聊与频道</option></select></label><button id="refreshMonitorButton" class="secondary">刷新</button></div>
+        <div id="monitorTerminal" class="terminal monitor-terminal"><div class="terminal-empty">请选择在线账户</div></div>
+      </section>
+
+      <section id="schedulesPage" class="page">
+        <div class="page-title"><div><h1>定时任务</h1><p>任务由 NAS 后台 Quartz 调度，不依赖浏览器保持打开。</p></div><button id="newScheduleButton" class="primary">＋ 新建任务</button></div>
+        <div class="toolbar"><label>账户<select id="scheduleAccount"></select></label><button id="refreshSchedulesButton" class="secondary">刷新任务</button></div>
+        <div class="panel table-wrap"><table><thead><tr><th>状态</th><th>目标</th><th>周期</th><th>时间</th><th>内容</th><th>操作</th></tr></thead><tbody id="scheduleRows"><tr><td colspan="6" class="muted">请选择账户</td></tr></tbody></table></div>
+      </section>
+
+      <section id="intervalsPage" class="page">
+        <div class="page-title"><div><h1>间隔聊天分析</h1><p>消息不足时保留累计窗口，达到阈值并成功发送后才开始下一轮。</p></div><button id="newIntervalButton" class="primary">＋ 新建规则</button></div>
+        <div class="toolbar"><label>账户<select id="intervalAccount"></select></label><button id="refreshIntervalsButton" class="secondary">刷新规则</button></div>
+        <div class="panel table-wrap"><table><thead><tr><th>状态</th><th>名称</th><th>来源</th><th>发送目标</th><th>间隔</th><th>累计/最低</th><th>上次发送</th><th>上次结果</th><th>操作</th></tr></thead><tbody id="intervalRows"><tr><td colspan="9" class="muted">请选择账户</td></tr></tbody></table></div>
+      </section>
+
+      <section id="mentionsPage" class="page">
+        <div class="page-title"><div><h1>@我的消息</h1><p>按 Telegram 账户隔离保存被提及的消息及通知状态。</p></div><button id="refreshMentionsButton" class="secondary">刷新记录</button></div>
+        <div class="toolbar"><label>账户<select id="mentionAccount"></select></label><label class="grow">关键词<input id="mentionKeyword" placeholder="搜索群聊、发送人或消息内容"></label><button id="searchMentionsButton" class="primary">查询</button></div>
+        <div class="panel table-wrap"><table><thead><tr><th>发生时间</th><th>群聊</th><th>发送人</th><th>消息内容</th><th>通知状态</th></tr></thead><tbody id="mentionRows"><tr><td colspan="5" class="muted">请选择账户</td></tr></tbody></table></div>
+      </section>
+
+      <section id="exceptionsPage" class="page">
+        <div class="page-title"><div><h1>异常中心</h1><p>仅展示已入库的异常日志，可查看完整堆栈并重试通知。</p></div><button id="refreshExceptionsButton" class="secondary">刷新记录</button></div>
+        <div class="toolbar toolbar-wrap">
+          <label>账户<select id="exceptionAccount"></select></label>
+          <label>开始日期<input id="exceptionFrom" type="date"></label>
+          <label>结束日期<input id="exceptionTo" type="date"></label>
+          <label>级别<select id="exceptionLevel"><option value="">全部</option><option value="Error">Error</option><option value="Critical">Critical</option></select></label>
+          <label class="grow">关键词<input id="exceptionKeyword" placeholder="来源、异常消息或堆栈"></label>
+          <button id="searchExceptionsButton" class="primary">查询</button>
+        </div>
+        <div class="panel table-wrap"><table><thead><tr><th>编号</th><th>发生时间</th><th>级别</th><th>来源</th><th>异常消息</th><th>Telegram</th><th>邮件</th><th>操作</th></tr></thead><tbody id="exceptionRows"><tr><td colspan="8" class="muted">请选择账户</td></tr></tbody></table></div>
+      </section>
+
+      <section id="outboxPage" class="page">
+        <div class="page-title"><div><h1>发件箱</h1><p>跟踪手工消息、定时任务和通知消息的发送结果，避免重复发送。</p></div><button id="refreshOutboxButton" class="secondary">刷新记录</button></div>
+        <div class="toolbar"><label>账户<select id="outboxAccount"></select></label></div>
+        <div class="panel table-wrap"><table><thead><tr><th>时间</th><th>状态</th><th>目标</th><th>用途</th><th>消息摘要</th><th>尝试</th><th>Telegram ID</th><th>错误</th><th>操作</th></tr></thead><tbody id="outboxRows"><tr><td colspan="9" class="muted">请选择账户</td></tr></tbody></table></div>
+      </section>
+
+      <section id="logsPage" class="page">
+        <div class="page-title"><div><h1>运行日志</h1><p>按账户显示当前运行周期最近 1000 条日志，不记录密码、验证码和消息正文。</p></div><button id="refreshLogsButton" class="secondary">刷新日志</button></div>
+        <div class="toolbar toolbar-wrap"><label>账户<select id="logAccount"></select></label><label>级别<select id="logLevel"><option value="">全部</option><option value="Information">Information</option><option value="Warning">Warning</option><option value="Error">Error</option><option value="Critical">Critical</option></select></label><label class="grow">关键词<input id="logKeyword" placeholder="搜索分类、消息或异常"></label><button id="searchLogsButton" class="primary">查询</button><button id="clearLogsButton" class="secondary">清空显示</button></div>
+        <div id="logTerminal" class="log-terminal"><div class="terminal-empty">请选择账户</div></div>
+      </section>
+
+      <section id="settingsPage" class="page">
+        <div class="page-title"><div><h1>系统设置</h1><p>统一配置 Web 后台使用的邮件发送服务。</p></div></div>
+        <div class="settings-grid">
+          <form id="emailSettingsForm" class="panel settings-card">
+            <div class="panel-head"><div><h2>邮件 SMTP</h2><p>异常通知、定时任务确认和自动化邮件共用此发送账户。</p></div></div>
+            <div class="settings-form">
+              <label>SMTP 服务器<input id="smtpHost" placeholder="例如 smtp.qq.com"></label>
+              <label>SMTP 端口<input id="smtpPort" type="number" min="1" max="65535" value="587"></label>
+              <label>用户名<input id="smtpUserName" autocomplete="username" placeholder="SMTP 登录账号"></label>
+              <label>授权码/密码<input id="smtpPassword" type="password" autocomplete="new-password" placeholder="留空表示保持现有密码"></label>
+              <label>发件地址<input id="smtpFromAddress" type="email" placeholder="name@example.com"></label>
+              <label class="check"><input id="smtpEnableSsl" type="checkbox" checked> 启用 SSL/TLS</label>
+              <div id="smtpPasswordStatus" class="setting-status">尚未加载配置</div>
+              <div class="settings-actions"><button type="submit" class="primary">保存邮件配置</button></div>
+            </div>
+          </form>
+          <div class="panel settings-card">
+            <div class="panel-head"><div><h2>发送测试邮件</h2><p>使用左侧已保存的 SMTP 配置发送一封测试邮件。</p></div></div>
+            <div class="settings-form">
+              <label>测试收件邮箱<input id="smtpTestRecipient" type="email" placeholder="recipient@example.com"></label>
+              <div class="settings-actions"><button id="testEmailButton" type="button" class="secondary">发送测试邮件</button></div>
+              <div id="smtpTestResult" class="setting-status"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="accountDialog">
+    <form id="accountForm" method="dialog">
+      <div class="dialog-head"><h2>添加 Telegram 账户</h2><button type="button" class="icon-button close-dialog">×</button></div>
+      <p class="hint">账户将使用 NAS 独立 Session，不会读取当前 WPF 的会话文件。</p>
+      <div class="form-grid">
+        <label>本地名称<input name="localName" placeholder="例如：工作号" required></label>
+        <label>手机号<input name="phoneNumber" placeholder="+8613800000000" required></label>
+        <label>API ID<input name="apiId" type="number" min="1" required></label>
+        <label>API Hash<input name="apiHash" type="password" autocomplete="off" required></label>
+        <label class="check"><input name="autoStart" type="checkbox" checked> NAS 重启后自动运行</label>
+        <label class="check"><input id="proxyEnabled" name="proxyEnabled" type="checkbox"> 使用 SOCKS5 代理</label>
+        <label>代理地址<input name="proxyHost" value="host.docker.internal"></label>
+        <label>代理端口<input name="proxyPort" type="number" value="7890"></label>
+        <div class="proxy-test-row wide"><button id="testProxyButton" type="button" class="secondary">测试代理端口</button><span id="proxyTestResult" class="setting-status">测试从 Docker 容器发起</span></div>
+      </div>
+      <div class="dialog-actions"><button type="button" class="secondary close-dialog">取消</button><button type="submit" class="primary">添加并登录</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="loginDialog">
+    <form id="loginForm" method="dialog">
+      <div class="dialog-head"><h2 id="loginTitle">完成 Telegram 登录</h2><button type="button" class="icon-button close-dialog">×</button></div>
+      <p id="loginHint" class="hint"></p>
+      <input id="loginValue" type="password" autocomplete="one-time-code" required>
+      <input id="loginAccountId" type="hidden">
+      <div class="dialog-actions"><button type="button" class="secondary close-dialog">稍后</button><button type="submit" class="primary">继续登录</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="scheduleDialog">
+    <form id="scheduleForm" method="dialog">
+      <div class="dialog-head"><h2>新建定时任务</h2><button type="button" class="icon-button close-dialog">×</button></div>
+      <div class="form-grid">
+        <label>账户<select id="taskAccount" required></select></label>
+        <label>目标会话<select id="taskDialog" required></select></label>
+        <label>时间<input name="time" type="time" value="08:00" required></label>
+        <label>周期<select name="period"><option value="Daily">每天</option><option value="Weekly">每周一</option></select></label>
+        <label class="wide">消息内容<input name="message" value="今日签到" required></label>
+        <label class="check"><input name="enabled" type="checkbox" checked> 启用任务</label>
+      </div>
+      <div class="dialog-actions"><button type="button" class="secondary close-dialog">取消</button><button type="submit" class="primary">保存任务</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="intervalDialog">
+    <form id="intervalForm" method="dialog">
+      <div class="dialog-head"><h2>新建间隔分析规则</h2><button type="button" class="icon-button close-dialog">×</button></div>
+      <p class="hint">每到间隔点读取来源会话最近记录；低于最低消息数时不发送，并继续累计到下一间隔。</p>
+      <div class="form-grid">
+        <label>账户<select id="intervalTaskAccount" required></select></label>
+        <label>名称<input name="name" value="聊天简报" required></label>
+        <label>来源会话<select id="intervalSourceDialog" required></select></label>
+        <label>发送目标<select id="intervalTargetDialog" required></select></label>
+        <label>间隔分钟<input name="intervalMinutes" type="number" min="1" max="1440" value="3" required></label>
+        <label>最低消息数<input name="minimumMessageCount" type="number" min="1" max="300" value="5" required></label>
+        <label>摘要保留行数<input name="summaryLineCount" type="number" min="1" max="30" value="8" required></label>
+        <label class="check"><input name="enabled" type="checkbox" checked> 启用规则</label>
+      </div>
+      <div class="dialog-actions"><button type="button" class="secondary close-dialog">取消</button><button type="submit" class="primary">保存规则</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="detailDialog" class="detail-dialog">
+    <div class="dialog-head"><h2 id="detailTitle">记录详情</h2><button type="button" class="icon-button close-dialog">×</button></div>
+    <pre id="detailContent"></pre>
+    <div class="dialog-actions"><button type="button" class="secondary close-dialog">关闭</button></div>
+  </dialog>
+
+  <div id="toast" class="toast"></div>
+  <script src="/app.js?v=20260717-settings"></script>
+</body>
+</html>

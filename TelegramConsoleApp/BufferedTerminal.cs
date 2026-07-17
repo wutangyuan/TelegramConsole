@@ -13,6 +13,11 @@ public sealed record TerminalInlineLink(
     int Length,
     object Tag);
 
+public sealed record TerminalBlock(
+    IReadOnlyList<(string Text, Brush? Foreground, object? Tag)> Lines,
+    object? DeduplicationKey = null,
+    IReadOnlyList<TerminalInlineLink>? InlineLinks = null);
+
 /// <summary>
 /// AvalonEdit-based, append-only terminal surface with bounded buffering.
 /// It avoids FlowDocument layout and coalesces burst traffic into one UI update.
@@ -86,13 +91,7 @@ public sealed class BufferedTerminal : TextEditor
         IReadOnlyList<TerminalInlineLink>? inlineLinks = null)
     {
         if (lines.Count == 0) return;
-        var pendingLines = lines
-            .Select((x, index) => new PendingLine(
-                Normalize(x.Text), Freeze(x.Foreground ?? Foreground ?? Brushes.White), x.Tag,
-                (inlineLinks ?? []).Where(link => link.LineIndex == index)
-                    .Select(link => new PendingLink(link.StartOffset, link.Length, link.Tag))
-                    .ToArray()))
-            .ToArray();
+        var pendingLines = CreatePendingLines(lines, inlineLinks);
         lock (_pendingSync)
         {
             if (deduplicationKey is not null)
@@ -112,6 +111,55 @@ public sealed class BufferedTerminal : TextEditor
         }
         RequestFlush();
     }
+
+    public void ReplaceBlocks(IReadOnlyList<TerminalBlock> blocks)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(() => ReplaceBlocks(blocks));
+            return;
+        }
+
+        var lines = blocks.SelectMany(x => CreatePendingLines(x.Lines, x.InlineLinks)).ToArray();
+        _flushTimer.Stop();
+        Interlocked.Exchange(ref _flushRequested, 0);
+        lock (_pendingSync)
+        {
+            _pending.Clear();
+            _recentKeyOrder.Clear();
+            _recentKeys.Clear();
+            _droppedCount = 0;
+            foreach (var key in blocks.Select(x => x.DeduplicationKey).Where(x => x is not null))
+            {
+                if (!_recentKeys.Add(key!)) continue;
+                _recentKeyOrder.Enqueue(key!);
+            }
+        }
+
+        var shouldScroll = ShouldAutoScroll();
+        Document.BeginUpdate();
+        try
+        {
+            if (Document.TextLength > 0) Document.Remove(0, Document.TextLength);
+            _segments.Clear();
+            foreach (var line in lines) AppendToDocument(line);
+            EnforceLimits();
+        }
+        finally
+        {
+            Document.EndUpdate();
+        }
+        if (shouldScroll) ScrollToVerticalOffset(double.MaxValue);
+    }
+
+    private PendingLine[] CreatePendingLines(
+        IReadOnlyList<(string Text, Brush? Foreground, object? Tag)> lines,
+        IReadOnlyList<TerminalInlineLink>? inlineLinks) =>
+        lines.Select((x, index) => new PendingLine(
+            Normalize(x.Text), Freeze(x.Foreground ?? Foreground ?? Brushes.White), x.Tag,
+            (inlineLinks ?? []).Where(link => link.LineIndex == index)
+                .Select(link => new PendingLink(link.StartOffset, link.Length, link.Tag))
+                .ToArray())).ToArray();
 
     public void ClearOutput()
     {
@@ -196,6 +244,7 @@ public sealed class BufferedTerminal : TextEditor
 
         if (batch.Count > 0)
         {
+            var shouldScroll = ShouldAutoScroll();
             Document.BeginUpdate();
             try
             {
@@ -207,7 +256,7 @@ public sealed class BufferedTerminal : TextEditor
                 Document.EndUpdate();
             }
 
-            if (AutoScroll) ScrollToEnd();
+            if (shouldScroll) ScrollToVerticalOffset(double.MaxValue);
         }
 
         if (hasPending) RequestFlush();
@@ -257,6 +306,13 @@ public sealed class BufferedTerminal : TextEditor
         var line = Document.GetLineByOffset(Math.Min(targetOffset, Document.TextLength - 1));
         var removeLength = line.EndOffset + line.DelimiterLength;
         if (removeLength > 0) Document.Remove(0, removeLength);
+    }
+
+    private bool ShouldAutoScroll()
+    {
+        if (!AutoScroll || Document.TextLength == 0) return AutoScroll;
+        var view = TextArea.TextView;
+        return view.DocumentHeight <= view.ScrollOffset.Y + view.ActualHeight + Math.Max(24, FontSize * 2);
     }
 
     private static string Normalize(string? text) =>

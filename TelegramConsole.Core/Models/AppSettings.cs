@@ -26,6 +26,28 @@ public sealed class AccountProfile
     public ExceptionAlertSettings ExceptionAlerts { get; set; } = new();
     public MentionAlertSettings MentionAlerts { get; set; } = new();
     public List<AutomationRule> AutomationRules { get; set; } = [];
+    public List<IntervalChatRule> IntervalChatRules { get; set; } = [];
+}
+
+public sealed class IntervalChatRule
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public bool Enabled { get; set; } = true;
+    public string Name { get; set; } = "聊天简报";
+    public long SourceChatId { get; set; }
+    public string SourceChatKind { get; set; } = "Channel";
+    public string SourceChatTitle { get; set; } = "";
+    public long TargetChatId { get; set; }
+    public string TargetChatKind { get; set; } = "Channel";
+    public string TargetChatTitle { get; set; } = "";
+    public int IntervalMinutes { get; set; } = 3;
+    public int MinimumMessageCount { get; set; } = 5;
+    public int SummaryLineCount { get; set; } = 8;
+    public DateTimeOffset? WindowStartedAt { get; set; }
+    public DateTimeOffset? LastCheckedAt { get; set; }
+    public DateTimeOffset? LastSentAt { get; set; }
+    public int LastObservedMessageCount { get; set; }
+    public string LastStatus { get; set; } = "等待首次检查";
 }
 
 public sealed class MentionAlertSettings

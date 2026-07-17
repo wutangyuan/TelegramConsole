@@ -36,6 +36,7 @@ public sealed class TelegramService : ITelegramService
     public long CurrentUserId => _client?.User?.id ?? 0;
     public string CurrentUser => _client?.User?.ToString() ?? "未登录";
     public event Action<ChatLine>? MessageReceived;
+    public event Action<MessageDeletion>? MessageDeleted;
     public event Action<string>? Log;
     public event Action<TelegramConnectionState>? ConnectionStateChanged;
     public event Action? OutboxChanged;
@@ -706,6 +707,15 @@ public sealed class TelegramService : ITelegramService
 
     private async Task OnUpdate(Update update)
     {
+        switch (update)
+        {
+            case UpdateDeleteChannelMessages channelDeletion:
+                PublishDeletedMessages(channelDeletion.messages, "Channel", channelDeletion.channel_id);
+                return;
+            case UpdateDeleteMessages deletion:
+                PublishDeletedMessages(deletion.messages);
+                return;
+        }
         TLMessage? message = update switch
         {
             UpdateNewMessage x => x.message as TLMessage,
@@ -715,6 +725,48 @@ public sealed class TelegramService : ITelegramService
         if (message is null) return;
 
         await PublishMessageAsync(message);
+    }
+
+    private void PublishDeletedMessages(IEnumerable<int> messageIds, string? knownKind = null, long knownChatId = 0)
+    {
+        var ids = messageIds.Distinct().ToArray();
+        if (ids.Length == 0) return;
+
+        var matches = new List<(string Kind, long ChatId, int MessageId, TLMessage? Message)>();
+        lock (_messageCacheSync)
+        {
+            foreach (var id in ids)
+            {
+                if (knownChatId != 0)
+                {
+                    var kind = knownKind ?? "Channel";
+                    _messageCache.TryGetValue((kind, knownChatId, id), out var cached);
+                    if (cached is not null) matches.Add((kind, knownChatId, id, cached));
+                    continue;
+                }
+                matches.AddRange(_messageCache
+                    .Where(x => x.Key.MessageId == id)
+                    .Select(x => (x.Key.Kind, x.Key.ChatId, x.Key.MessageId, (TLMessage?)x.Value)));
+            }
+        }
+
+        foreach (var group in matches
+                     .GroupBy(x => (x.Kind, x.ChatId)))
+        {
+            var title = _manager?.Chats.TryGetValue(group.Key.ChatId, out var chat) == true
+                ? chat.Title ?? group.Key.ChatId.ToString()
+                : _manager?.Users.TryGetValue(group.Key.ChatId, out var user) == true
+                    ? DisplayName(user)
+                    : $"ID {group.Key.ChatId}";
+            MessageDeleted?.Invoke(new MessageDeletion(
+                DateTime.Now, group.Key.ChatId, group.Key.Kind, title,
+                group.GroupBy(x => x.MessageId).Select(x => x.First()).OrderBy(x => x.MessageId)
+                    .Select(x => new DeletedMessageInfo(
+                        x.MessageId,
+                        NameOf(x.Message!.from_id),
+                        MessageText(x.Message)))
+                    .ToArray()));
+        }
     }
 
     private async Task PublishMessageAsync(TLMessage message, DialogItem? fallback = null)

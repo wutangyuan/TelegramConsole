@@ -4,8 +4,11 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Threading;
 using ComboBox = System.Windows.Controls.ComboBox;
 using TextBox = System.Windows.Controls.TextBox;
 
@@ -45,33 +48,22 @@ public static class SearchableComboBoxBehavior
     {
         private readonly ComboBox _comboBox;
         private readonly DependencyPropertyDescriptor _itemsSourceDescriptor;
-        private TextBox? _editor;
+        private TextBox? _searchBox;
         private ListCollectionView? _view;
         private bool _applyingView;
+        private bool _suppressTextChanged;
 
         public SearchState(ComboBox comboBox)
         {
             _comboBox = comboBox;
-            _comboBox.IsEditable = true;
+            _comboBox.IsEditable = false;
             _comboBox.IsTextSearchEnabled = false;
-            _comboBox.StaysOpenOnEdit = true;
-            _comboBox.Loaded += ComboBox_Loaded;
             _comboBox.DropDownOpened += ComboBox_DropDownOpened;
             _comboBox.DropDownClosed += ComboBox_DropDownClosed;
-            _comboBox.SelectionChanged += ComboBox_SelectionChanged;
-            _comboBox.PreviewKeyDown += ComboBox_PreviewKeyDown;
             _itemsSourceDescriptor = DependencyPropertyDescriptor.FromProperty(
                 ItemsControl.ItemsSourceProperty, typeof(ComboBox));
-            _itemsSourceDescriptor.AddValueChanged(_comboBox, ItemsSourceChanged);
-            ApplyItemsSource(_comboBox.ItemsSource);
-        }
-
-        private void ComboBox_Loaded(object sender, RoutedEventArgs e)
-        {
-            _comboBox.ApplyTemplate();
-            _editor = _comboBox.Template.FindName("PART_EditableTextBox", _comboBox) as TextBox;
-            if (_editor is not null) _editor.TextChanged += Editor_TextChanged;
-            SyncSelectedText();
+            _itemsSourceDescriptor.AddValueChanged(comboBox, ItemsSourceChanged);
+            ApplyItemsSource(comboBox.ItemsSource);
         }
 
         private void ItemsSourceChanged(object? sender, EventArgs e)
@@ -101,34 +93,76 @@ public static class SearchableComboBoxBehavior
         private void ComboBox_DropDownOpened(object? sender, EventArgs e)
         {
             ClearFilter();
-            _editor?.SelectAll();
+            _comboBox.Dispatcher.BeginInvoke(AttachAndFocusSearchBox, DispatcherPriority.ContextIdle);
         }
 
-        private void ComboBox_DropDownClosed(object? sender, EventArgs e) => ClearFilter();
-
-        private void ComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e) => SyncSelectedText();
-
-        private void SyncSelectedText()
+        private void AttachAndFocusSearchBox()
         {
-            if (_comboBox.SelectedItem is not null) _comboBox.Text = DisplayText(_comboBox.SelectedItem);
+            _comboBox.ApplyTemplate();
+            var popup = _comboBox.Template.FindName("PART_Popup", _comboBox) as Popup;
+            var editor = popup?.Child is null ? null : FindNamedTextBox(popup.Child, "PART_SearchBox");
+            if (editor is null) return;
+            if (!ReferenceEquals(_searchBox, editor))
+            {
+                if (_searchBox is not null)
+                {
+                    _searchBox.TextChanged -= SearchBox_TextChanged;
+                    _searchBox.PreviewKeyDown -= SearchBox_PreviewKeyDown;
+                }
+                _searchBox = editor;
+                _searchBox.TextChanged += SearchBox_TextChanged;
+                _searchBox.PreviewKeyDown += SearchBox_PreviewKeyDown;
+            }
+            _suppressTextChanged = true;
+            _searchBox.Clear();
+            _suppressTextChanged = false;
+            _searchBox.UpdateLayout();
+            _searchBox.Focus();
+            Keyboard.Focus(_searchBox);
         }
 
-        private void Editor_TextChanged(object sender, TextChangedEventArgs e)
+        private static TextBox? FindNamedTextBox(DependencyObject parent, string name)
         {
-            if (!_comboBox.IsDropDownOpen || _view is null) return;
-            var query = _editor?.Text.Trim() ?? "";
+            if (parent is TextBox textBox && textBox.Name == name) return textBox;
+            for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+            {
+                if (FindNamedTextBox(VisualTreeHelper.GetChild(parent, index), name) is { } match) return match;
+            }
+            return null;
+        }
+
+        private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_suppressTextChanged || _view is null) return;
+            var query = _searchBox?.Text.Trim() ?? "";
             _view.Filter = string.IsNullOrWhiteSpace(query)
                 ? null
                 : item => DisplayText(item).Contains(query, StringComparison.CurrentCultureIgnoreCase);
             _view.Refresh();
+            if (_view.Count > 0) _view.MoveCurrentToFirst();
         }
 
-        private void ComboBox_PreviewKeyDown(object sender, KeyEventArgs e)
+        private void SearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Key != Key.Escape || !_comboBox.IsDropDownOpen) return;
+            if (e.Key == Key.Escape)
+            {
+                _comboBox.IsDropDownOpen = false;
+                e.Handled = true;
+                return;
+            }
+            if (e.Key != Key.Enter || _view?.CurrentItem is null) return;
+            _comboBox.SelectedItem = _view.CurrentItem;
             _comboBox.IsDropDownOpen = false;
-            ClearFilter();
             e.Handled = true;
+        }
+
+        private void ComboBox_DropDownClosed(object? sender, EventArgs e)
+        {
+            ClearFilter();
+            if (_searchBox is null) return;
+            _suppressTextChanged = true;
+            _searchBox.Clear();
+            _suppressTextChanged = false;
         }
 
         private string DisplayText(object? item)
@@ -148,7 +182,7 @@ public static class SearchableComboBoxBehavior
 
         private void ClearFilter()
         {
-            if (_view is null || _view.Filter is null) return;
+            if (_view?.Filter is null) return;
             _view.Filter = null;
             _view.Refresh();
         }
@@ -156,12 +190,13 @@ public static class SearchableComboBoxBehavior
         public void Dispose()
         {
             _itemsSourceDescriptor.RemoveValueChanged(_comboBox, ItemsSourceChanged);
-            _comboBox.Loaded -= ComboBox_Loaded;
             _comboBox.DropDownOpened -= ComboBox_DropDownOpened;
             _comboBox.DropDownClosed -= ComboBox_DropDownClosed;
-            _comboBox.SelectionChanged -= ComboBox_SelectionChanged;
-            _comboBox.PreviewKeyDown -= ComboBox_PreviewKeyDown;
-            if (_editor is not null) _editor.TextChanged -= Editor_TextChanged;
+            if (_searchBox is not null)
+            {
+                _searchBox.TextChanged -= SearchBox_TextChanged;
+                _searchBox.PreviewKeyDown -= SearchBox_PreviewKeyDown;
+            }
         }
     }
 }

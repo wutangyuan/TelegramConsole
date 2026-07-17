@@ -12,12 +12,20 @@ public interface ISettingsStore
     void RemoveAccount(long userId);
 }
 
+public interface IManagedAccountCatalog
+{
+    IReadOnlyList<ManagedAccountDefinition> Load();
+    void Save(ManagedAccountDefinition account);
+    void Remove(Guid accountId);
+}
+
 public interface ITelegramService : IDisposable
 {
     bool IsLoggedIn { get; }
     long CurrentUserId { get; }
     string CurrentUser { get; }
     event Action<ChatLine>? MessageReceived;
+    event Action<MessageDeletion>? MessageDeleted;
     event Action<string>? Log;
     event Action<TelegramConnectionState>? ConnectionStateChanged;
     event Action? OutboxChanged;
@@ -69,4 +77,14 @@ public interface ISchedulerService : IDisposable
     Task DeleteAsync(Guid taskId);
     Task RunDueTasksAsync();
     Task ExecuteNowAsync(Guid taskId);
+}
+
+public interface IIntervalChatAutomationService : IDisposable
+{
+    event Action<string>? Status;
+    Task ActivateAccountAsync(AccountProfile account);
+    Task DeactivateAccountAsync();
+    Task UpsertAsync(IntervalChatRule rule);
+    Task DeleteAsync(Guid ruleId);
+    Task ExecuteNowAsync(Guid ruleId);
 }

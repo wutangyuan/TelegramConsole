@@ -151,8 +151,20 @@
                         Click="ToggleDialogsButton_Click" />
             </Grid>
 
-            <TabControl Grid.Column="2" Margin="4,0,0,0">
-                <TabItem Header="{DynamicResource ChatTerminal}">
+            <TabControl x:Name="MainTabs" Grid.Column="2" Margin="4,0,0,0"
+                        SelectionChanged="MainTabs_SelectionChanged">
+                <TabControl.Resources>
+                    <DataTemplate x:Key="UnreadTabHeaderTemplate">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding}" />
+                            <Ellipse Width="7" Height="7" Fill="#EF4444" Margin="6,0,0,0"
+                                     VerticalAlignment="Center"
+                                     Visibility="{Binding RelativeSource={RelativeSource AncestorType={x:Type TabItem}}, Path=Tag}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </TabControl.Resources>
+                <TabItem x:Name="ChatTab" Tag="Collapsed" Header="{DynamicResource ChatTerminal}"
+                         HeaderTemplate="{StaticResource UnreadTabHeaderTemplate}">
                     <Grid Margin="10">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*" />
@@ -197,7 +209,8 @@
                     </Grid>
                 </TabItem>
 
-                <TabItem Header="{DynamicResource GroupMonitor}">
+                <TabItem x:Name="MonitorTab" Tag="Collapsed" Header="{DynamicResource GroupMonitor}"
+                         HeaderTemplate="{StaticResource UnreadTabHeaderTemplate}">
                     <Grid Margin="10">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="38" />
@@ -216,7 +229,8 @@
                     </Grid>
                 </TabItem>
 
-                <TabItem Header="{DynamicResource Schedules}">
+                <TabItem x:Name="SchedulesTab" Tag="Collapsed" Header="{DynamicResource Schedules}"
+                         HeaderTemplate="{StaticResource UnreadTabHeaderTemplate}">
                     <Grid Margin="10">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -316,7 +330,60 @@
                         </ListView>
                     </Grid>
                 </TabItem>
-                <TabItem Header="{DynamicResource Mentions}">
+                <TabItem x:Name="IntervalTab" Tag="Collapsed" Header="{DynamicResource IntervalAnalysis}"
+                         HeaderTemplate="{StaticResource UnreadTabHeaderTemplate}">
+                    <Grid Margin="10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="34" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <WrapPanel VerticalAlignment="Center">
+                            <TextBlock Text="{DynamicResource RuleName}" VerticalAlignment="Center" />
+                            <TextBox x:Name="IntervalNameBox" Width="130" Text="{DynamicResource DefaultDigestName}" />
+                            <TextBlock Text="{DynamicResource SourceChat}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                            <ComboBox x:Name="IntervalSourceBox" Width="210" DisplayMemberPath="Name"
+                                      local:SearchableComboBoxBehavior.IsEnabled="True" />
+                            <TextBlock Text="{DynamicResource TargetChat}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                            <ComboBox x:Name="IntervalTargetBox" Width="210" DisplayMemberPath="Name"
+                                      local:SearchableComboBoxBehavior.IsEnabled="True" />
+                            <TextBlock Text="{DynamicResource IntervalMinutes}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                            <TextBox x:Name="IntervalMinutesBox" Width="58" Text="3" />
+                            <TextBlock Text="{DynamicResource MinimumMessages}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                            <TextBox x:Name="IntervalMinimumBox" Width="58" Text="5" />
+                            <TextBlock Text="{DynamicResource SummaryLines}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                            <TextBox x:Name="IntervalSummaryLinesBox" Width="58" Text="8" />
+                            <Button Content="{DynamicResource AddRule}" Click="AddIntervalRule_Click"
+                                    Style="{StaticResource PrimaryButtonStyle}" />
+                            <Button Content="{DynamicResource RunNow}" Click="RunIntervalRuleNow_Click" />
+                            <Button Content="{DynamicResource DeleteSelected}" Click="RemoveIntervalRule_Click" />
+                        </WrapPanel>
+                        <TextBlock Grid.Row="1" Foreground="#64748B" VerticalAlignment="Center"
+                                   Text="{DynamicResource IntervalAnalysisHint}" />
+                        <ListView x:Name="IntervalRuleList" Grid.Row="2" SelectionMode="Extended"
+                                  MouseDoubleClick="IntervalRuleList_MouseDoubleClick">
+                            <ListView.View>
+                                <GridView>
+                                    <GridViewColumn Header="{DynamicResource Select}" Width="55">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate><CheckBox IsChecked="{Binding IsChecked, Mode=TwoWay}" HorizontalAlignment="Center" /></DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Header="{DynamicResource Status}" Width="65" DisplayMemberBinding="{Binding EnabledText}" />
+                                    <GridViewColumn Header="{DynamicResource RuleName}" Width="130" DisplayMemberBinding="{Binding Name}" />
+                                    <GridViewColumn Header="{DynamicResource SourceChat}" Width="180" DisplayMemberBinding="{Binding SourceTitle}" />
+                                    <GridViewColumn Header="{DynamicResource TargetChat}" Width="180" DisplayMemberBinding="{Binding TargetTitle}" />
+                                    <GridViewColumn Header="{DynamicResource Interval}" Width="95" DisplayMemberBinding="{Binding IntervalText}" />
+                                    <GridViewColumn Header="{DynamicResource MessageCount}" Width="90" DisplayMemberBinding="{Binding MessageCountText}" />
+                                    <GridViewColumn Header="{DynamicResource LastSent}" Width="145" DisplayMemberBinding="{Binding LastSentText}" />
+                                    <GridViewColumn Header="{DynamicResource LastResult}" Width="300" DisplayMemberBinding="{Binding LastStatus}" />
+                                </GridView>
+                            </ListView.View>
+                        </ListView>
+                    </Grid>
+                </TabItem>
+                <TabItem x:Name="MentionsTab" Tag="Collapsed" Header="{DynamicResource Mentions}"
+                         HeaderTemplate="{StaticResource UnreadTabHeaderTemplate}">
                     <Grid Margin="10">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="44" />
@@ -371,7 +438,8 @@
                         </ListView>
                     </Grid>
                 </TabItem>
-                <TabItem Header="{DynamicResource Exceptions}">
+                <TabItem x:Name="ExceptionsTab" Tag="Collapsed" Header="{DynamicResource Exceptions}"
+                         HeaderTemplate="{StaticResource UnreadTabHeaderTemplate}">
                     <Grid Margin="10">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="44" />
@@ -455,7 +523,8 @@
                         </ListView>
                     </Grid>
                 </TabItem>
-                <TabItem Header="{DynamicResource Outbox}">
+                <TabItem x:Name="OutboxTab" Tag="Collapsed" Header="{DynamicResource Outbox}"
+                         HeaderTemplate="{StaticResource UnreadTabHeaderTemplate}">
                     <Grid Margin="10">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="44" />
@@ -486,7 +555,8 @@
                         </ListView>
                     </Grid>
                 </TabItem>
-                <TabItem Header="{DynamicResource RuntimeLogs}">
+                <TabItem x:Name="RuntimeLogsTab" Tag="Collapsed" Header="{DynamicResource RuntimeLogs}"
+                         HeaderTemplate="{StaticResource UnreadTabHeaderTemplate}">
                     <Grid Margin="10">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="44" />
