@@ -19,6 +19,16 @@
     <sys:String x:Key="OpenMedia">Open media</sys:String>
     <sys:String x:Key="MessageRecalled">Message recalled</sys:String>
     <sys:String x:Key="SelectConversationForVisual">Select a conversation to view messages</sys:String>
+    <sys:String x:Key="EditMessage">Edit message</sys:String>
+    <sys:String x:Key="DeleteMessage">Delete message</sys:String>
+    <sys:String x:Key="CopyMessage">Copy text</sys:String>
+    <sys:String x:Key="CopyMessageLink">Copy message link</sys:String>
+    <sys:String x:Key="AddReaction">Add reaction</sys:String>
+    <sys:String x:Key="ForwardedFrom">Forwarded from</sys:String>
+    <sys:String x:Key="Edited">edited</sys:String>
+    <sys:String x:Key="ForwardMessage">Forward message</sys:String>
+    <sys:String x:Key="SelectForwardTarget">Select a target (the list supports search)</sys:String>
+    <sys:String x:Key="Today">Today</sys:String>
     <sys:String x:Key="Schedules">◷ Schedules</sys:String><sys:String x:Key="Mentions">@ Mentions</sys:String>
     <sys:String x:Key="Exceptions">⚠ Exceptions</sys:String><sys:String x:Key="RuntimeLogs">≡ Logs</sys:String><sys:String x:Key="Send">Send</sys:String>
     <sys:String x:Key="MonitorEnabled">Enable group monitoring (show incoming and outgoing group messages)</sys:String>

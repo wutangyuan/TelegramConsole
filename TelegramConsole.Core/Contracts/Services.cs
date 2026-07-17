@@ -36,6 +36,7 @@ public interface ITelegramService : IDisposable
     Task<List<DialogItem>> LoadDialogsAsync();
     Task<List<ChatLine>> LoadHistoryAsync(DialogItem dialog, int limit = 300);
     Task<string> DownloadMediaAsync(DialogItem dialog, int messageId);
+    Task<string?> DownloadMediaThumbnailAsync(DialogItem dialog, int messageId);
     Task SendAsync(DialogItem dialog, string text);
     Task SendScheduledAsync(ScheduledMessage schedule);
     Task SendConfirmationAsync(ScheduledMessage schedule, string text);
@@ -50,6 +51,7 @@ public interface ITelegramService : IDisposable
     Task SendReplyAsync(DialogItem dialog, int replyToMessageId, string text, string quote = "");
     Task EditMessageAsync(DialogItem dialog, int messageId, string text);
     Task DeleteMessagesAsync(DialogItem dialog, IReadOnlyCollection<int> messageIds, bool revoke = true);
+    Task SendReactionAsync(DialogItem dialog, int messageId, string emoji);
     Task ForwardMessagesAsync(DialogItem source, IReadOnlyCollection<int> messageIds, DialogItem target);
     string GetMessageLink(DialogItem dialog, int messageId);
     Task SaveCloudDraftAsync(DialogItem dialog, string text, int? replyToMessageId = null);

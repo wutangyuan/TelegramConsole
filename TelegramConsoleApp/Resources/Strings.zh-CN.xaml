@@ -28,6 +28,16 @@
     <sys:String x:Key="OpenMedia">打开媒体</sys:String>
     <sys:String x:Key="MessageRecalled">已撤回</sys:String>
     <sys:String x:Key="SelectConversationForVisual">选择会话后查看可视化消息</sys:String>
+    <sys:String x:Key="EditMessage">编辑消息</sys:String>
+    <sys:String x:Key="DeleteMessage">撤回消息</sys:String>
+    <sys:String x:Key="CopyMessage">复制文本</sys:String>
+    <sys:String x:Key="CopyMessageLink">复制消息链接</sys:String>
+    <sys:String x:Key="AddReaction">添加回应</sys:String>
+    <sys:String x:Key="ForwardedFrom">转发自</sys:String>
+    <sys:String x:Key="Edited">已编辑</sys:String>
+    <sys:String x:Key="ForwardMessage">转发消息</sys:String>
+    <sys:String x:Key="SelectForwardTarget">选择转发目标（下拉列表支持搜索）</sys:String>
+    <sys:String x:Key="Today">今天</sys:String>
     <sys:String x:Key="GroupMonitor">◉ 群消息监控</sys:String>
     <sys:String x:Key="Schedules">◷ 定时签到</sys:String>
     <sys:String x:Key="Mentions">@ 我的消息</sys:String>

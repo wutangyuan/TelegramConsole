@@ -29,6 +29,7 @@ public partial class MainWindow : Window
     private List<DialogItem> _allDialogs = [];
     private QuoteTargetItem? _selectedQuoteTarget;
     private QuoteTargetItem? _contextQuoteTarget;
+    private int? _editingMessageId;
     private bool _loadingHistory;
     private bool _initialized;
     private bool _resourcesDisposed;
@@ -78,6 +79,12 @@ public partial class MainWindow : Window
         _intervalChatAutomation = new IntervalChatAutomationService(_telegram, _store, _logger);
         VisualChat.QuoteRequested += line => SelectQuoteTarget(QuoteTargetItem.From(line));
         VisualChat.MediaOpenRequested += VisualChat_MediaOpenRequested;
+        VisualChat.PreviewRequested += VisualChat_PreviewRequested;
+        VisualChat.EditRequested += BeginEditMessage;
+        VisualChat.DeleteRequested += VisualChat_DeleteRequested;
+        VisualChat.CopyLinkRequested += VisualChat_CopyLinkRequested;
+        VisualChat.ForwardRequested += VisualChat_ForwardRequested;
+        VisualChat.ReactionRequested += VisualChat_ReactionRequested;
         _chatPresentationMode = Enum.TryParse<ChatPresentationMode>(_settings.ChatViewMode, true, out var mode)
             ? mode
             : ChatPresentationMode.Console;
@@ -720,6 +727,73 @@ public partial class MainWindow : Window
         });
     }
 
+    private async void VisualChat_PreviewRequested(ChatLine line)
+    {
+        if (DialogsList.SelectedItem is not DialogItem dialog || dialog.Id != line.ChatId) return;
+        try
+        {
+            var path = await _telegram.DownloadMediaThumbnailAsync(dialog, line.MessageId);
+            if (path is not null) VisualChat.SetPreview(line.MessageId, path);
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning("Telegram.Media", $"缩略图加载失败：{dialog.Kind}/{dialog.Id}/{line.MessageId}", ex);
+        }
+    }
+
+    private void BeginEditMessage(ChatLine line)
+    {
+        if (!line.IsOutgoing || line.MessageId <= 0) return;
+        ClearQuoteSelection();
+        _editingMessageId = line.MessageId;
+        QuotePreviewText.Text = $"✎ 编辑 #{line.MessageId}: {line.DisplayText}";
+        QuotePreviewPanel.Visibility = Visibility.Visible;
+        MessageBox.Text = line.Text;
+        MessageBox.Focus();
+        MessageBox.SelectAll();
+    }
+
+    private async void VisualChat_DeleteRequested(ChatLine line)
+    {
+        if (DialogsList.SelectedItem is not DialogItem dialog || dialog.Id != line.ChatId) return;
+        var result = System.Windows.MessageBox.Show(
+            $"确定撤回消息 #{line.MessageId}？", "TelegramConsole",
+            MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (result != MessageBoxResult.Yes) return;
+        await RunUiAsync(async () => await _telegram.DeleteMessagesAsync(dialog, [line.MessageId], true));
+    }
+
+    private void VisualChat_CopyLinkRequested(ChatLine line)
+    {
+        if (DialogsList.SelectedItem is not DialogItem dialog || dialog.Id != line.ChatId) return;
+        var link = _telegram.GetMessageLink(dialog, line.MessageId);
+        if (string.IsNullOrWhiteSpace(link))
+            SetStatus("当前会话无法生成公开消息链接");
+        else
+        {
+            System.Windows.Clipboard.SetText(link);
+            SetStatus("消息链接已复制");
+        }
+    }
+
+    private async void VisualChat_ReactionRequested(ChatLine line, string emoji)
+    {
+        if (DialogsList.SelectedItem is not DialogItem dialog || dialog.Id != line.ChatId) return;
+        await RunUiAsync(async () => await _telegram.SendReactionAsync(dialog, line.MessageId, emoji));
+    }
+
+    private async void VisualChat_ForwardRequested(ChatLine line)
+    {
+        if (DialogsList.SelectedItem is not DialogItem source || source.Id != line.ChatId) return;
+        var picker = new ForwardTargetWindow(_allDialogs) { Owner = this };
+        if (picker.ShowDialog() != true || picker.SelectedDialog is not DialogItem target) return;
+        await RunUiAsync(async () =>
+        {
+            await _telegram.ForwardMessagesAsync(source, [line.MessageId], target);
+            SetStatus($"消息已转发到 {target.Name}");
+        });
+    }
+
     private async void MessageBox_KeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter || Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) return;
@@ -740,6 +814,14 @@ public partial class MainWindow : Window
         SetStatus(L("SendingMessage"));
         try
         {
+            if (_editingMessageId is int editingMessageId)
+            {
+                await _telegram.EditMessageAsync(dialog, editingMessageId, text);
+                MessageBox.Clear();
+                SetStatus($"消息 #{editingMessageId} 已编辑");
+                ClearQuoteSelection();
+                return;
+            }
             var quoteTarget = _selectedQuoteTarget;
             if (quoteTarget is null)
                 await _telegram.SendAsync(dialog, text);
@@ -790,6 +872,7 @@ public partial class MainWindow : Window
 
     private void SelectQuoteTarget(QuoteTargetItem target)
     {
+        _editingMessageId = null;
         _selectedQuoteTarget = target;
         QuotePreviewText.Text = $"↪ {target.DisplayText}";
         QuotePreviewPanel.Visibility = Visibility.Visible;
@@ -798,6 +881,7 @@ public partial class MainWindow : Window
 
     private void ClearQuoteSelection()
     {
+        _editingMessageId = null;
         _selectedQuoteTarget = null;
         _contextQuoteTarget = null;
         QuotePreviewText.Text = string.Empty;

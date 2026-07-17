@@ -1,6 +1,7 @@
 <UserControl x:Class="TelegramConsoleApp.RichChatView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:TelegramConsoleApp"
              Background="#E7EEF5">
     <Grid>
         <ListBox x:Name="MessageList" ItemsSource="{Binding Items, RelativeSource={RelativeSource AncestorType=UserControl}}"
@@ -25,17 +26,41 @@
             <ListBox.ItemTemplate>
                 <DataTemplate>
                     <Grid Margin="0,3">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                        <Border HorizontalAlignment="Center" Background="#A6FFFFFF" CornerRadius="10"
+                                Padding="10,3" Margin="0,5,0,7" Visibility="{Binding DateVisibility}">
+                            <TextBlock Text="{Binding DateText}" Foreground="#64748B" FontSize="11" />
+                        </Border>
                         <Border x:Name="Bubble" MaxWidth="620" HorizontalAlignment="{Binding Alignment}"
+                                Grid.Row="1"
                                 Background="{Binding BubbleBrush}" CornerRadius="12" Padding="11,7"
                                 BorderBrush="{Binding BorderBrush}" BorderThickness="1">
                             <Border.ContextMenu>
                                 <ContextMenu>
                                     <MenuItem Header="{DynamicResource QuoteReply}" Click="QuoteMenuItem_Click" Tag="{Binding}" />
+                                    <MenuItem Header="{DynamicResource EditMessage}" Click="EditMenuItem_Click" Tag="{Binding}"
+                                              Visibility="{Binding OutgoingVisibility}" />
+                                    <MenuItem Header="{DynamicResource DeleteMessage}" Click="DeleteMenuItem_Click" Tag="{Binding}" />
+                                    <MenuItem Header="{DynamicResource ForwardMessage}" Click="ForwardMenuItem_Click" Tag="{Binding}" />
+                                    <MenuItem Header="{DynamicResource AddReaction}">
+                                        <MenuItem Header="👍" Click="ReactionMenuItem_Click" Tag="{Binding}" />
+                                        <MenuItem Header="❤️" Click="ReactionMenuItem_Click" Tag="{Binding}" />
+                                        <MenuItem Header="😂" Click="ReactionMenuItem_Click" Tag="{Binding}" />
+                                        <MenuItem Header="🔥" Click="ReactionMenuItem_Click" Tag="{Binding}" />
+                                        <MenuItem Header="🎉" Click="ReactionMenuItem_Click" Tag="{Binding}" />
+                                    </MenuItem>
+                                    <Separator />
+                                    <MenuItem Header="{DynamicResource CopyMessage}" Click="CopyMenuItem_Click" Tag="{Binding}" />
+                                    <MenuItem Header="{DynamicResource CopyMessageLink}" Click="CopyLinkMenuItem_Click" Tag="{Binding}" />
                                     <MenuItem Header="{DynamicResource OpenMedia}" Click="MediaMenuItem_Click" Tag="{Binding}"
                                               Visibility="{Binding MediaVisibility}" />
                                 </ContextMenu>
                             </Border.ContextMenu>
                             <StackPanel>
+                                <DockPanel Visibility="{Binding ForwardVisibility}" Margin="0,0,0,4">
+                                    <TextBlock Text="↪" Foreground="#2A8BD8" Margin="0,0,5,0" />
+                                    <TextBlock Text="{Binding ForwardedLabel}" Foreground="#2A8BD8" FontSize="11" />
+                                </DockPanel>
                                 <DockPanel Margin="0,0,0,4">
                                     <TextBlock Text="{Binding Sender}" Foreground="{Binding SenderBrush}"
                                                FontWeight="SemiBold" FontSize="12" />
@@ -44,7 +69,8 @@
                                 </DockPanel>
                                 <Border Visibility="{Binding ReplyVisibility}" Background="#18000000"
                                         BorderBrush="#3B82F6" BorderThickness="3,0,0,0"
-                                        CornerRadius="4" Padding="8,4" Margin="0,0,0,6">
+                                        CornerRadius="4" Padding="8,4" Margin="0,0,0,6" Cursor="Hand"
+                                        Tag="{Binding}" MouseLeftButtonUp="ReplyPreview_MouseLeftButtonUp">
                                     <StackPanel>
                                         <TextBlock Text="{Binding ReplySender}" Foreground="#2563EB"
                                                    FontWeight="SemiBold" FontSize="11" />
@@ -53,9 +79,17 @@
                                     </StackPanel>
                                 </Border>
                                 <Button Visibility="{Binding MediaVisibility}" Click="MediaButton_Click" Tag="{Binding}"
+                                        Loaded="MediaButton_Loaded"
                                         HorizontalContentAlignment="Stretch" Padding="0" Margin="0,0,0,6"
                                         Background="Transparent" BorderThickness="0" Cursor="Hand">
-                                    <Border Background="{Binding MediaBrush}" CornerRadius="9" Padding="10">
+                                    <Grid>
+                                    <Border Background="#DCE6EF" CornerRadius="9" ClipToBounds="True"
+                                            Visibility="{Binding PreviewVisibility}">
+                                        <Image Source="{Binding PreviewImage}" MaxHeight="280" MinHeight="120"
+                                               MaxWidth="560" Stretch="Uniform" />
+                                    </Border>
+                                    <Border Background="{Binding MediaBrush}" CornerRadius="9" Padding="10"
+                                            Visibility="{Binding MediaPlaceholderVisibility}">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="42" />
@@ -72,11 +106,33 @@
                                             </StackPanel>
                                         </Grid>
                                     </Border>
+                                    </Grid>
                                 </Button>
-                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Foreground="{Binding TextBrush}"
-                                           FontSize="14" Visibility="{Binding TextVisibility}" />
+                                <local:LinkTextBlock LinkText="{Binding Text}" TextWrapping="Wrap" Foreground="{Binding TextBrush}"
+                                                     FontSize="14" Visibility="{Binding TextVisibility}" />
                                 <TextBlock Text="{DynamicResource MessageRecalled}" Foreground="#F97316" FontStyle="Italic"
                                            Visibility="{Binding DeletedVisibility}" />
+                                <ItemsControl ItemsSource="{Binding Reactions}" Margin="0,5,0,0"
+                                              Visibility="{Binding ReactionsVisibility}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{Binding Background}" BorderBrush="{Binding BorderBrush}"
+                                                    BorderThickness="1" CornerRadius="10" Padding="7,2" Margin="0,0,4,2">
+                                                <TextBlock Text="{Binding Text}" FontSize="12" />
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,4,0,0">
+                                    <TextBlock Text="{Binding StatisticsText}" Foreground="#64748B" FontSize="10"
+                                               Visibility="{Binding StatisticsVisibility}" Margin="0,0,6,0" />
+                                    <TextBlock Text="{Binding EditedText}" Foreground="#64748B" FontSize="10"
+                                               Visibility="{Binding EditedVisibility}" Margin="0,0,6,0" />
+                                    <TextBlock Text="📌" FontSize="10" Visibility="{Binding PinnedVisibility}" />
+                                </StackPanel>
                             </StackPanel>
                         </Border>
                     </Grid>

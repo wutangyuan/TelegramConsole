@@ -31,7 +31,11 @@ public sealed record ChatMediaInfo(
     string MimeType = "",
     long Size = 0,
     int DurationSeconds = 0,
-    bool IsDownloadable = false);
+    bool IsDownloadable = false,
+    string Title = "",
+    string Description = "");
+
+public sealed record ChatReaction(string Symbol, int Count, bool IsChosen = false);
 
 public sealed record ChatLine(
     DateTime Time,
@@ -50,7 +54,15 @@ public sealed record ChatLine(
     string ReplyText = "",
     string MediaLabel = "",
     bool HasDownloadableMedia = false,
-    ChatMediaInfo? Media = null)
+    ChatMediaInfo? Media = null,
+    bool IsEdited = false,
+    bool IsPinned = false,
+    string ForwardedFrom = "",
+    string AuthorSignature = "",
+    int ViewCount = 0,
+    int ForwardCount = 0,
+    long GroupedId = 0,
+    IReadOnlyList<ChatReaction>? Reactions = null)
 {
     public string DisplayText => string.IsNullOrWhiteSpace(MediaLabel) || Text == MediaLabel
         ? Text

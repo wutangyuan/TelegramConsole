@@ -371,6 +371,79 @@ public sealed class TelegramService : ITelegramService
         }
     }
 
+    public async Task<string?> DownloadMediaThumbnailAsync(DialogItem dialog, int messageId)
+    {
+        EnsureLogin();
+        TLMessage? message;
+        lock (_messageCacheSync)
+            _messageCache.TryGetValue((dialog.Kind, dialog.Id, messageId), out message);
+        if (message is null)
+            message = (await FetchMessagesAsync(dialog, [messageId])).GetValueOrDefault(messageId);
+        if (message is null) return null;
+
+        Func<Stream, Task>? download = null;
+        switch (message.media)
+        {
+            case MessageMediaPhoto { photo: Photo photo }:
+            {
+                var size = BestThumbnail(photo.sizes);
+                if (size is not null) download = async stream => await _client!.DownloadFileAsync(photo, stream, size);
+                break;
+            }
+            case MessageMediaDocument { document: Document document }:
+            {
+                var size = BestThumbnail(document.thumbs);
+                if (size is not null) download = async stream => await _client!.DownloadFileAsync(document, stream, size);
+                break;
+            }
+        }
+        if (download is null) return null;
+
+        var directory = Path.Combine(
+            _store.DataDirectory, "media", CurrentUserId.ToString(), "thumbnails",
+            SanitizeFileName($"{dialog.Kind}_{dialog.Id}"));
+        Directory.CreateDirectory(directory);
+        var targetPath = Path.Combine(directory, $"{messageId}.jpg");
+        await _mediaDownloadLock.WaitAsync();
+        try
+        {
+            if (File.Exists(targetPath) && new FileInfo(targetPath).Length > 0) return targetPath;
+            var partialPath = targetPath + ".part";
+            if (File.Exists(partialPath)) File.Delete(partialPath);
+            try
+            {
+                await using var output = new FileStream(
+                    partialPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 32768, useAsync: true);
+                await download(output);
+                await output.FlushAsync();
+                File.Move(partialPath, targetPath, overwrite: true);
+                return targetPath;
+            }
+            catch
+            {
+                if (File.Exists(partialPath)) File.Delete(partialPath);
+                throw;
+            }
+        }
+        finally
+        {
+            _mediaDownloadLock.Release();
+        }
+    }
+
+    private static PhotoSizeBase? BestThumbnail(IEnumerable<PhotoSizeBase>? sizes) => sizes?
+        .Where(x => x is PhotoSize or PhotoSizeProgressive or PhotoCachedSize)
+        .OrderByDescending(PhotoSizeArea)
+        .FirstOrDefault();
+
+    private static long PhotoSizeArea(PhotoSizeBase size) => size switch
+    {
+        PhotoSize x => (long)x.w * x.h,
+        PhotoSizeProgressive x => (long)x.w * x.h,
+        PhotoCachedSize x => (long)x.w * x.h,
+        _ => 0
+    };
+
     public void ConfigureAutomationRules(IReadOnlyList<AutomationRule> rules) =>
         _automationRules = rules.Where(x => x.Enabled).ToArray();
 
@@ -476,6 +549,15 @@ public sealed class TelegramService : ITelegramService
             await _client!.Channels_DeleteMessages(new InputChannel(channel.id, channel.access_hash), messageIds.ToArray());
         else
             await _client!.Messages_DeleteMessages(messageIds.ToArray(), revoke);
+    }
+
+    public async Task SendReactionAsync(DialogItem dialog, int messageId, string emoji)
+    {
+        EnsureLogin();
+        if (messageId <= 0 || string.IsNullOrWhiteSpace(emoji)) return;
+        await _client!.Messages_SendReaction(
+            ResolvePeer(dialog.Id, dialog.Kind), messageId,
+            [new ReactionEmoji { emoticon = emoji }]);
     }
 
     public async Task ForwardMessagesAsync(
@@ -715,6 +797,20 @@ public sealed class TelegramService : ITelegramService
             case UpdateDeleteMessages deletion:
                 PublishDeletedMessages(deletion.messages);
                 return;
+            case UpdateMessageReactions reactionUpdate:
+                await RepublishCachedMessageAsync(reactionUpdate.peer.ID, reactionUpdate.msg_id, message =>
+                {
+                    message.reactions = reactionUpdate.reactions;
+                    message.flags |= TLMessage.Flags.has_reactions;
+                });
+                return;
+            case UpdateChannelMessageViews viewsUpdate:
+                await RepublishCachedMessageAsync(viewsUpdate.channel_id, viewsUpdate.id, message =>
+                {
+                    message.views = viewsUpdate.views;
+                    message.flags |= TLMessage.Flags.has_views;
+                });
+                return;
         }
         TLMessage? message = update switch
         {
@@ -724,7 +820,17 @@ public sealed class TelegramService : ITelegramService
         };
         if (message is null) return;
 
-        await PublishMessageAsync(message);
+        await PublishMessageAsync(message, processAutomation: update is not UpdateEditMessage);
+    }
+
+    private async Task RepublishCachedMessageAsync(long chatId, int messageId, Action<TLMessage> update)
+    {
+        TLMessage? message;
+        lock (_messageCacheSync)
+            message = _messageCache.FirstOrDefault(x => x.Key.ChatId == chatId && x.Key.MessageId == messageId).Value;
+        if (message is null) return;
+        update(message);
+        await PublishMessageAsync(message, processAutomation: false);
     }
 
     private void PublishDeletedMessages(IEnumerable<int> messageIds, string? knownKind = null, long knownChatId = 0)
@@ -769,7 +875,10 @@ public sealed class TelegramService : ITelegramService
         }
     }
 
-    private async Task PublishMessageAsync(TLMessage message, DialogItem? fallback = null)
+    private async Task PublishMessageAsync(
+        TLMessage message,
+        DialogItem? fallback = null,
+        bool processAutomation = true)
     {
         var peerInfo = _manager?.UserOrChat(message.peer_id);
         var isGroup = peerInfo is ChatBase || fallback?.IsGroup == true;
@@ -792,7 +901,7 @@ public sealed class TelegramService : ITelegramService
         var line = ToChatLine(message, dialog, replyMessage);
         MessageReceived?.Invoke(line);
         await IndexMessagesAsync([line]);
-        if (!line.IsOutgoing) await ProcessAutomationRulesAsync(line);
+        if (processAutomation && !line.IsOutgoing) await ProcessAutomationRulesAsync(line);
     }
 
     private async Task TryPublishConfirmedMessageAsync(TLMessage message, DialogItem fallback)
@@ -857,8 +966,36 @@ public sealed class TelegramService : ITelegramService
             message.flags.HasFlag(TLMessage.Flags.out_), IsMentioned(message), message.id, dialog.Kind,
             TopicIdOf(message), replyId,
             replyMessage is null ? "" : NameOf(replyMessage.from_id), replyText,
-            MediaLabel(message.media) ?? "", IsDownloadableMedia(message.media), MediaInfo(message.media));
+            MediaLabel(message.media) ?? "", IsDownloadableMedia(message.media), MediaInfo(message.media),
+            message.flags.HasFlag(TLMessage.Flags.has_edit_date),
+            message.flags.HasFlag(TLMessage.Flags.pinned),
+            ForwardedFrom(message.fwd_from), message.post_author ?? "", message.views, message.forwards,
+            message.grouped_id, ReactionsOf(message.reactions));
     }
+
+    private string ForwardedFrom(MessageFwdHeader? header)
+    {
+        if (header is null) return "";
+        if (!string.IsNullOrWhiteSpace(header.from_name)) return header.from_name;
+        if (header.from_id is not null)
+        {
+            var name = NameOf(header.from_id);
+            if (!string.IsNullOrWhiteSpace(name)) return name;
+        }
+        return !string.IsNullOrWhiteSpace(header.post_author) ? header.post_author : "转发消息";
+    }
+
+    private static IReadOnlyList<ChatReaction> ReactionsOf(MessageReactions? reactions) =>
+        reactions?.results?.Select(x => new ChatReaction(
+            x.reaction switch
+            {
+                ReactionEmoji emoji => emoji.emoticon,
+                ReactionCustomEmoji => "◇",
+                ReactionPaid => "⭐",
+                _ => "•"
+            },
+            x.count,
+            x.flags.HasFlag(ReactionCount.Flags.has_chosen_order))).ToArray() ?? [];
 
     private async Task<TLMessage?> ResolveReplyMessageAsync(TLMessage message, DialogItem dialog)
     {
@@ -989,7 +1126,21 @@ public sealed class TelegramService : ITelegramService
             MessageMediaWebPage => ChatMediaKind.WebPage,
             _ => ChatMediaKind.Other
         };
-        return new ChatMediaInfo(mediaKind, label, IsDownloadable: media is MessageMediaPhoto);
+        var (title, description) = media switch
+        {
+            MessageMediaPoll poll => (poll.poll.question.text, $"{poll.poll.answers?.Length ?? 0} 个选项"),
+            MessageMediaContact contact => ($"{contact.first_name} {contact.last_name}".Trim(), contact.phone_number),
+            MessageMediaVenue venue => (venue.title, venue.address),
+            MessageMediaGeoLive { geo: GeoPoint geo } => ("实时位置", $"{geo.lat:0.######}, {geo.lon:0.######}"),
+            MessageMediaGeo { geo: GeoPoint geo } => ("位置", $"{geo.lat:0.######}, {geo.lon:0.######}"),
+            MessageMediaWebPage { webpage: WebPage page } =>
+                (string.IsNullOrWhiteSpace(page.title) ? page.site_name ?? page.display_url : page.title,
+                 string.IsNullOrWhiteSpace(page.description) ? page.url : page.description),
+            _ => ("", "")
+        };
+        return new ChatMediaInfo(
+            mediaKind, label, IsDownloadable: media is MessageMediaPhoto,
+            Title: title ?? "", Description: description ?? "");
     }
 
     private static string DocumentLabel(DocumentBase? documentBase)
