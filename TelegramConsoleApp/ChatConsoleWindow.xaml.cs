@@ -20,6 +20,7 @@ public partial class ChatConsoleWindow : Window
     private QuoteTargetItem? _contextQuoteTarget;
     private bool _historyLoaded;
     private bool _suppressWorkspaceRestore;
+    private DateTime _pendingSentScrollUntilUtc;
 
     public ChatConsoleWindow(
         ITelegramService telegram,
@@ -57,13 +58,13 @@ public partial class ChatConsoleWindow : Window
         {
             MergeTimeline(await _telegram.LoadHistoryAsync(_dialog, QuoteHistoryLimit));
             _historyLoaded = true;
-            RenderTimeline();
+            RenderTimeline(forceScrollToEnd: true);
             InputBox.Focus();
         }
         catch (Exception ex)
         {
             _historyLoaded = true;
-            RenderTimeline();
+            RenderTimeline(forceScrollToEnd: true);
             AppendText("[ERROR] " + UserMessageFormatter.From(ex), Brushes.OrangeRed);
         }
     }
@@ -75,7 +76,10 @@ public partial class ChatConsoleWindow : Window
         {
             var canAppend = MergeTimeline([line]);
             if (!_historyLoaded) return;
-            if (canAppend) Append(line);
+            var forceScrollToEnd = line.IsOutgoing && DateTime.UtcNow <= _pendingSentScrollUntilUtc;
+            if (forceScrollToEnd) _pendingSentScrollUntilUtc = default;
+            if (canAppend) Append(line, forceScrollToEnd);
+            else if (forceScrollToEnd) RenderTimeline(forceScrollToEnd: true);
             else if (!_timelineRenderTimer.IsEnabled) _timelineRenderTimer.Start();
         });
     }
@@ -138,7 +142,7 @@ public partial class ChatConsoleWindow : Window
         return canAppend;
     }
 
-    private void RenderTimeline()
+    private void RenderTimeline(bool forceScrollToEnd = false)
     {
         var blocks = _timeline
             .Select(x => new TimelineRenderItem(x.Time, x.MessageId, 0, CreateBlock(x)))
@@ -149,7 +153,7 @@ public partial class ChatConsoleWindow : Window
             .ThenBy(x => x.Sequence)
             .Select(x => x.Block)
             .ToArray();
-        ConsoleBox.ReplaceBlocks(blocks);
+        ConsoleBox.ReplaceBlocks(blocks, forceScrollToEnd);
     }
 
     private async void SendButton_Click(object sender, RoutedEventArgs e) => await SendAsync();
@@ -193,6 +197,7 @@ public partial class ChatConsoleWindow : Window
             SetSendEnabled(false);
             SendButton.Content = LocalizationManager.Text("SendingMessage");
             var quoteTarget = _selectedQuoteTarget;
+            _pendingSentScrollUntilUtc = DateTime.UtcNow.AddSeconds(30);
             if (quoteTarget is not null)
             {
                 await _telegram.SendReplyAsync(_dialog, quoteTarget.MessageId, text, quoteTarget.Text);
@@ -201,11 +206,13 @@ public partial class ChatConsoleWindow : Window
             {
                 await _telegram.SendAsync(_dialog, text);
             }
+            ConsoleBox.ScrollToEnd();
             InputBox.Clear();
             ClearQuoteSelection();
         }
         catch (Exception ex)
         {
+            _pendingSentScrollUntilUtc = default;
             AppendText("[ERROR] " + UserMessageFormatter.From(ex), Brushes.OrangeRed);
         }
         finally
@@ -216,10 +223,10 @@ public partial class ChatConsoleWindow : Window
         }
     }
 
-    private void Append(ChatLine line)
+    private void Append(ChatLine line, bool forceScrollToEnd = false)
     {
         var block = CreateBlock(line);
-        ConsoleBox.AppendLines(block.Lines, block.DeduplicationKey, block.InlineLinks);
+        ConsoleBox.AppendLines(block.Lines, block.DeduplicationKey, block.InlineLinks, forceScrollToEnd);
     }
 
     private static TerminalBlock CreateBlock(ChatLine line)

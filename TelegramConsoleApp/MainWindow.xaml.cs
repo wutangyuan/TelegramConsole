@@ -37,6 +37,7 @@ public partial class MainWindow : Window
     private bool _initialized;
     private bool _resourcesDisposed;
     private bool _loginInProgress;
+    private (string Kind, long Id, DateTime ExpiresUtc)? _pendingSentScroll;
     private bool _unreadNotificationsReady;
     private bool _outboxBaselineReady;
     private bool _mentionBaselineReady;
@@ -705,7 +706,7 @@ public partial class MainWindow : Window
                 var availableReactions = await _telegram.LoadAvailableReactionsAsync(dialog);
                 _chatTimeline.Clear();
                 _chatTimeline.AddRange(history.OrderBy(x => x.Time).ThenBy(x => x.MessageId));
-                RenderChatTimeline(dialog);
+                RenderChatTimeline(dialog, forceScrollToEnd: true);
                 VisualChat.ReplaceMessages(history);
                 VisualChat.SetAvailableReactions(availableReactions);
             }
@@ -937,13 +938,20 @@ public partial class MainWindow : Window
                 return;
             }
             var quoteTarget = _selectedQuoteTarget;
+            RequestScrollAfterSend(dialog);
             if (quoteTarget is null)
                 await _telegram.SendAsync(dialog, text);
             else
                 await _telegram.SendReplyAsync(dialog, quoteTarget.MessageId, text, quoteTarget.Text);
+            ScrollCurrentChatToEnd();
             MessageBox.Clear();
             SetStatus(quoteTarget is null ? LF("MessageSent", dialog.Name) : LF("QuoteReplySent", dialog.Name));
             ClearQuoteSelection();
+        }
+        catch
+        {
+            _pendingSentScroll = null;
+            throw;
         }
         finally
         {
@@ -1031,11 +1039,34 @@ public partial class MainWindow : Window
         if (DialogsList.SelectedItem is not DialogItem current || current.Id != line.ChatId) return false;
         var isNew = line.MessageId <= 0 || !_chatTimeline.Any(x => x.MessageId == line.MessageId &&
             x.ChatId == line.ChatId && string.Equals(x.ChatKind, line.ChatKind, StringComparison.Ordinal));
+        var forceScrollToEnd = ConsumePendingSentScroll(line);
         var requiresRender = MergeChatTimeline(line);
-        VisualChat.UpsertMessage(line);
-        if (requiresRender) RenderChatTimeline(current);
-        else AppendChatLine(ChatConsole, line);
+        VisualChat.UpsertMessage(line, forceScrollToEnd);
+        if (requiresRender) RenderChatTimeline(current, forceScrollToEnd);
+        else AppendChatLine(ChatConsole, line, forceScrollToEnd);
         return isNew;
+    }
+
+    private void RequestScrollAfterSend(DialogItem dialog) =>
+        _pendingSentScroll = (dialog.Kind, dialog.Id, DateTime.UtcNow.AddSeconds(30));
+
+    private bool ConsumePendingSentScroll(ChatLine line)
+    {
+        if (_pendingSentScroll is not { } pending || DateTime.UtcNow > pending.ExpiresUtc)
+        {
+            _pendingSentScroll = null;
+            return false;
+        }
+        if (!line.IsOutgoing || line.ChatId != pending.Id ||
+            !string.Equals(line.ChatKind, pending.Kind, StringComparison.Ordinal)) return false;
+        _pendingSentScroll = null;
+        return true;
+    }
+
+    private void ScrollCurrentChatToEnd()
+    {
+        ChatConsole.ScrollToEnd();
+        VisualChat.ScrollToEnd();
     }
 
     private bool MergeChatTimeline(ChatLine line)
@@ -1062,7 +1093,7 @@ public partial class MainWindow : Window
         return requiresRender;
     }
 
-    private void RenderChatTimeline(DialogItem dialog)
+    private void RenderChatTimeline(DialogItem dialog, bool forceScrollToEnd = false)
     {
         var blocks = new List<TerminalBlock>
         {
@@ -1079,7 +1110,7 @@ public partial class MainWindow : Window
             .ThenBy(x => x.MessageId)
             .ThenBy(x => x.Order);
         blocks.AddRange(timeline.Select(x => x.Block));
-        ChatConsole.ReplaceBlocks(blocks);
+        ChatConsole.ReplaceBlocks(blocks, forceScrollToEnd);
     }
 
     private void Telegram_MessageDeleted(MessageDeletion deletion) => Dispatcher.BeginInvoke(() =>
@@ -1930,10 +1961,10 @@ public partial class MainWindow : Window
         _ => prompt
     };
 
-    private static void AppendChatLine(BufferedTerminal box, ChatLine line)
+    private static void AppendChatLine(BufferedTerminal box, ChatLine line, bool forceScrollToEnd = false)
     {
         var block = CreateChatTerminalBlock(line);
-        box.AppendLines(block.Lines, block.DeduplicationKey, block.InlineLinks);
+        box.AppendLines(block.Lines, block.DeduplicationKey, block.InlineLinks, forceScrollToEnd);
     }
 
     private static TerminalBlock CreateChatTerminalBlock(ChatLine line)

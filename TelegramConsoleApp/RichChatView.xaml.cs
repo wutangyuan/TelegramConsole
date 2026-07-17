@@ -61,8 +61,9 @@ public partial class RichChatView : System.Windows.Controls.UserControl
         ScrollToEnd();
     }
 
-    public void UpsertMessage(ChatLine line)
+    public void UpsertMessage(ChatLine line, bool forceScrollToEnd = false)
     {
+        var shouldScroll = forceScrollToEnd || IsNearBottom();
         if (line.MessageId > 0 && _byMessageId.TryGetValue(line.MessageId, out var existing))
         {
             var index = Items.IndexOf(existing);
@@ -71,6 +72,7 @@ public partial class RichChatView : System.Windows.Controls.UserControl
             Items[index] = replacement;
             _byMessageId[line.MessageId] = replacement;
             RefreshDateSeparators();
+            if (shouldScroll) ScrollToEnd();
             return;
         }
 
@@ -87,7 +89,7 @@ public partial class RichChatView : System.Windows.Controls.UserControl
         }
         RefreshDateSeparators();
         UpdateEmptyState();
-        ScrollToEnd();
+        if (shouldScroll) ScrollToEnd();
     }
 
     public void MarkDeleted(DeletedMessageInfo deleted)
@@ -133,10 +135,29 @@ public partial class RichChatView : System.Windows.Controls.UserControl
         return time != 0 ? time : left.MessageId.CompareTo(right.MessageId);
     }
 
-    private void ScrollToEnd() => Dispatcher.BeginInvoke(() =>
+    public void ScrollToEnd() => Dispatcher.BeginInvoke(() =>
     {
         if (Items.Count > 0) MessageList.ScrollIntoView(Items[^1]);
     }, System.Windows.Threading.DispatcherPriority.Background);
+
+    private bool IsNearBottom()
+    {
+        var scrollViewer = FindDescendant<ScrollViewer>(MessageList);
+        return scrollViewer is null ||
+               scrollViewer.ScrollableHeight - scrollViewer.VerticalOffset <= 32;
+    }
+
+    private static T? FindDescendant<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (var index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, index);
+            if (child is T match) return match;
+            var nested = FindDescendant<T>(child);
+            if (nested is not null) return nested;
+        }
+        return null;
+    }
 
     private void UpdateEmptyState() => EmptyState.Visibility = Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 

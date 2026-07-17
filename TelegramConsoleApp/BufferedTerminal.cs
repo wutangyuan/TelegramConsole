@@ -34,6 +34,7 @@ public sealed class BufferedTerminal : TextEditor
     private readonly TextSegmentCollection<ColoredSegment> _segments;
     private int _droppedCount;
     private int _flushRequested;
+    private int _forceScrollRequested;
 
     public int MaximumLines { get; set; } = 1000;
     public int MaximumCharacters { get; set; } = 500_000;
@@ -82,13 +83,15 @@ public sealed class BufferedTerminal : TextEditor
         string text,
         Brush? foreground = null,
         object? tag = null,
-        object? deduplicationKey = null) =>
-        AppendLines([(text, foreground, tag)], deduplicationKey);
+        object? deduplicationKey = null,
+        bool forceScrollToEnd = false) =>
+        AppendLines([(text, foreground, tag)], deduplicationKey, forceScrollToEnd: forceScrollToEnd);
 
     public void AppendLines(
         IReadOnlyList<(string Text, Brush? Foreground, object? Tag)> lines,
         object? deduplicationKey = null,
-        IReadOnlyList<TerminalInlineLink>? inlineLinks = null)
+        IReadOnlyList<TerminalInlineLink>? inlineLinks = null,
+        bool forceScrollToEnd = false)
     {
         if (lines.Count == 0) return;
         var pendingLines = CreatePendingLines(lines, inlineLinks);
@@ -109,10 +112,11 @@ public sealed class BufferedTerminal : TextEditor
                 _droppedCount++;
             }
         }
+        if (forceScrollToEnd) Interlocked.Exchange(ref _forceScrollRequested, 1);
         RequestFlush();
     }
 
-    public void ReplaceBlocks(IReadOnlyList<TerminalBlock> blocks)
+    public void ReplaceBlocks(IReadOnlyList<TerminalBlock> blocks, bool forceScrollToEnd = false)
     {
         if (!Dispatcher.CheckAccess())
         {
@@ -123,6 +127,7 @@ public sealed class BufferedTerminal : TextEditor
         var lines = blocks.SelectMany(x => CreatePendingLines(x.Lines, x.InlineLinks)).ToArray();
         _flushTimer.Stop();
         Interlocked.Exchange(ref _flushRequested, 0);
+        Interlocked.Exchange(ref _forceScrollRequested, 0);
         lock (_pendingSync)
         {
             _pending.Clear();
@@ -136,7 +141,7 @@ public sealed class BufferedTerminal : TextEditor
             }
         }
 
-        var shouldScroll = ShouldAutoScroll();
+        var shouldScroll = forceScrollToEnd || ShouldAutoScroll();
         Document.BeginUpdate();
         try
         {
@@ -244,7 +249,7 @@ public sealed class BufferedTerminal : TextEditor
 
         if (batch.Count > 0)
         {
-            var shouldScroll = ShouldAutoScroll();
+            var shouldScroll = Interlocked.Exchange(ref _forceScrollRequested, 0) != 0 || ShouldAutoScroll();
             Document.BeginUpdate();
             try
             {
