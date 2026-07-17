@@ -155,7 +155,8 @@
                        VerticalAlignment="Center" FontWeight="Bold" />
             <TextBox x:Name="InputBox" Grid.Column="1" Padding="2" Background="#000000"
                      Foreground="#FFFFFF" BorderThickness="0" CaretBrush="#FFFFFF"
-                     VerticalContentAlignment="Center" KeyDown="InputBox_KeyDown"
+                     AcceptsReturn="True" TextWrapping="Wrap" VerticalContentAlignment="Center"
+                     ToolTip="Enter 发送，Alt+Enter 换行" PreviewKeyDown="InputBox_KeyDown"
                      TextChanged="InputBox_TextChanged" />
             <Button x:Name="SendButton" Grid.Column="2" Content="SEND ↵" Click="SendButton_Click"
                     Background="#18181B" Foreground="#FFFFFF" BorderBrush="#3F3F46"

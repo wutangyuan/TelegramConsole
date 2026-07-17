@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -17,6 +18,7 @@ public partial class RichChatView : System.Windows.Controls.UserControl
     private const int MaximumMessages = 300;
     private readonly Dictionary<int, RichChatMessageItem> _byMessageId = [];
     private readonly HashSet<int> _previewRequests = [];
+    private IReadOnlyList<string> _availableReactions = [];
 
     public ObservableCollection<RichChatMessageItem> Items { get; } = [];
     public event Action<ChatLine>? QuoteRequested;
@@ -24,7 +26,9 @@ public partial class RichChatView : System.Windows.Controls.UserControl
     public event Action<ChatLine>? PreviewRequested;
     public event Action<ChatLine>? EditRequested;
     public event Action<ChatLine>? DeleteRequested;
+    public event Action<ChatLine>? CopyTextRequested;
     public event Action<ChatLine>? CopyLinkRequested;
+    public event Action<ChatLine>? CopyMediaRequested;
     public event Action<ChatLine>? ForwardRequested;
     public event Action<ChatLine, string>? ReactionRequested;
 
@@ -104,6 +108,9 @@ public partial class RichChatView : System.Windows.Controls.UserControl
         UpdateEmptyState();
     }
 
+    public void SetAvailableReactions(IReadOnlyList<string> reactions) =>
+        _availableReactions = reactions.Distinct().ToArray();
+
     public void SetPreview(int messageId, string? path)
     {
         if (!_byMessageId.TryGetValue(messageId, out var item) || string.IsNullOrWhiteSpace(path)) return;
@@ -161,19 +168,61 @@ public partial class RichChatView : System.Windows.Controls.UserControl
     private void EditMenuItem_Click(object sender, RoutedEventArgs e) => RaiseLine(sender, EditRequested);
     private void DeleteMenuItem_Click(object sender, RoutedEventArgs e) => RaiseLine(sender, DeleteRequested);
     private void CopyLinkMenuItem_Click(object sender, RoutedEventArgs e) => RaiseLine(sender, CopyLinkRequested);
+    private void CopyMediaMenuItem_Click(object sender, RoutedEventArgs e) => RaiseLine(sender, CopyMediaRequested);
     private void ForwardMenuItem_Click(object sender, RoutedEventArgs e) => RaiseLine(sender, ForwardRequested);
 
-    private void ReactionMenuItem_Click(object sender, RoutedEventArgs e)
+    private void ReactionMenu_SubmenuOpened(object sender, RoutedEventArgs e)
     {
-        if (sender is MenuItem { Tag: RichChatMessageItem item, Header: string emoji } && !item.IsDeleted)
-            ReactionRequested?.Invoke(item.Line, emoji);
+        if (sender is not MenuItem menu || menu.Tag is not RichChatMessageItem item) return;
+        menu.Items.Clear();
+        if (_availableReactions.Count == 0)
+        {
+            menu.Items.Add(new MenuItem { Header = "当前聊天不允许回应", IsEnabled = false });
+            return;
+        }
+        var contextMenu = ItemsControl.ItemsControlFromItemContainer(menu) as ContextMenu;
+        var panel = new UniformGrid { Columns = 8 };
+        foreach (var emoji in _availableReactions)
+        {
+            var option = new System.Windows.Controls.Button
+            {
+                Content = emoji,
+                Width = 34,
+                Height = 34,
+                Padding = new Thickness(0),
+                Margin = new Thickness(1),
+                FontSize = 18,
+                Background = Brushes.Transparent,
+                BorderBrush = Brushes.Transparent,
+                Cursor = System.Windows.Input.Cursors.Hand,
+                ToolTip = emoji
+            };
+            option.Click += (_, _) =>
+            {
+                if (!item.IsDeleted) ReactionRequested?.Invoke(item.Line, emoji);
+                menu.IsSubmenuOpen = false;
+                if (contextMenu is not null) contextMenu.IsOpen = false;
+            };
+            panel.Children.Add(option);
+        }
+        var scroller = new ScrollViewer
+        {
+            Content = panel,
+            Width = 300,
+            MaxHeight = 260,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            Padding = new Thickness(3)
+        };
+        menu.Items.Add(new MenuItem
+        {
+            Header = scroller,
+            Padding = new Thickness(0),
+            StaysOpenOnClick = true
+        });
     }
 
-    private void CopyMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        if ((sender as FrameworkElement)?.Tag is RichChatMessageItem item && !string.IsNullOrWhiteSpace(item.Line.DisplayText))
-            System.Windows.Clipboard.SetText(item.Line.DisplayText);
-    }
+    private void CopyMenuItem_Click(object sender, RoutedEventArgs e) => RaiseLine(sender, CopyTextRequested);
 
     private static void RaiseLine(object sender, Action<ChatLine>? handler)
     {

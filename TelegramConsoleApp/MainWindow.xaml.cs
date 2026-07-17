@@ -27,13 +27,23 @@ public partial class MainWindow : Window
     private bool _exitRequested;
     private bool _trayHintShown;
     private List<DialogItem> _allDialogs = [];
+    private readonly List<ChatLine> _chatTimeline = [];
+    private readonly Dictionary<(string ChatKind, long ChatId, int MessageId), CachedDeletion> _chatDeletions = [];
     private QuoteTargetItem? _selectedQuoteTarget;
     private QuoteTargetItem? _contextQuoteTarget;
     private int? _editingMessageId;
+    private ChatLine? _editingMessage;
     private bool _loadingHistory;
     private bool _initialized;
     private bool _resourcesDisposed;
     private bool _loginInProgress;
+    private bool _unreadNotificationsReady;
+    private bool _outboxBaselineReady;
+    private bool _mentionBaselineReady;
+    private bool _exceptionBaselineReady;
+    private HashSet<long> _knownOutboxIds = [];
+    private HashSet<long> _knownMentionIds = [];
+    private HashSet<long> _knownExceptionIds = [];
     private int _exceptionQueryLimit = 10;
     private GridLength _expandedDialogWidth = new(290);
     private ChatPresentationMode _chatPresentationMode;
@@ -82,7 +92,9 @@ public partial class MainWindow : Window
         VisualChat.PreviewRequested += VisualChat_PreviewRequested;
         VisualChat.EditRequested += BeginEditMessage;
         VisualChat.DeleteRequested += VisualChat_DeleteRequested;
+        VisualChat.CopyTextRequested += VisualChat_CopyTextRequested;
         VisualChat.CopyLinkRequested += VisualChat_CopyLinkRequested;
+        VisualChat.CopyMediaRequested += VisualChat_CopyMediaRequested;
         VisualChat.ForwardRequested += VisualChat_ForwardRequested;
         VisualChat.ReactionRequested += VisualChat_ReactionRequested;
         _chatPresentationMode = Enum.TryParse<ChatPresentationMode>(_settings.ChatViewMode, true, out var mode)
@@ -112,19 +124,24 @@ public partial class MainWindow : Window
         _telegram.ConnectionStateChanged += state => Dispatcher.BeginInvoke(() => HandleConnectionState(state));
         _telegram.OutboxChanged += Telegram_OutboxChanged;
         _telegram.AutomationActivity += Telegram_AutomationActivity;
-        _scheduler.Status += text => Dispatcher.BeginInvoke(() =>
+        _scheduler.Status += text =>
         {
-            SetStatus(text);
-            AppendConsole(MonitorConsole, $"[{DateTime.Now:HH:mm:ss}] [任务] {text}");
-            MarkTabUnread(SchedulesTab);
-            MarkTabUnread(MonitorTab);
-        });
-        _intervalChatAutomation.Status += text => Dispatcher.BeginInvoke(() =>
+            var notifyUnread = _unreadNotificationsReady;
+            Dispatcher.BeginInvoke(() =>
+            {
+                SetStatus(text);
+                AppendConsole(MonitorConsole, $"[{DateTime.Now:HH:mm:ss}] [任务] {text}");
+                if (notifyUnread) MarkTabUnread(MonitorTab);
+            });
+        };
+        _intervalChatAutomation.Status += text =>
         {
-            SetStatus(text);
-            RenderIntervalChatRules();
-            MarkTabUnread(IntervalTab);
-        });
+            Dispatcher.BeginInvoke(() =>
+            {
+                SetStatus(text);
+                RenderIntervalChatRules();
+            });
+        };
         _logger.EntryWritten += Logger_EntryWritten;
         _exceptionMonitor.RecordsChanged += ExceptionMonitor_RecordsChanged;
         _mentionMonitor.RecordsChanged += MentionMonitor_RecordsChanged;
@@ -140,6 +157,7 @@ public partial class MainWindow : Window
         Closed += (_, _) => AccountWorkspaceManager.Unregister(this);
         if (loginLocalName != "新账户") Title = $"Telegram 控制台助手 - {loginLocalName}";
         _initialized = true;
+        ClearAllUnreadIndicators();
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -279,6 +297,9 @@ public partial class MainWindow : Window
 
     private async Task DeactivateAccountAsync()
     {
+        _unreadNotificationsReady = false;
+        ResetUnreadBaselines();
+        ClearAllUnreadIndicators();
         _activeAccount = null;
         UpdateTrayAccount();
         _exceptionMonitor.DeactivateAccount();
@@ -304,6 +325,8 @@ public partial class MainWindow : Window
         MentionList.ItemsSource = null;
         OutboxList.ItemsSource = null;
         ClearQuoteSelection();
+        _chatTimeline.Clear();
+        _chatDeletions.Clear();
         ChatConsole.ClearOutput();
         VisualChat.ClearMessages();
         MonitorConsole.ClearOutput();
@@ -472,6 +495,9 @@ public partial class MainWindow : Window
 
     private async Task ActivateAccountAsync()
     {
+        _unreadNotificationsReady = false;
+        ResetUnreadBaselines();
+        ClearAllUnreadIndicators();
         var userId = _telegram.CurrentUserId;
         if (userId == 0) throw new InvalidOperationException("无法取得当前 Telegram 账号 ID");
         if (!_settings.Accounts.TryGetValue(userId, out var account))
@@ -504,6 +530,8 @@ public partial class MainWindow : Window
 
         _allDialogs = [];
         DialogsList.ItemsSource = null;
+        _chatTimeline.Clear();
+        _chatDeletions.Clear();
         ChatConsole.ClearOutput();
         VisualChat.ClearMessages();
         MonitorConsole.ClearOutput();
@@ -523,6 +551,8 @@ public partial class MainWindow : Window
         await RefreshExceptionsAsync();
         await RefreshMentionsAsync();
         await RefreshOutboxAsync();
+        ClearAllUnreadIndicators();
+        _unreadNotificationsReady = true;
         Title = $"Telegram 控制台助手 - {account.LocalName} ({account.DisplayName})";
         UpdateLoginIdentity(account.LocalName, account.DisplayName);
         AccountWorkspaceManager.Register(this, userId);
@@ -621,6 +651,7 @@ public partial class MainWindow : Window
     {
         DialogsList.SelectedItem = null;
         ClearQuoteSelection();
+        _chatTimeline.Clear();
         ChatConsole.ClearOutput();
         VisualChat.ClearMessages();
         SetStatus(L("BlankStatus"));
@@ -669,13 +700,14 @@ public partial class MainWindow : Window
             _loadingHistory = true;
             try
             {
-                ChatConsole.ClearOutput();
                 ClearQuoteSelection();
-                AppendConsole(ChatConsole, $"--- {dialog.Name} ---");
                 var history = await _telegram.LoadHistoryAsync(dialog, QuoteHistoryLimit);
+                var availableReactions = await _telegram.LoadAvailableReactionsAsync(dialog);
+                _chatTimeline.Clear();
+                _chatTimeline.AddRange(history.OrderBy(x => x.Time).ThenBy(x => x.MessageId));
+                RenderChatTimeline(dialog);
                 VisualChat.ReplaceMessages(history);
-                foreach (var line in history)
-                    AppendChatLine(ChatConsole, line);
+                VisualChat.SetAvailableReactions(availableReactions);
             }
             finally
             {
@@ -711,9 +743,9 @@ public partial class MainWindow : Window
         ConsoleViewColumn.Width = showConsole ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
         ChatViewSplitterColumn.Width = _chatPresentationMode == ChatPresentationMode.Split ? new GridLength(6) : new GridLength(0);
         VisualViewColumn.Width = showVisual ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
-        ConsoleViewButton.FontWeight = _chatPresentationMode == ChatPresentationMode.Console ? FontWeights.Bold : FontWeights.Normal;
-        VisualViewButton.FontWeight = _chatPresentationMode == ChatPresentationMode.Visual ? FontWeights.Bold : FontWeights.Normal;
-        SplitViewButton.FontWeight = _chatPresentationMode == ChatPresentationMode.Split ? FontWeights.Bold : FontWeights.Normal;
+        ConsoleViewButton.IsChecked = _chatPresentationMode == ChatPresentationMode.Console;
+        VisualViewButton.IsChecked = _chatPresentationMode == ChatPresentationMode.Visual;
+        SplitViewButton.IsChecked = _chatPresentationMode == ChatPresentationMode.Split;
     }
 
     private async void VisualChat_MediaOpenRequested(ChatLine line)
@@ -724,6 +756,20 @@ public partial class MainWindow : Window
             SetStatus(LF("DownloadingMedia", line.MediaLabel));
             var path = await _telegram.DownloadMediaAsync(dialog, line.MessageId);
             if (MediaFileLauncher.Open(this, path)) SetStatus(LF("MediaOpened", Path.GetFileName(path)));
+        });
+    }
+
+    private async void VisualChat_CopyMediaRequested(ChatLine line)
+    {
+        if (DialogsList.SelectedItem is not DialogItem dialog || dialog.Id != line.ChatId) return;
+        await RunUiAsync(async () =>
+        {
+            SetStatus(LF("DownloadingMedia", line.MediaLabel));
+            var path = await _telegram.DownloadMediaAsync(dialog, line.MessageId);
+            var copyAsImage = line.Media?.Kind is ChatMediaKind.Photo or ChatMediaKind.Sticker;
+            if (!await ClipboardHelper.TrySetMediaAsync(path, copyAsImage))
+                throw new InvalidOperationException("媒体复制失败，请稍后重试");
+            SetStatus($"媒体已复制：{Path.GetFileName(path)}");
         });
     }
 
@@ -746,6 +792,7 @@ public partial class MainWindow : Window
         if (!line.IsOutgoing || line.MessageId <= 0) return;
         ClearQuoteSelection();
         _editingMessageId = line.MessageId;
+        _editingMessage = line;
         QuotePreviewText.Text = $"✎ 编辑 #{line.MessageId}: {line.DisplayText}";
         QuotePreviewPanel.Visibility = Visibility.Visible;
         MessageBox.Text = line.Text;
@@ -760,10 +807,18 @@ public partial class MainWindow : Window
             $"确定撤回消息 #{line.MessageId}？", "TelegramConsole",
             MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (result != MessageBoxResult.Yes) return;
-        await RunUiAsync(async () => await _telegram.DeleteMessagesAsync(dialog, [line.MessageId], true));
+        await RunUiAsync(async () =>
+        {
+            await _telegram.DeleteMessagesAsync(dialog, [line.MessageId], true);
+            var deletion = new MessageDeletion(
+                DateTime.Now, dialog.Id, dialog.Kind, dialog.Name,
+                [new DeletedMessageInfo(line.MessageId, line.Sender, line.DisplayText)]);
+            ApplyDeletedMessage(deletion, deletion.Messages[0], notifyUnread: false);
+            SetStatus($"消息 #{line.MessageId} 已撤回");
+        });
     }
 
-    private void VisualChat_CopyLinkRequested(ChatLine line)
+    private async void VisualChat_CopyLinkRequested(ChatLine line)
     {
         if (DialogsList.SelectedItem is not DialogItem dialog || dialog.Id != line.ChatId) return;
         var link = _telegram.GetMessageLink(dialog, line.MessageId);
@@ -771,15 +826,54 @@ public partial class MainWindow : Window
             SetStatus("当前会话无法生成公开消息链接");
         else
         {
-            System.Windows.Clipboard.SetText(link);
-            SetStatus("消息链接已复制");
+            SetStatus(await ClipboardHelper.TrySetTextAsync(link)
+                ? $"消息链接已复制：{link}"
+                : "复制失败，请稍后重试");
         }
+    }
+
+    private async void VisualChat_CopyTextRequested(ChatLine line)
+    {
+        if (string.IsNullOrWhiteSpace(line.DisplayText)) return;
+        SetStatus(await ClipboardHelper.TrySetTextAsync(line.DisplayText)
+            ? "消息正文已复制"
+            : "复制失败，请稍后重试");
     }
 
     private async void VisualChat_ReactionRequested(ChatLine line, string emoji)
     {
         if (DialogsList.SelectedItem is not DialogItem dialog || dialog.Id != line.ChatId) return;
-        await RunUiAsync(async () => await _telegram.SendReactionAsync(dialog, line.MessageId, emoji));
+        await RunUiAsync(async () =>
+        {
+            await _telegram.SendReactionAsync(dialog, line.MessageId, emoji);
+            ApplyChatLineToCurrentView(line with { Reactions = ApplyLocalReaction(line.Reactions, emoji) });
+            SetStatus($"已回应 {emoji} 到消息 #{line.MessageId}");
+        });
+    }
+
+    private static IReadOnlyList<ChatReaction> ApplyLocalReaction(
+        IReadOnlyList<ChatReaction>? current,
+        string emoji)
+    {
+        var reactions = (current ?? []).ToList();
+        for (var index = reactions.Count - 1; index >= 0; index--)
+        {
+            var reaction = reactions[index];
+            if (!reaction.IsChosen || reaction.Symbol == emoji) continue;
+            if (reaction.Count <= 1) reactions.RemoveAt(index);
+            else reactions[index] = reaction with { Count = reaction.Count - 1, IsChosen = false };
+        }
+
+        var targetIndex = reactions.FindIndex(x => x.Symbol == emoji);
+        if (targetIndex < 0)
+            reactions.Add(new ChatReaction(emoji, 1, true));
+        else if (!reactions[targetIndex].IsChosen)
+            reactions[targetIndex] = reactions[targetIndex] with
+            {
+                Count = reactions[targetIndex].Count + 1,
+                IsChosen = true
+            };
+        return reactions;
     }
 
     private async void VisualChat_ForwardRequested(ChatLine line)
@@ -796,10 +890,27 @@ public partial class MainWindow : Window
 
     private async void MessageBox_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter || Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) return;
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (key != Key.Enter) return;
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Alt))
+        {
+            e.Handled = true;
+            InsertLineBreak(MessageBox);
+            return;
+        }
         e.Handled = true;
         if (string.IsNullOrWhiteSpace(MessageBox.Text)) return;
         await RunUiAsync(SendMessageAsync);
+    }
+
+    private static void InsertLineBreak(System.Windows.Controls.TextBox textBox)
+    {
+        var start = textBox.SelectionStart;
+        var length = textBox.SelectionLength;
+        var lineBreak = Environment.NewLine;
+        textBox.Text = textBox.Text.Remove(start, length).Insert(start, lineBreak);
+        textBox.CaretIndex = start + lineBreak.Length;
+        textBox.SelectionLength = 0;
     }
 
     private void MessageBox_TextChanged(object sender, TextChangedEventArgs e) => UpdateChatSendButton();
@@ -816,7 +927,10 @@ public partial class MainWindow : Window
         {
             if (_editingMessageId is int editingMessageId)
             {
+                var editingMessage = _editingMessage;
                 await _telegram.EditMessageAsync(dialog, editingMessageId, text);
+                if (editingMessage is not null && editingMessage.MessageId == editingMessageId)
+                    ApplyChatLineToCurrentView(editingMessage with { Text = text, IsEdited = true });
                 MessageBox.Clear();
                 SetStatus($"消息 #{editingMessageId} 已编辑");
                 ClearQuoteSelection();
@@ -873,6 +987,7 @@ public partial class MainWindow : Window
     private void SelectQuoteTarget(QuoteTargetItem target)
     {
         _editingMessageId = null;
+        _editingMessage = null;
         _selectedQuoteTarget = target;
         QuotePreviewText.Text = $"↪ {target.DisplayText}";
         QuotePreviewPanel.Visibility = Visibility.Visible;
@@ -882,6 +997,7 @@ public partial class MainWindow : Window
     private void ClearQuoteSelection()
     {
         _editingMessageId = null;
+        _editingMessage = null;
         _selectedQuoteTarget = null;
         _contextQuoteTarget = null;
         QuotePreviewText.Text = string.Empty;
@@ -902,35 +1018,111 @@ public partial class MainWindow : Window
         if (_settings.MonitorEnabled && line.IsGroup)
         {
             AppendChatLine(MonitorConsole, line);
-            MarkTabUnread(MonitorTab);
+            if (!line.IsEdited) MarkTabUnread(MonitorTab);
         }
         if (DialogsList.SelectedItem is DialogItem current && current.Id == line.ChatId)
         {
-            AppendChatLine(ChatConsole, line);
-            VisualChat.UpsertMessage(line);
-            MarkTabUnread(ChatTab);
+            if (ApplyChatLineToCurrentView(line)) MarkTabUnread(ChatTab);
         }
+    }
+
+    private bool ApplyChatLineToCurrentView(ChatLine line)
+    {
+        if (DialogsList.SelectedItem is not DialogItem current || current.Id != line.ChatId) return false;
+        var isNew = line.MessageId <= 0 || !_chatTimeline.Any(x => x.MessageId == line.MessageId &&
+            x.ChatId == line.ChatId && string.Equals(x.ChatKind, line.ChatKind, StringComparison.Ordinal));
+        var requiresRender = MergeChatTimeline(line);
+        VisualChat.UpsertMessage(line);
+        if (requiresRender) RenderChatTimeline(current);
+        else AppendChatLine(ChatConsole, line);
+        return isNew;
+    }
+
+    private bool MergeChatTimeline(ChatLine line)
+    {
+        var existingIndex = line.MessageId > 0
+            ? _chatTimeline.FindIndex(x => x.MessageId == line.MessageId && x.ChatId == line.ChatId &&
+                                           string.Equals(x.ChatKind, line.ChatKind, StringComparison.Ordinal))
+            : -1;
+        if (existingIndex >= 0)
+        {
+            _chatTimeline[existingIndex] = line;
+            return true;
+        }
+
+        var previous = _chatTimeline.LastOrDefault();
+        var requiresRender = previous is not null &&
+                             (line.Time < previous.Time ||
+                              line.Time == previous.Time && line.MessageId > 0 && previous.MessageId > line.MessageId);
+        _chatTimeline.Add(line);
+        var ordered = _chatTimeline.OrderBy(x => x.Time).ThenBy(x => x.MessageId).TakeLast(QuoteHistoryLimit).ToArray();
+        if (ordered.Length != _chatTimeline.Count) requiresRender = true;
+        _chatTimeline.Clear();
+        _chatTimeline.AddRange(ordered);
+        return requiresRender;
+    }
+
+    private void RenderChatTimeline(DialogItem dialog)
+    {
+        var blocks = new List<TerminalBlock>
+        {
+            new([($"--- {dialog.Name} ---", Brushes.White, null)])
+        };
+        var timeline = _chatTimeline
+            .Select(line => (line.Time, Order: 0, line.MessageId, Block: CreateChatTerminalBlock(line)))
+            .Concat(_chatDeletions.Values
+                .Where(x => x.Deletion.ChatId == dialog.Id &&
+                            string.Equals(x.Deletion.ChatKind, dialog.Kind, StringComparison.Ordinal))
+                .Select(x => (x.Deletion.Time, Order: 1, x.Message.MessageId,
+                    Block: CreateDeletionTerminalBlock(x.Deletion, x.Message))))
+            .OrderBy(x => x.Time)
+            .ThenBy(x => x.MessageId)
+            .ThenBy(x => x.Order);
+        blocks.AddRange(timeline.Select(x => x.Block));
+        ChatConsole.ReplaceBlocks(blocks);
     }
 
     private void Telegram_MessageDeleted(MessageDeletion deletion) => Dispatcher.BeginInvoke(() =>
     {
         foreach (var message in deletion.Messages)
-        {
-            var sender = string.IsNullOrWhiteSpace(message.Sender) ? "未知发送人" : message.Sender;
-            var marker = $"[{deletion.Time:HH:mm:ss}] [{deletion.Chat}] ↩ 已撤回 #{message.MessageId} {sender}: {message.Text}";
-            if (_settings.MonitorEnabled && deletion.ChatKind is "Chat" or "Channel")
-            {
-                AppendConsole(MonitorConsole, marker, Brushes.Orange);
-                MarkTabUnread(MonitorTab);
-            }
-            if (DialogsList.SelectedItem is DialogItem current && current.Id == deletion.ChatId)
-            {
-                AppendConsole(ChatConsole, marker, Brushes.Orange);
-                VisualChat.MarkDeleted(message);
-                MarkTabUnread(ChatTab);
-            }
-        }
+            ApplyDeletedMessage(deletion, message, notifyUnread: true);
     });
+
+    private void ApplyDeletedMessage(
+        MessageDeletion deletion,
+        DeletedMessageInfo message,
+        bool notifyUnread)
+    {
+        var cacheKey = (deletion.ChatKind, deletion.ChatId, message.MessageId);
+        _chatDeletions[cacheKey] = new CachedDeletion(deletion, message);
+        while (_chatDeletions.Count > QuoteHistoryLimit)
+            _chatDeletions.Remove(_chatDeletions.First().Key);
+        var deletionBlock = CreateDeletionTerminalBlock(deletion, message);
+        var deduplicationKey = ("deleted", deletion.ChatKind, deletion.ChatId, message.MessageId);
+        if (_settings.MonitorEnabled && deletion.ChatKind is "Chat" or "Channel")
+        {
+            MonitorConsole.AppendLines(deletionBlock.Lines, deduplicationKey);
+            if (notifyUnread) MarkTabUnread(MonitorTab);
+        }
+        if (DialogsList.SelectedItem is DialogItem current && current.Id == deletion.ChatId &&
+            string.Equals(current.Kind, deletion.ChatKind, StringComparison.Ordinal))
+        {
+            ChatConsole.AppendLines(deletionBlock.Lines, deduplicationKey);
+            VisualChat.MarkDeleted(message);
+            if (notifyUnread) MarkTabUnread(ChatTab);
+        }
+    }
+
+    private static TerminalBlock CreateDeletionTerminalBlock(MessageDeletion deletion, DeletedMessageInfo message)
+    {
+        var sender = string.IsNullOrWhiteSpace(message.Sender) ? "未知发送人" : message.Sender;
+        var marker = $"[{deletion.Time:HH:mm:ss}] [{deletion.Chat}] ↩ 已撤回 #{message.MessageId} {sender}: {message.Text}";
+        return new TerminalBlock(
+            [(marker, Brushes.Orange, null)],
+            ("deleted", deletion.ChatKind, deletion.ChatId, message.MessageId));
+    }
+
+    private sealed record CachedDeletion(MessageDeletion Deletion, DeletedMessageInfo Message);
 
     private void MainTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -940,7 +1132,21 @@ public partial class MainWindow : Window
 
     private void MarkTabUnread(TabItem tab)
     {
-        if (!ReferenceEquals(MainTabs.SelectedItem, tab)) tab.Tag = Visibility.Visible;
+        if (_unreadNotificationsReady && !ReferenceEquals(MainTabs.SelectedItem, tab))
+            tab.Tag = Visibility.Visible;
+    }
+
+    private void ClearAllUnreadIndicators()
+    {
+        foreach (var tab in MainTabs.Items.OfType<TabItem>()) tab.Tag = Visibility.Collapsed;
+    }
+
+    private void ResetUnreadBaselines()
+    {
+        _outboxBaselineReady = _mentionBaselineReady = _exceptionBaselineReady = false;
+        _knownOutboxIds.Clear();
+        _knownMentionIds.Clear();
+        _knownExceptionIds.Clear();
     }
 
     private void MonitorEnabledBox_Changed(object sender, RoutedEventArgs e)
@@ -1347,12 +1553,15 @@ public partial class MainWindow : Window
         _trayIcon = null;
     }
 
-    private void Logger_EntryWritten(AppLogEntry entry) =>
+    private void Logger_EntryWritten(AppLogEntry entry)
+    {
+        var notifyUnread = _unreadNotificationsReady;
         Dispatcher.BeginInvoke(() =>
         {
             AppendLogEntry(entry);
-            MarkTabUnread(RuntimeLogsTab);
+            if (notifyUnread) MarkTabUnread(RuntimeLogsTab);
         });
+    }
 
     private void AppendLogEntry(AppLogEntry entry)
     {
@@ -1383,26 +1592,40 @@ public partial class MainWindow : Window
 
     private void ClearLogDisplay_Click(object sender, RoutedEventArgs e) => LogConsole.ClearOutput();
 
-    private void Telegram_OutboxChanged() => Dispatcher.BeginInvoke(async () =>
+    private void Telegram_OutboxChanged()
     {
-        MarkTabUnread(OutboxTab);
-        try { await RefreshOutboxAsync(); }
-        catch (Exception ex) { _logger.Error("Outbox", "刷新发件箱失败", ex); }
-    });
+        var notifyUnread = _unreadNotificationsReady;
+        Dispatcher.BeginInvoke(async () =>
+        {
+            try
+            {
+                if (await RefreshOutboxAsync() && notifyUnread) MarkTabUnread(OutboxTab);
+            }
+            catch (Exception ex) { _logger.Error("Outbox", "刷新发件箱失败", ex); }
+        });
+    }
 
-    private void Telegram_AutomationActivity(string message) => Dispatcher.BeginInvoke(() =>
+    private void Telegram_AutomationActivity(string message)
     {
-        SetStatus(message);
-        AppendConsole(MonitorConsole, $"[{DateTime.Now:HH:mm:ss}] [规则] {message}");
-        MarkTabUnread(MonitorTab);
-    });
+        var notifyUnread = _unreadNotificationsReady;
+        Dispatcher.BeginInvoke(() =>
+        {
+            SetStatus(message);
+            AppendConsole(MonitorConsole, $"[{DateTime.Now:HH:mm:ss}] [规则] {message}");
+            if (notifyUnread) MarkTabUnread(MonitorTab);
+        });
+    }
 
     private async void RefreshOutbox_Click(object sender, RoutedEventArgs e) =>
-        await RunUiAsync(RefreshOutboxAsync);
+        await RunUiAsync(async () => { await RefreshOutboxAsync(); });
 
-    private async Task RefreshOutboxAsync()
+    private async Task<bool> RefreshOutboxAsync()
     {
         var records = await _telegram.QueryOutboxAsync();
+        var currentIds = records.Select(x => x.Id).ToHashSet();
+        var hasAddedRows = _outboxBaselineReady && currentIds.Except(_knownOutboxIds).Any();
+        _knownOutboxIds = currentIds;
+        _outboxBaselineReady = true;
         OutboxList.ItemsSource = records.Select(x => new OutboxRow(
             x.Id,
             x.CreatedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
@@ -1414,6 +1637,7 @@ public partial class MainWindow : Window
             x.AttemptCount,
             x.TelegramMessageId?.ToString() ?? "-",
             x.Error)).ToList();
+        return hasAddedRows;
     }
 
     private async void RetryOutbox_Click(object sender, RoutedEventArgs e) => await RunUiAsync(async () =>
@@ -1487,17 +1711,21 @@ public partial class MainWindow : Window
         });
 
     private async void RefreshMentions_Click(object sender, RoutedEventArgs e) =>
-        await RunUiAsync(RefreshMentionsAsync);
+        await RunUiAsync(async () => { await RefreshMentionsAsync(); });
 
     private async void ResetMentionQuery_Click(object sender, RoutedEventArgs e)
     {
         MentionKeywordBox.Clear();
-        await RunUiAsync(RefreshMentionsAsync);
+        await RunUiAsync(async () => { await RefreshMentionsAsync(); });
     }
 
-    private async Task RefreshMentionsAsync()
+    private async Task<bool> RefreshMentionsAsync()
     {
         var records = await _mentionMonitor.QueryAsync(new MentionQuery(MentionKeywordBox.Text.Trim()));
+        var currentIds = records.Select(x => x.Id).ToHashSet();
+        var hasAddedRows = _mentionBaselineReady && currentIds.Except(_knownMentionIds).Any();
+        _knownMentionIds = currentIds;
+        _mentionBaselineReady = true;
         MentionList.ItemsSource = records.Select(x => new MentionRow(
             x.Id,
             x.OccurredAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
@@ -1505,15 +1733,21 @@ public partial class MainWindow : Window
             x.Sender,
             x.Message,
             x.NotificationStatus)).ToList();
+        return hasAddedRows;
     }
 
-    private void MentionMonitor_RecordsChanged() =>
+    private void MentionMonitor_RecordsChanged()
+    {
+        var notifyUnread = _unreadNotificationsReady;
         Dispatcher.BeginInvoke(async () =>
         {
-            MarkTabUnread(MentionsTab);
-            try { await RefreshMentionsAsync(); }
+            try
+            {
+                if (await RefreshMentionsAsync() && notifyUnread) MarkTabUnread(MentionsTab);
+            }
             catch (Exception ex) { _logger.Error("MentionMonitor", "刷新@消息列表失败", ex); }
         });
+    }
 
     private void MentionList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
@@ -1568,7 +1802,7 @@ public partial class MainWindow : Window
     private async void RefreshExceptions_Click(object sender, RoutedEventArgs e)
     {
         _exceptionQueryLimit = 500;
-        await RunUiAsync(RefreshExceptionsAsync);
+        await RunUiAsync(async () => { await RefreshExceptionsAsync(); });
     }
 
     private async void RetryExceptionNotifications_Click(object sender, RoutedEventArgs e) =>
@@ -1582,7 +1816,7 @@ public partial class MainWindow : Window
             SetStatus($"已重新处理 {ids.Count} 条异常通知");
         });
 
-    private async Task RefreshExceptionsAsync()
+    private async Task<bool> RefreshExceptionsAsync()
     {
         var from = ToLocalDateOffset(ExceptionFromDatePicker.SelectedDate);
         var toExclusive = ToLocalDateOffset(ExceptionToDatePicker.SelectedDate?.AddDays(1));
@@ -1594,6 +1828,10 @@ public partial class MainWindow : Window
         };
         var records = await _exceptionMonitor.QueryAsync(new ExceptionQuery(
             from, toExclusive, level, ExceptionKeywordBox.Text.Trim(), _exceptionQueryLimit));
+        var currentIds = records.Select(x => x.Id).ToHashSet();
+        var hasAddedRows = _exceptionBaselineReady && currentIds.Except(_knownExceptionIds).Any();
+        _knownExceptionIds = currentIds;
+        _exceptionBaselineReady = true;
         ExceptionList.ItemsSource = records.Select(x => new ExceptionRow(
             x.Id,
             x.OccurredAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
@@ -1604,6 +1842,7 @@ public partial class MainWindow : Window
             x.TelegramStatus,
             x.EmailStatus)).ToList();
         SetStatus(LF("ExceptionQueryComplete", records.Count));
+        return hasAddedRows;
     }
 
     private async void ResetExceptionQuery_Click(object sender, RoutedEventArgs e)
@@ -1613,7 +1852,7 @@ public partial class MainWindow : Window
         ExceptionQueryLevelBox.SelectedIndex = 0;
         ExceptionKeywordBox.Clear();
         _exceptionQueryLimit = 10;
-        await RunUiAsync(RefreshExceptionsAsync);
+        await RunUiAsync(async () => { await RefreshExceptionsAsync(); });
     }
 
     private static DateTimeOffset? ToLocalDateOffset(DateTime? date)
@@ -1623,13 +1862,18 @@ public partial class MainWindow : Window
         return new DateTimeOffset(localDate, TimeZoneInfo.Local.GetUtcOffset(localDate));
     }
 
-    private void ExceptionMonitor_RecordsChanged() =>
+    private void ExceptionMonitor_RecordsChanged()
+    {
+        var notifyUnread = _unreadNotificationsReady;
         Dispatcher.BeginInvoke(async () =>
         {
-            MarkTabUnread(ExceptionsTab);
-            try { await RefreshExceptionsAsync(); }
+            try
+            {
+                if (await RefreshExceptionsAsync() && notifyUnread) MarkTabUnread(ExceptionsTab);
+            }
             catch (Exception ex) { _logger.Error("ExceptionMonitor", "刷新异常列表失败", ex); }
         });
+    }
 
     private void ExceptionList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
@@ -1688,7 +1932,15 @@ public partial class MainWindow : Window
 
     private static void AppendChatLine(BufferedTerminal box, ChatLine line)
     {
+        var block = CreateChatTerminalBlock(line);
+        box.AppendLines(block.Lines, block.DeduplicationKey, block.InlineLinks);
+    }
+
+    private static TerminalBlock CreateChatTerminalBlock(ChatLine line)
+    {
         var body = $"[{line.Time:HH:mm:ss}] [{line.Chat}] {line.Sender}: {line.DisplayText}";
+        if (line.IsEdited) body += "  [已编辑]";
+        body += FormatReactions(line.Reactions);
         var color = line.IsMentioned ? Brushes.DodgerBlue : line.IsOutgoing ? Brushes.LimeGreen : Brushes.White;
         var messageTag = line.MessageId > 0 ? QuoteTargetItem.From(line) : null;
         object? deduplicationKey = line.MessageId > 0
@@ -1696,18 +1948,23 @@ public partial class MainWindow : Window
             : null;
         if (line.ReplyToMessageId is not int replyId)
         {
-            box.AppendLines(
+            return new TerminalBlock(
                 [(body, color, messageTag)], deduplicationKey,
                 MediaLinkFactory.Create(line, body, lineIndex: 0));
-            return;
         }
         var sender = string.IsNullOrWhiteSpace(line.ReplySender) ? $"消息 #{replyId}" : line.ReplySender;
-        box.AppendLines(
+        return new TerminalBlock(
         [
             ($"↪ {sender}: {PreviewReply(line.ReplyText)}", Brushes.Gray,
                 new QuoteTargetItem(replyId, sender, line.ReplyText)),
             (body, color, messageTag)
         ], deduplicationKey, MediaLinkFactory.Create(line, body, lineIndex: 1));
+    }
+
+    private static string FormatReactions(IReadOnlyList<ChatReaction>? reactions)
+    {
+        if (reactions is null || reactions.Count == 0) return "";
+        return "  " + string.Join(" ", reactions.Select(x => x.Count > 1 ? $"{x.Symbol}×{x.Count}" : x.Symbol));
     }
 
     private static string PreviewReply(string text)

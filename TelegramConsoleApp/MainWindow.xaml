@@ -174,12 +174,25 @@
                         </Grid.RowDefinitions>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
                             <TextBlock Text="{DynamicResource MessageView}" VerticalAlignment="Center" Foreground="#64748B" Margin="0,0,10,0" />
-                            <Button x:Name="ConsoleViewButton" Content="{DynamicResource ConsoleView}" Padding="16,5" Margin="0,0,6,5"
-                                    Click="ConsoleViewButton_Click" />
-                            <Button x:Name="VisualViewButton" Content="{DynamicResource VisualView}" Padding="16,5" Margin="0,0,6,5"
-                                    Click="VisualViewButton_Click" />
-                            <Button x:Name="SplitViewButton" Content="{DynamicResource SplitView}" Padding="16,5" Margin="0,0,6,5"
-                                    Click="SplitViewButton_Click" />
+                            <Border BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="7"
+                                    Background="White" Margin="0,0,0,4">
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton x:Name="ConsoleViewButton" Content="{DynamicResource ConsoleView}"
+                                                 GroupName="ChatViewMode" Tag="Left"
+                                                 Style="{StaticResource ViewModeSegmentStyle}"
+                                                 Click="ConsoleViewButton_Click" />
+                                    <Border Width="1" Background="#E2E8F0" />
+                                    <RadioButton x:Name="VisualViewButton" Content="{DynamicResource VisualView}"
+                                                 GroupName="ChatViewMode"
+                                                 Style="{StaticResource ViewModeSegmentStyle}"
+                                                 Click="VisualViewButton_Click" />
+                                    <Border Width="1" Background="#E2E8F0" />
+                                    <RadioButton x:Name="SplitViewButton" Content="{DynamicResource SplitView}"
+                                                 GroupName="ChatViewMode" Tag="Right"
+                                                 Style="{StaticResource ViewModeSegmentStyle}"
+                                                 Click="SplitViewButton_Click" />
+                                </StackPanel>
+                            </Border>
                         </StackPanel>
                         <Grid Grid.Row="1">
                             <Grid.ColumnDefinitions>
@@ -220,9 +233,9 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="100" />
                             </Grid.ColumnDefinitions>
-                            <TextBox x:Name="MessageBox" AcceptsReturn="True" KeyDown="MessageBox_KeyDown"
+                            <TextBox x:Name="MessageBox" AcceptsReturn="True" PreviewKeyDown="MessageBox_KeyDown"
                                      TextChanged="MessageBox_TextChanged"
-                                     ToolTip="Enter 发送，Shift+Enter 换行" Margin="0,0,8,0" />
+                                     ToolTip="Enter 发送，Alt+Enter 换行" Margin="0,0,8,0" />
                             <Button x:Name="SendButton" Grid.Column="1" Content="{DynamicResource Send}" Click="SendButton_Click"
                                     Style="{StaticResource PrimaryButtonStyle}" Margin="0" IsEnabled="False" />
                         </Grid>

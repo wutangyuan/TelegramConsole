@@ -158,10 +158,27 @@ public partial class ChatConsoleWindow : Window
 
     private async void InputBox_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter) return;
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (key != Key.Enter) return;
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Alt))
+        {
+            e.Handled = true;
+            InsertLineBreak(InputBox);
+            return;
+        }
         e.Handled = true;
         if (string.IsNullOrWhiteSpace(InputBox.Text)) return;
         await SendAsync();
+    }
+
+    private static void InsertLineBreak(System.Windows.Controls.TextBox textBox)
+    {
+        var start = textBox.SelectionStart;
+        var length = textBox.SelectionLength;
+        var lineBreak = Environment.NewLine;
+        textBox.Text = textBox.Text.Remove(start, length).Insert(start, lineBreak);
+        textBox.CaretIndex = start + lineBreak.Length;
+        textBox.SelectionLength = 0;
     }
 
     private void InputBox_TextChanged(object sender, TextChangedEventArgs e) => UpdateSendButton();
@@ -208,6 +225,8 @@ public partial class ChatConsoleWindow : Window
     private static TerminalBlock CreateBlock(ChatLine line)
     {
         var body = $"[{line.Time:HH:mm:ss}] {line.Sender}: {line.DisplayText}";
+        if (line.IsEdited) body += "  [已编辑]";
+        body += FormatReactions(line.Reactions);
         var color = line.IsMentioned ? Brushes.DodgerBlue : line.IsOutgoing ? Brushes.LimeGreen : Brushes.White;
         var messageTag = line.MessageId > 0 ? QuoteTargetItem.From(line) : null;
         object? deduplicationKey = line.MessageId > 0
@@ -227,6 +246,12 @@ public partial class ChatConsoleWindow : Window
             ($"↪ {sender}: {value}", Brushes.Gray, new QuoteTargetItem(replyId, sender, line.ReplyText)),
             (body, color, messageTag)
         ], deduplicationKey, MediaLinkFactory.Create(line, body, lineIndex: 1));
+    }
+
+    private static string FormatReactions(IReadOnlyList<ChatReaction>? reactions)
+    {
+        if (reactions is null || reactions.Count == 0) return "";
+        return "  " + string.Join(" ", reactions.Select(x => x.Count > 1 ? $"{x.Symbol}×{x.Count}" : x.Symbol));
     }
 
     private void ConsoleBox_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)

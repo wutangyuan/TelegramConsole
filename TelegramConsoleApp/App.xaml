@@ -65,6 +65,137 @@
             </Style.Triggers>
         </Style>
 
+        <Style x:Key="ViewModeSegmentStyle" TargetType="RadioButton">
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Padding" Value="16,6" />
+            <Setter Property="Foreground" Value="#475569" />
+            <Setter Property="Background" Value="White" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="SegmentBorder" Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}" CornerRadius="0">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="Tag" Value="Left">
+                                <Setter TargetName="SegmentBorder" Property="CornerRadius" Value="6,0,0,6" />
+                            </Trigger>
+                            <Trigger Property="Tag" Value="Right">
+                                <Setter TargetName="SegmentBorder" Property="CornerRadius" Value="0,6,6,0" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="SegmentBorder" Property="Background" Value="#E8F4FC" />
+                                <Setter Property="Foreground" Value="#075985" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="SegmentBorder" Property="Background" Value="{StaticResource AccentBrush}" />
+                                <Setter Property="Foreground" Value="White" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="SegmentBorder" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="ContextMenu">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HasDropShadow" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ContextMenu">
+                        <Border Background="White" BorderBrush="#CBD5E1" BorderThickness="1"
+                                CornerRadius="8" Padding="5" SnapsToDevicePixels="True">
+                            <Border.Effect>
+                                <DropShadowEffect Color="#334155" BlurRadius="14" ShadowDepth="4" Opacity="0.22" />
+                            </Border.Effect>
+                            <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="MenuItem">
+            <Setter Property="Foreground" Value="#1E293B" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="MinWidth" Value="168" />
+            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="MenuItem">
+                        <Grid SnapsToDevicePixels="True">
+                            <Border x:Name="ItemBackground" Background="{TemplateBinding Background}"
+                                    CornerRadius="5" Padding="{TemplateBinding Padding}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="18" />
+                                    </Grid.ColumnDefinitions>
+                                    <ContentPresenter ContentSource="Header" VerticalAlignment="Center"
+                                                      RecognizesAccessKey="True" />
+                                    <Path x:Name="SubmenuArrow" Grid.Column="1" Width="5" Height="8"
+                                          HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          Fill="#64748B" Visibility="Collapsed"
+                                          Data="M 0 0 L 4 4 L 0 8 Z" />
+                                </Grid>
+                            </Border>
+                            <Popup x:Name="PART_Popup" Placement="Right" HorizontalOffset="-3" VerticalOffset="-5"
+                                   IsOpen="{TemplateBinding IsSubmenuOpen}" AllowsTransparency="True"
+                                   Focusable="False" PopupAnimation="Fade">
+                                <Border Background="White" BorderBrush="#CBD5E1" BorderThickness="1"
+                                        CornerRadius="8" Padding="5">
+                                    <Border.Effect>
+                                        <DropShadowEffect Color="#334155" BlurRadius="14" ShadowDepth="4" Opacity="0.22" />
+                                    </Border.Effect>
+                                    <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle" />
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="HasItems" Value="True">
+                                <Setter TargetName="SubmenuArrow" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="ItemBackground" Property="Background" Value="#E8F4FC" />
+                                <Setter Property="Foreground" Value="#075985" />
+                            </Trigger>
+                            <Trigger Property="IsSubmenuOpen" Value="True">
+                                <Setter TargetName="ItemBackground" Property="Background" Value="#D8EEFC" />
+                                <Setter Property="Foreground" Value="#075985" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45" />
+                                <Setter Property="Cursor" Value="Arrow" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="Separator">
+            <Setter Property="Margin" Value="8,5" />
+            <Setter Property="Height" Value="1" />
+            <Setter Property="Background" Value="#E2E8F0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Separator">
+                        <Border Height="1" Background="{TemplateBinding Background}" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style TargetType="TextBox">
             <Setter Property="MinHeight" Value="34" />
             <Setter Property="Padding" Value="9,5" />
@@ -264,12 +395,6 @@
                                 <Setter TargetName="Arrow" Property="RenderTransform">
                                     <Setter.Value><RotateTransform Angle="180" CenterX="4" CenterY="2.5" /></Setter.Value>
                                 </Setter>
-                            </Trigger>
-                            <Trigger Property="local:SearchableComboBoxBehavior.IsEnabled" Value="True">
-                                <Setter TargetName="PART_SearchBox" Property="Visibility" Value="Visible" />
-                                <Setter TargetName="PART_Popup" Property="Focusable" Value="True" />
-                                <Setter TargetName="PART_Popup" Property="AllowsTransparency" Value="False" />
-                                <Setter TargetName="PART_Popup" Property="PopupAnimation" Value="None" />
                             </Trigger>
                             <Trigger Property="IsEditable" Value="True">
                                 <Setter TargetName="SelectionContent" Property="Visibility" Value="Collapsed" />

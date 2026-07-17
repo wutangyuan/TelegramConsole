@@ -42,16 +42,15 @@
                                               Visibility="{Binding OutgoingVisibility}" />
                                     <MenuItem Header="{DynamicResource DeleteMessage}" Click="DeleteMenuItem_Click" Tag="{Binding}" />
                                     <MenuItem Header="{DynamicResource ForwardMessage}" Click="ForwardMenuItem_Click" Tag="{Binding}" />
-                                    <MenuItem Header="{DynamicResource AddReaction}">
-                                        <MenuItem Header="👍" Click="ReactionMenuItem_Click" Tag="{Binding}" />
-                                        <MenuItem Header="❤️" Click="ReactionMenuItem_Click" Tag="{Binding}" />
-                                        <MenuItem Header="😂" Click="ReactionMenuItem_Click" Tag="{Binding}" />
-                                        <MenuItem Header="🔥" Click="ReactionMenuItem_Click" Tag="{Binding}" />
-                                        <MenuItem Header="🎉" Click="ReactionMenuItem_Click" Tag="{Binding}" />
+                                    <MenuItem Header="{DynamicResource AddReaction}" Tag="{Binding}"
+                                              SubmenuOpened="ReactionMenu_SubmenuOpened">
+                                        <MenuItem Header="正在读取可用表情…" IsEnabled="False" />
                                     </MenuItem>
                                     <Separator />
                                     <MenuItem Header="{DynamicResource CopyMessage}" Click="CopyMenuItem_Click" Tag="{Binding}" />
                                     <MenuItem Header="{DynamicResource CopyMessageLink}" Click="CopyLinkMenuItem_Click" Tag="{Binding}" />
+                                    <MenuItem Header="{DynamicResource CopyMedia}" Click="CopyMediaMenuItem_Click" Tag="{Binding}"
+                                              Visibility="{Binding MediaVisibility}" />
                                     <MenuItem Header="{DynamicResource OpenMedia}" Click="MediaMenuItem_Click" Tag="{Binding}"
                                               Visibility="{Binding MediaVisibility}" />
                                 </ContextMenu>

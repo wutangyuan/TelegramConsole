@@ -51,6 +51,7 @@ public interface ITelegramService : IDisposable
     Task SendReplyAsync(DialogItem dialog, int replyToMessageId, string text, string quote = "");
     Task EditMessageAsync(DialogItem dialog, int messageId, string text);
     Task DeleteMessagesAsync(DialogItem dialog, IReadOnlyCollection<int> messageIds, bool revoke = true);
+    Task<IReadOnlyList<string>> LoadAvailableReactionsAsync(DialogItem dialog);
     Task SendReactionAsync(DialogItem dialog, int messageId, string emoji);
     Task ForwardMessagesAsync(DialogItem source, IReadOnlyCollection<int> messageIds, DialogItem target);
     string GetMessageLink(DialogItem dialog, int messageId);

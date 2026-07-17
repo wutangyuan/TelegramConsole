@@ -30,8 +30,9 @@
     <sys:String x:Key="SelectConversationForVisual">选择会话后查看可视化消息</sys:String>
     <sys:String x:Key="EditMessage">编辑消息</sys:String>
     <sys:String x:Key="DeleteMessage">撤回消息</sys:String>
-    <sys:String x:Key="CopyMessage">复制文本</sys:String>
-    <sys:String x:Key="CopyMessageLink">复制消息链接</sys:String>
+    <sys:String x:Key="CopyMessage">复制消息正文</sys:String>
+    <sys:String x:Key="CopyMessageLink">复制消息地址（URL）</sys:String>
+    <sys:String x:Key="CopyMedia">复制媒体</sys:String>
     <sys:String x:Key="AddReaction">添加回应</sys:String>
     <sys:String x:Key="ForwardedFrom">转发自</sys:String>
     <sys:String x:Key="Edited">已编辑</sys:String>
@@ -96,7 +97,7 @@
     <sys:String x:Key="SaveChanges">保存修改</sys:String>
     <sys:String x:Key="Monday">周一</sys:String><sys:String x:Key="Tuesday">周二</sys:String><sys:String x:Key="Wednesday">周三</sys:String>
     <sys:String x:Key="Thursday">周四</sys:String><sys:String x:Key="Friday">周五</sys:String><sys:String x:Key="Saturday">周六</sys:String><sys:String x:Key="Sunday">周日</sys:String>
-    <sys:String x:Key="ConsoleHelp">右键消息引用回复   enter 发送   ctrl+l 清屏   esc 取消引用/关闭</sys:String>
+    <sys:String x:Key="ConsoleHelp">右键消息引用回复   enter 发送   alt+enter 换行   ctrl+l 清屏   esc 取消引用/关闭</sys:String>
     <sys:String x:Key="SelfLegend">● 自己 </sys:String><sys:String x:Key="MessageLegend">● 消息 </sys:String><sys:String x:Key="MentionLegend">● @提及</sys:String>
     <sys:String x:Key="ConfigureTelegram">请配置 Telegram API 参数后点击“一键登录”</sys:String>
     <sys:String x:Key="ProxySaved">代理设置已加密保存：{0}</sys:String><sys:String x:Key="ProxyDisabled">代理已关闭，将使用直连</sys:String>
@@ -155,7 +156,7 @@
     <sys:String x:Key="CloudDraftEmpty">“{0}”当前没有云草稿</sys:String><sys:String x:Key="CloudDraftLoaded">已读取“{0}”的云草稿，共 {1} 个字符</sys:String><sys:String x:Key="CloudDraftSaved">“{0}”的云草稿已保存</sys:String><sys:String x:Key="CloudDraftCleared">“{0}”的云草稿已清除</sys:String>
     <sys:String x:Key="ChatIsNotForum">当前会话没有启用 Telegram 话题（Forum Topic）功能，请选择带话题的 Forum 群组。</sys:String>
     <sys:String x:Key="TelegramFloodWait">Telegram 操作过于频繁，请等待约 {0} 秒后再试。</sys:String><sys:String x:Key="TelegramNoWritePermission">当前账号没有在该会话中发送消息的权限。</sys:String><sys:String x:Key="TelegramAdminRequired">此操作需要群组或频道管理员权限。</sys:String><sys:String x:Key="TelegramChannelUnavailable">该群组或频道不可访问，可能已设为私有、被删除或当前账号已退出。</sys:String>
-    <sys:String x:Key="TelegramPrivacyRestricted">对方的隐私设置不允许执行此操作。</sys:String><sys:String x:Key="TelegramPeerInvalid">目标会话已失效，请刷新会话列表后重试。</sys:String><sys:String x:Key="TelegramMessageUnavailable">该消息不存在、已删除或不属于当前会话。</sys:String><sys:String x:Key="TelegramEditExpired">该消息已超过 Telegram 允许的编辑期限。</sys:String><sys:String x:Key="TelegramEditOwnOnly">只能编辑当前账号自己发送的消息。</sys:String><sys:String x:Key="TelegramMessageNotModified">消息内容没有变化，无需保存。</sys:String>
+    <sys:String x:Key="TelegramPrivacyRestricted">对方的隐私设置不允许执行此操作。</sys:String><sys:String x:Key="TelegramPeerInvalid">目标会话已失效，请刷新会话列表后重试。</sys:String><sys:String x:Key="TelegramMessageUnavailable">该消息不存在、已删除或不属于当前会话。</sys:String><sys:String x:Key="TelegramEditExpired">该消息已超过 Telegram 允许的编辑期限。</sys:String><sys:String x:Key="TelegramEditOwnOnly">只能编辑当前账号自己发送的消息。</sys:String><sys:String x:Key="TelegramMessageNotModified">消息内容没有变化，无需保存。</sys:String><sys:String x:Key="TelegramReactionUnavailable">当前聊天或消息不允许使用这个回应，请重新打开回应列表选择。</sys:String>
     <sys:String x:Key="TelegramDeleteForbidden">当前账号没有删除该消息的权限。</sys:String><sys:String x:Key="TelegramMessageTooLong">消息内容超过 Telegram 允许的长度。</sys:String><sys:String x:Key="TelegramTopicClosed">该话题已经关闭，无法继续发送消息。</sys:String><sys:String x:Key="TelegramTopicUnavailable">该话题不存在或已经被删除。</sys:String><sys:String x:Key="TelegramScheduleTooLate">计划发送时间超出 Telegram 允许的范围，请选择更近的日期。</sys:String><sys:String x:Key="TelegramScheduleLimit">该会话的服务器计划消息数量已达到 Telegram 上限。</sys:String><sys:String x:Key="TelegramScheduleNotAllowed">Telegram 不允许在该会话中创建服务器定时消息。</sys:String>
     <sys:String x:Key="TelegramUserBlocked">无法向该用户发送消息，请检查双方的屏蔽状态。</sys:String><sys:String x:Key="TelegramUserUnavailable">该用户账号已停用或不可用。</sys:String><sys:String x:Key="TelegramLoginExpired">Telegram 登录会话已失效，请重新登录。</sys:String><sys:String x:Key="OperationTimedOutFriendly">操作等待超时，请检查网络或代理后重试。</sys:String><sys:String x:Key="NetworkConnectionFriendly">网络或代理连接异常，请确认代理可用并检查 Telegram 在线状态。</sys:String><sys:String x:Key="EmailSendFailedFriendly">邮件发送失败，请检查 SMTP 地址、端口、SSL 和授权码。</sys:String>
     <sys:String x:Key="FileAccessDeniedFriendly">没有访问该文件或目录的权限。</sys:String><sys:String x:Key="FileNotFoundFriendly">需要的文件不存在，可能未完整解压或已被移动。</sys:String><sys:String x:Key="SystemOpenFailedFriendly">Windows 无法打开该文件或目录，请检查默认关联程序。</sys:String><sys:String x:Key="TelegramRejectedUnknown">Telegram 拒绝了此操作（错误码：{0}），详细信息已写入运行日志。</sys:String><sys:String x:Key="UnexpectedOperationFriendly">操作未完成，详细信息已写入运行日志，请稍后重试。</sys:String>

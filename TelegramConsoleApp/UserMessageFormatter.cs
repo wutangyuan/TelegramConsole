@@ -23,6 +23,7 @@ internal static partial class UserMessageFormatter
         ("MESSAGE_AUTHOR_REQUIRED", "TelegramEditOwnOnly"),
         ("MESSAGE_NOT_MODIFIED", "TelegramMessageNotModified"),
         ("MESSAGE_DELETE_FORBIDDEN", "TelegramDeleteForbidden"),
+        ("REACTION_INVALID", "TelegramReactionUnavailable"),
         ("MESSAGE_TOO_LONG", "TelegramMessageTooLong"),
         ("TOPIC_CLOSED", "TelegramTopicClosed"),
         ("TOPIC_DELETED", "TelegramTopicUnavailable"),

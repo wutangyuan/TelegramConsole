@@ -20,6 +20,7 @@ public sealed class TelegramService : ITelegramService
     private readonly Dictionary<(string Kind, long ChatId, int MessageId), TLMessage> _messageCache = [];
     private readonly Queue<(string Kind, long ChatId, int MessageId)> _messageCacheOrder = [];
     private readonly object _messageCacheSync = new();
+    private IReadOnlyList<string>? _globalReactionSymbols;
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     private readonly SemaphoreSlim _mediaDownloadLock = new(1, 1);
@@ -558,6 +559,48 @@ public sealed class TelegramService : ITelegramService
         await _client!.Messages_SendReaction(
             ResolvePeer(dialog.Id, dialog.Kind), messageId,
             [new ReactionEmoji { emoticon = emoji }]);
+    }
+
+    public async Task<IReadOnlyList<string>> LoadAvailableReactionsAsync(DialogItem dialog)
+    {
+        EnsureLogin();
+        try
+        {
+            ChatReactions? chatReactions = null;
+            if (dialog.Kind == "Channel" && _manager!.Chats.TryGetValue(dialog.Id, out var chat) && chat is Channel channel)
+            {
+                var full = await _client!.Channels_GetFullChannel(new InputChannel(channel.id, channel.access_hash));
+                chatReactions = full.full_chat.AvailableReactions;
+            }
+            else if (dialog.Kind == "Chat")
+            {
+                var full = await _client!.Messages_GetFullChat(dialog.Id);
+                chatReactions = full.full_chat.AvailableReactions;
+            }
+
+            if (dialog.Kind is "Channel" or "Chat" && chatReactions is null) return [];
+            if (chatReactions is ChatReactionsSome some)
+                return some.reactions.OfType<ReactionEmoji>().Select(x => x.emoticon).Distinct().ToArray();
+            return await LoadGlobalReactionSymbolsAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning("Telegram.Reaction", $"读取可用回应失败：{dialog.Kind}/{dialog.Id}", ex);
+            return [];
+        }
+    }
+
+    private async Task<IReadOnlyList<string>> LoadGlobalReactionSymbolsAsync()
+    {
+        if (_globalReactionSymbols is not null) return _globalReactionSymbols;
+        var available = await _client!.Messages_GetAvailableReactions(0);
+        _globalReactionSymbols = available?.reactions
+            .Where(x => !x.flags.HasFlag(AvailableReaction.Flags.inactive) &&
+                        !x.flags.HasFlag(AvailableReaction.Flags.premium))
+            .Select(x => x.reaction)
+            .Distinct()
+            .ToArray() ?? [];
+        return _globalReactionSymbols;
     }
 
     public async Task ForwardMessagesAsync(

@@ -135,14 +135,15 @@ public partial class ProductivityWindow : Window
                 group.Select(x => x.MessageId).ToArray(), target);
     });
 
-    private void CopyLink_Click(object sender, RoutedEventArgs e)
+    private async void CopyLink_Click(object sender, RoutedEventArgs e)
     {
         try
         {
             var row = SelectedMessage();
             var link = _telegram.GetMessageLink(DialogOf(row), row.MessageId);
             if (link.Length == 0) throw new InvalidOperationException(LocalizationManager.Get("NoPublicMessageLink"));
-            System.Windows.Clipboard.SetText(link);
+            if (!await ClipboardHelper.TrySetTextAsync(link))
+                throw new InvalidOperationException("复制失败，请稍后重试");
         }
         catch (Exception ex) { ShowError(UserMessageFormatter.From(ex)); }
     }
