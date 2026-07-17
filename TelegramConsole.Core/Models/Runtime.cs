@@ -46,3 +46,19 @@ public sealed record CreateManagedAccountRequest(
 
 public sealed record SendChatMessageRequest(long DialogId, string DialogKind, string DialogName, string Message);
 
+public sealed record ApplicationResourceSnapshot(
+    long WorkingSetBytes,
+    long PrivateMemoryBytes,
+    long ManagedHeapBytes,
+    ulong DiskReadBytes,
+    ulong DiskWriteBytes,
+    double DiskReadBytesPerSecond,
+    double DiskWriteBytesPerSecond,
+    long UploadedBytes,
+    long DownloadedBytes,
+    double UploadBytesPerSecond,
+    double DownloadBytesPerSecond,
+    long DataDirectoryBytes,
+    long MediaCacheBytes,
+    TimeSpan Uptime,
+    DateTimeOffset CapturedAt);

@@ -161,6 +161,20 @@ internal sealed class OutgoingMessageStore
         return result;
     }
 
+    public async Task<int> DeleteSentBeforeAsync(DateTimeOffset cutoff)
+    {
+        await using var connection = OpenConnection();
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            DELETE FROM outgoing_messages
+             WHERE status=$status
+               AND julianday(updated_at) < julianday($cutoff);
+            """;
+        command.Parameters.AddWithValue("$status", OutgoingMessageStatus.Sent.ToString());
+        command.Parameters.AddWithValue("$cutoff", cutoff.ToString("O"));
+        return await command.ExecuteNonQueryAsync();
+    }
+
     private static OutgoingEnvelope ReadEnvelope(SqliteDataReader reader) => new(
         reader.GetInt64(reader.GetOrdinal("id")),
         reader.GetInt64(reader.GetOrdinal("account_id")),

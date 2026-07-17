@@ -9,6 +9,11 @@ namespace TelegramConsole.Infrastructure;
 
 public sealed class TelegramService : ITelegramService
 {
+    private static readonly TimeSpan InternalRecoveryProbeTimeout = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan RecoveryLockTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan RebuildConnectionTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan SentOutboxRetention = TimeSpan.FromDays(20);
+    private static readonly TimeSpan OutboxCleanupInterval = TimeSpan.FromDays(1);
     private static int _wTelegramLoggingConfigured;
     private WTelegram.Client? _client;
     private WTelegram.UpdateManager? _manager;
@@ -24,12 +29,14 @@ public sealed class TelegramService : ITelegramService
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private readonly SemaphoreSlim _sendLock = new(1, 1);
     private readonly SemaphoreSlim _mediaDownloadLock = new(1, 1);
+    private readonly SemaphoreSlim _outboxCleanupLock = new(1, 1);
     private readonly object _recoverySync = new();
     private TelegramConnectionStatus? _lastConnectionStatus;
     private AppSettings? _connectionSettings;
     private Task? _recoveryTask;
     private bool _suppressDisconnectLogging;
     private bool _disposed;
+    private DateTimeOffset _nextOutboxCleanupAt = DateTimeOffset.MinValue;
     private IReadOnlyList<AutomationRule> _automationRules = [];
 
     public bool IsLoggedIn => _client?.User is not null && !_client.Disconnected;
@@ -58,6 +65,7 @@ public sealed class TelegramService : ITelegramService
 
     public async Task<string?> BeginLoginAsync(AppSettings settings)
     {
+        await CleanupOutboxIfDueAsync();
         await _connectionLock.WaitAsync();
         try
         {
@@ -93,9 +101,11 @@ public sealed class TelegramService : ITelegramService
         Log?.Invoke(logMessage);
         ReportConnection(TelegramConnectionStatus.Connecting, statusMessage);
         DisposeClientForReconnect(clearPeers);
+        WTelegram.Client client;
         try
         {
-            _client = new WTelegram.Client(settings.ApiId, settings.ApiHash, _store.GetSessionPath(settings.PhoneNumber));
+            client = new WTelegram.Client(settings.ApiId, settings.ApiHash, _store.GetSessionPath(settings.PhoneNumber));
+            _client = client;
         }
         catch (IOException ex) when (ex.Message.Contains("used by another process", StringComparison.OrdinalIgnoreCase) ||
                                     ex.Message.Contains("另一个进程", StringComparison.OrdinalIgnoreCase))
@@ -104,13 +114,14 @@ public sealed class TelegramService : ITelegramService
                 "该账户正在另一个 Telegram 控制台进程中运行，Session 已被占用。请在原窗口操作，或正常退出旧版本后再登录。",
                 ex);
         }
-        ConfigureClientConnection(_client);
-        ApplyProxy(_client, settings.Proxy);
-        _client.OnOther += OnOther;
-        _manager = _client.WithUpdateManager(OnUpdate);
-        var prompt = await _client.Login(settings.PhoneNumber);
+        ConfigureClientConnection(client);
+        ApplyProxy(client, settings.Proxy);
+        client.OnOther += OnOther;
+        _manager = client.WithUpdateManager(OnUpdate);
+        var prompt = await client.Login(settings.PhoneNumber);
         _logger.Info("Telegram", prompt is null ? "Telegram 登录成功" : $"Telegram 登录等待输入：{prompt}");
-        if (prompt is null) ReportConnection(TelegramConnectionStatus.Connected, $"Telegram 已连接：{CurrentUser}");
+        if (prompt is null && ReferenceEquals(_client, client))
+            ReportConnection(TelegramConnectionStatus.Connected, $"Telegram 已连接：{CurrentUser}");
         return prompt;
     }
 
@@ -167,47 +178,69 @@ public sealed class TelegramService : ITelegramService
             "Telegram 连接异常，正在等待客户端内部重连...",
             reactorException);
 
+        Task? probeTask = null;
         try
         {
-            await failedClient.Invoke(new TL.Methods.Ping { ping_id = Random.Shared.NextInt64() });
+            probeTask = failedClient.Invoke(new TL.Methods.Ping { ping_id = Random.Shared.NextInt64() });
+            await probeTask.WaitAsync(InternalRecoveryProbeTimeout);
             if (!_disposed && ReferenceEquals(_client, failedClient) && !failedClient.Disconnected)
             {
                 ReportConnection(TelegramConnectionStatus.Connected, $"Telegram 已重新连接：{CurrentUser}");
                 return;
             }
         }
+        catch (TimeoutException)
+        {
+            if (probeTask is not null) ObserveBackgroundFailure(probeTask);
+            if (_disposed || !ReferenceEquals(_client, failedClient)) return;
+            _logger.Error(
+                "Telegram.Connection",
+                $"Telegram 内部恢复在 {InternalRecoveryProbeTimeout.TotalSeconds:0} 秒内未完成，将重建连接",
+                new TimeoutException("Telegram API 探测超时"));
+        }
         catch (Exception probeException)
         {
             if (_disposed || !ReferenceEquals(_client, failedClient)) return;
-            if (!failedClient.Disconnected)
-            {
-                _logger.Warning(
-                    "Telegram.Connection",
-                    $"Telegram API 探测失败，但客户端未处于断开状态，暂不判定为真正断线：{probeException.Message}");
-                return;
-            }
-
             _logger.Error(
                 "Telegram.Connection",
-                "Telegram API 探测失败且客户端仍处于断开状态，确认主连接不可用",
+                "Telegram API 探测失败，确认当前主连接不可用，将重建连接",
                 probeException);
         }
 
-        if (_disposed || !ReferenceEquals(_client, failedClient) || !failedClient.Disconnected) return;
+        if (_disposed || !ReferenceEquals(_client, failedClient)) return;
 
-        await _connectionLock.WaitAsync();
+        if (!await _connectionLock.WaitAsync(RecoveryLockTimeout))
+        {
+            ReportConnection(
+                TelegramConnectionStatus.Disconnected,
+                "Telegram 自动重连等待超时，请重新登录。",
+                new TimeoutException("等待连接锁超时"));
+            return;
+        }
+        Task<string?>? reconnectTask = null;
         try
         {
             if (_disposed || !ReferenceEquals(_client, failedClient)) return;
-            var prompt = await CreateClientAndLoginAsync(
+            reconnectTask = CreateClientAndLoginAsync(
                 settings,
                 "WTelegram 内部恢复失败，正在使用现有会话重建连接",
                 "Telegram 内部恢复失败，正在重建连接...",
                 clearPeers: false);
+            var prompt = await reconnectTask.WaitAsync(RebuildConnectionTimeout);
             if (prompt is not null)
                 ReportConnection(
                     TelegramConnectionStatus.Disconnected,
                     "自动重连需要重新验证，请完成 Telegram 登录验证。");
+        }
+        catch (TimeoutException timeoutException)
+        {
+            if (reconnectTask is not null) ObserveBackgroundFailure(reconnectTask);
+            DisposeClientForReconnect(clearPeers: false);
+            if (!_disposed)
+                ReportConnection(
+                    TelegramConnectionStatus.Disconnected,
+                    "Telegram 自动重建连接超时，请检查网络或代理后重新登录。",
+                    timeoutException);
         }
         catch (Exception reconnectException)
         {
@@ -222,6 +255,13 @@ public sealed class TelegramService : ITelegramService
             _connectionLock.Release();
         }
     }
+
+    private static void ObserveBackgroundFailure(Task task) =>
+        _ = task.ContinueWith(
+            completed => _ = completed.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
 
     private void ReportConnection(TelegramConnectionStatus status, string message, Exception? exception = null)
     {
@@ -720,8 +760,11 @@ public sealed class TelegramService : ITelegramService
             "Confirmation", text, key, allowFailedRetry: true, allowUnknownRetry: false);
     }
 
-    public async Task<IReadOnlyList<OutgoingMessageRecord>> QueryOutboxAsync(int limit = 200) =>
-        CurrentUserId == 0 ? [] : await _outbox.QueryAsync(CurrentUserId, limit);
+    public async Task<IReadOnlyList<OutgoingMessageRecord>> QueryOutboxAsync(int limit = 200)
+    {
+        await CleanupOutboxIfDueAsync();
+        return CurrentUserId == 0 ? [] : await _outbox.QueryAsync(CurrentUserId, limit);
+    }
 
     public async Task RetryOutboxAsync(long recordId)
     {
@@ -747,6 +790,7 @@ public sealed class TelegramService : ITelegramService
         bool allowUnknownRetry)
     {
         EnsureLogin();
+        await CleanupOutboxIfDueAsync();
         await _sendLock.WaitAsync();
         try
         {
@@ -800,6 +844,33 @@ public sealed class TelegramService : ITelegramService
         finally
         {
             _sendLock.Release();
+        }
+    }
+
+    private async Task CleanupOutboxIfDueAsync()
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (now < _nextOutboxCleanupAt || !await _outboxCleanupLock.WaitAsync(0)) return;
+        try
+        {
+            now = DateTimeOffset.UtcNow;
+            if (now < _nextOutboxCleanupAt) return;
+            var deleted = await _outbox.DeleteSentBeforeAsync(now - SentOutboxRetention);
+            _nextOutboxCleanupAt = now + OutboxCleanupInterval;
+            if (deleted > 0)
+            {
+                _logger.Info("Telegram.Outbox", $"已自动清理 {deleted} 条超过 20 天的已发送记录");
+                OutboxChanged?.Invoke();
+            }
+        }
+        catch (Exception ex)
+        {
+            _nextOutboxCleanupAt = now + TimeSpan.FromHours(1);
+            _logger.Warning("Telegram.Outbox", "自动清理过期发件箱记录失败，将在稍后重试", ex);
+        }
+        finally
+        {
+            _outboxCleanupLock.Release();
         }
     }
 
@@ -1361,12 +1432,14 @@ public sealed class TelegramService : ITelegramService
         }
         if (string.IsNullOrWhiteSpace(proxy.Host) || proxy.Port is < 1 or > 65535)
             throw new InvalidOperationException("SOCKS5 代理地址或端口不正确");
-        client.TcpHandler = (host, port) => Socks5ProxyConnector.ConnectAsync(proxy, host, port);
+        client.TcpHandler = (host, port) => TelegramTrafficMeter.ConnectMeteredAsync(
+            () => Socks5ProxyConnector.ConnectAsync(proxy, host, port));
     }
 
     private static void ConfigureClientConnection(WTelegram.Client client)
     {
         client.PingInterval = 30;
+        client.TcpHandler = TelegramTrafficMeter.ConnectDirectAsync;
     }
 
     private static string PeerKey(long id, string kind) => $"{kind}:{id}";
@@ -1377,5 +1450,6 @@ public sealed class TelegramService : ITelegramService
         _logger.Info("Telegram", "Telegram 服务正在关闭");
         DisposeClientForReconnect(clearPeers: true);
         _sendLock.Dispose();
+        _outboxCleanupLock.Dispose();
     }
 }

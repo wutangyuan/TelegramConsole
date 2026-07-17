@@ -19,6 +19,7 @@ var dataDirectory = builder.Configuration["TELEGRAMCONSOLE_DATA_DIR"] ??
                     Path.Combine(builder.Environment.ContentRootPath, "data");
 builder.Services.AddSingleton<ISettingsStore>(_ => new PortableSettingsStore(dataDirectory));
 builder.Services.AddSingleton<IManagedAccountCatalog>(_ => new EncryptedManagedAccountCatalog(dataDirectory));
+builder.Services.AddSingleton<IApplicationResourceMonitor>(_ => new ApplicationResourceMonitor(dataDirectory));
 builder.Services.AddSingleton<AccountRuntimeManager>();
 builder.Services.AddHostedService<AccountRuntimeHostedService>();
 builder.Services.AddHealthChecks();
@@ -180,6 +181,7 @@ api.MapGet("/system", (AccountRuntimeManager manager) => Results.Ok(new
     accounts = manager.GetSnapshots().Count,
     online = manager.GetSnapshots().Count(x => x.Status == AccountRuntimeStatus.Online)
 }));
+api.MapGet("/system/resources", (IApplicationResourceMonitor monitor) => Results.Ok(monitor.Capture()));
 api.MapGet("/accounts", (AccountRuntimeManager manager) => manager.GetSnapshots());
 api.MapPost("/accounts", async (CreateManagedAccountRequest request, AccountRuntimeManager manager, CancellationToken ct) =>
     Results.Ok(await manager.AddAsync(request, ct)));

@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Diagnostics;
 using System.IO;
+using System.Windows.Threading;
 
 namespace TelegramConsoleApp;
 
@@ -21,6 +22,8 @@ public partial class MainWindow : Window
     private readonly IIntervalChatAutomationService _intervalChatAutomation;
     private readonly IExceptionMonitorService _exceptionMonitor;
     private readonly IMentionMonitorService _mentionMonitor;
+    private readonly IApplicationResourceMonitor _resourceMonitor;
+    private readonly DispatcherTimer _resourceTimer;
     private AccountProfile? _activeAccount;
     private System.Windows.Forms.NotifyIcon? _trayIcon;
     private System.Windows.Forms.ToolStripMenuItem? _trayAccountItem;
@@ -86,6 +89,12 @@ public partial class MainWindow : Window
         _telegram = new TelegramService(_store, _logger);
         _exceptionMonitor = new ExceptionMonitorService(_store, _logger, _telegram, _settings);
         _mentionMonitor = new MentionMonitorService(_store, _telegram, _logger);
+        _resourceMonitor = new ApplicationResourceMonitor(_store.DataDirectory);
+        _resourceTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
+        {
+            Interval = TimeSpan.FromSeconds(2)
+        };
+        _resourceTimer.Tick += (_, _) => UpdateResourceStatistics();
         _scheduler = new SchedulerService(_telegram, _store, _settings, _logger);
         _intervalChatAutomation = new IntervalChatAutomationService(_telegram, _store, _logger);
         VisualChat.QuoteRequested += line => SelectQuoteTarget(QuoteTargetItem.From(line));
@@ -163,6 +172,8 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        UpdateResourceStatistics();
+        _resourceTimer.Start();
         await RefreshExceptionsAsync();
         if (_launchRequest?.AutoLogin == true && !_telegram.IsLoggedIn)
             await RunUiAsync(BeginLoginAsync);
@@ -1545,6 +1556,8 @@ public partial class MainWindow : Window
     {
         if (_resourcesDisposed) return;
         _resourcesDisposed = true;
+        _resourceTimer.Stop();
+        _resourceMonitor.Dispose();
 
         _logger.Info("Application", "应用正在退出");
         if (int.TryParse(ApiIdBox.Text, out var apiId)) _settings.ApiId = apiId;
@@ -1622,6 +1635,62 @@ public partial class MainWindow : Window
     }
 
     private void ClearLogDisplay_Click(object sender, RoutedEventArgs e) => LogConsole.ClearOutput();
+
+    private void UpdateResourceStatistics()
+    {
+        try
+        {
+            var snapshot = _resourceMonitor.Capture();
+            ResourceMemoryText.Text = FormatBytes(snapshot.WorkingSetBytes);
+            ResourceMemoryDetailText.Text = LF(
+                "ResourceMemoryDetail",
+                FormatBytes(snapshot.PrivateMemoryBytes),
+                FormatBytes(snapshot.ManagedHeapBytes));
+            ResourceStorageText.Text = FormatBytes(snapshot.DataDirectoryBytes);
+            ResourceStorageDetailText.Text = LF("ResourceStorageDetail", FormatBytes(snapshot.MediaCacheBytes));
+            ResourceDiskText.Text = LF(
+                "ResourceDiskTotal",
+                FormatBytes(snapshot.DiskReadBytes),
+                FormatBytes(snapshot.DiskWriteBytes));
+            ResourceDiskDetailText.Text = LF(
+                "ResourceDiskRate",
+                FormatRate(snapshot.DiskReadBytesPerSecond),
+                FormatRate(snapshot.DiskWriteBytesPerSecond));
+            ResourceNetworkText.Text = LF(
+                "ResourceNetworkTotal",
+                FormatBytes(snapshot.DownloadedBytes),
+                FormatBytes(snapshot.UploadedBytes));
+            ResourceNetworkDetailText.Text = LF(
+                "ResourceNetworkRate",
+                FormatRate(snapshot.DownloadBytesPerSecond),
+                FormatRate(snapshot.UploadBytesPerSecond),
+                FormatUptime(snapshot.Uptime));
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning("Application.Resource", "资源统计刷新失败", ex);
+            _resourceTimer.Stop();
+        }
+    }
+
+    private static string FormatRate(double bytesPerSecond) => $"{FormatBytes(bytesPerSecond)}/s";
+
+    private static string FormatBytes(double bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        var value = Math.Max(0, bytes);
+        var unit = 0;
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+        return unit == 0 ? $"{value:0} {units[unit]}" : $"{value:0.##} {units[unit]}";
+    }
+
+    private static string FormatUptime(TimeSpan uptime) => uptime.TotalDays >= 1
+        ? $"{(int)uptime.TotalDays}d {uptime:hh\\:mm\\:ss}"
+        : uptime.ToString(@"hh\:mm\:ss");
 
     private void Telegram_OutboxChanged()
     {

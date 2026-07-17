@@ -19,6 +19,11 @@ public interface IManagedAccountCatalog
     void Remove(Guid accountId);
 }
 
+public interface IApplicationResourceMonitor : IDisposable
+{
+    ApplicationResourceSnapshot Capture();
+}
+
 public interface ITelegramService : IDisposable
 {
     bool IsLoggedIn { get; }

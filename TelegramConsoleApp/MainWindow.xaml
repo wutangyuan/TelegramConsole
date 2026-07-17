@@ -591,16 +591,47 @@
                          HeaderTemplate="{StaticResource UnreadTabHeaderTemplate}">
                     <Grid Margin="10">
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
                             <RowDefinition Height="44" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
-                        <StackPanel Orientation="Horizontal">
+                        <UniformGrid Columns="4" Margin="0,0,0,8">
+                            <Border Background="#F8FAFC" BorderBrush="#D9E2EC" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="0,0,6,0">
+                                <StackPanel>
+                                    <TextBlock Text="{DynamicResource ResourceMemory}" Foreground="#64748B" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="ResourceMemoryText" Text="--" Foreground="#0F172A" FontSize="18" FontWeight="SemiBold" Margin="0,3,0,0" />
+                                    <TextBlock x:Name="ResourceMemoryDetailText" Text="--" Foreground="#64748B" FontSize="11" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#F8FAFC" BorderBrush="#D9E2EC" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="2,0,4,0">
+                                <StackPanel>
+                                    <TextBlock Text="{DynamicResource ResourceStorage}" Foreground="#64748B" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="ResourceStorageText" Text="--" Foreground="#0F172A" FontSize="18" FontWeight="SemiBold" Margin="0,3,0,0" />
+                                    <TextBlock x:Name="ResourceStorageDetailText" Text="--" Foreground="#64748B" FontSize="11" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#F8FAFC" BorderBrush="#D9E2EC" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="4,0,2,0">
+                                <StackPanel>
+                                    <TextBlock Text="{DynamicResource ResourceDiskIo}" Foreground="#64748B" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="ResourceDiskText" Text="--" Foreground="#0F172A" FontSize="15" FontWeight="SemiBold" Margin="0,3,0,0" />
+                                    <TextBlock x:Name="ResourceDiskDetailText" Text="--" Foreground="#64748B" FontSize="11" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                            <Border Background="#F8FAFC" BorderBrush="#D9E2EC" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="6,0,0,0">
+                                <StackPanel>
+                                    <TextBlock Text="{DynamicResource ResourceNetwork}" Foreground="#64748B" FontWeight="SemiBold" />
+                                    <TextBlock x:Name="ResourceNetworkText" Text="--" Foreground="#0F172A" FontSize="15" FontWeight="SemiBold" Margin="0,3,0,0" />
+                                    <TextBlock x:Name="ResourceNetworkDetailText" Text="--" Foreground="#64748B" FontSize="11" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                        </UniformGrid>
+                        <StackPanel Grid.Row="1" Orientation="Horizontal">
                             <Button Content="{DynamicResource OpenLogDirectory}" Click="OpenLogDirectory_Click" />
                             <Button Content="{DynamicResource ClearDisplay}" Click="ClearLogDisplay_Click" />
                             <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Foreground="#64748B"
-                                       Text="日志按天保存，自动保留最近 30 天；不记录密码、验证码和消息正文。" />
+                                       Text="{DynamicResource RuntimeResourceHint}" />
                         </StackPanel>
-                        <local:BufferedTerminal x:Name="LogConsole" Grid.Row="1"
+                        <local:BufferedTerminal x:Name="LogConsole" Grid.Row="2"
                                                 FontFamily="Cascadia Mono, Consolas" FontSize="13"
                                                 Background="#090D12" Foreground="#F8FAFC"
                                                 BorderBrush="#1E293B" BorderThickness="1"
