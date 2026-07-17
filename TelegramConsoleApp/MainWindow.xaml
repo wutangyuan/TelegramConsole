@@ -234,8 +234,7 @@
                                 <ColumnDefinition Width="100" />
                             </Grid.ColumnDefinitions>
                             <TextBox x:Name="MessageBox" AcceptsReturn="True" PreviewKeyDown="MessageBox_KeyDown"
-                                     TextChanged="MessageBox_TextChanged"
-                                     ToolTip="Enter 发送，Alt+Enter 换行" Margin="0,0,8,0" />
+                                     TextChanged="MessageBox_TextChanged" Margin="0,0,8,0" />
                             <Button x:Name="SendButton" Grid.Column="1" Content="{DynamicResource Send}" Click="SendButton_Click"
                                     Style="{StaticResource PrimaryButtonStyle}" Margin="0" IsEnabled="False" />
                         </Grid>
