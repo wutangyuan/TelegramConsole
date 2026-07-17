@@ -12,6 +12,13 @@
     <sys:String x:Key="RefreshDialogs">Refresh</sys:String><sys:String x:Key="OpenConsole">Pop-out Console</sys:String><sys:String x:Key="BlankScreen">Blank</sys:String>
     <sys:String x:Key="OpenInConsole">Open in pop-out console</sys:String>
     <sys:String x:Key="ChatTerminal">⌨ Chat</sys:String><sys:String x:Key="GroupMonitor">◉ Group Monitor</sys:String>
+    <sys:String x:Key="MessageView">Message view</sys:String>
+    <sys:String x:Key="ConsoleView">Console</sys:String>
+    <sys:String x:Key="VisualView">Visual</sys:String>
+    <sys:String x:Key="SplitView">Split</sys:String>
+    <sys:String x:Key="OpenMedia">Open media</sys:String>
+    <sys:String x:Key="MessageRecalled">Message recalled</sys:String>
+    <sys:String x:Key="SelectConversationForVisual">Select a conversation to view messages</sys:String>
     <sys:String x:Key="Schedules">◷ Schedules</sys:String><sys:String x:Key="Mentions">@ Mentions</sys:String>
     <sys:String x:Key="Exceptions">⚠ Exceptions</sys:String><sys:String x:Key="RuntimeLogs">≡ Logs</sys:String><sys:String x:Key="Send">Send</sys:String>
     <sys:String x:Key="MonitorEnabled">Enable group monitoring (show incoming and outgoing group messages)</sys:String>

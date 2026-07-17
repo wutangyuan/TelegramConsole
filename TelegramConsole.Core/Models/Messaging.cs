@@ -5,6 +5,34 @@ public sealed record DialogItem(string Name, long Id, string Kind, bool IsGroup,
     public override string ToString() => $"{(IsGroup ? "#" : "@")} {Name}";
 }
 
+public enum ChatMediaKind
+{
+    None,
+    Photo,
+    Video,
+    Animation,
+    Audio,
+    Voice,
+    VideoNote,
+    Document,
+    Sticker,
+    Poll,
+    Location,
+    Contact,
+    Game,
+    WebPage,
+    Other
+}
+
+public sealed record ChatMediaInfo(
+    ChatMediaKind Kind,
+    string Label,
+    string FileName = "",
+    string MimeType = "",
+    long Size = 0,
+    int DurationSeconds = 0,
+    bool IsDownloadable = false);
+
 public sealed record ChatLine(
     DateTime Time,
     string Chat,
@@ -21,7 +49,8 @@ public sealed record ChatLine(
     string ReplySender = "",
     string ReplyText = "",
     string MediaLabel = "",
-    bool HasDownloadableMedia = false)
+    bool HasDownloadableMedia = false,
+    ChatMediaInfo? Media = null)
 {
     public string DisplayText => string.IsNullOrWhiteSpace(MediaLabel) || Text == MediaLabel
         ? Text

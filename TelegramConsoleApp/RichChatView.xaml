@@ -1,0 +1,96 @@
+<UserControl x:Class="TelegramConsoleApp.RichChatView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Background="#E7EEF5">
+    <Grid>
+        <ListBox x:Name="MessageList" ItemsSource="{Binding Items, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                 BorderThickness="0" Background="Transparent" Padding="14,10"
+                 ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+            <ListBox.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <VirtualizingStackPanel />
+                </ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="Margin" Value="0" />
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="BorderThickness" Value="0" />
+                    <Setter Property="Focusable" Value="False" />
+                </Style>
+            </ListBox.ItemContainerStyle>
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Grid Margin="0,3">
+                        <Border x:Name="Bubble" MaxWidth="620" HorizontalAlignment="{Binding Alignment}"
+                                Background="{Binding BubbleBrush}" CornerRadius="12" Padding="11,7"
+                                BorderBrush="{Binding BorderBrush}" BorderThickness="1">
+                            <Border.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="{DynamicResource QuoteReply}" Click="QuoteMenuItem_Click" Tag="{Binding}" />
+                                    <MenuItem Header="{DynamicResource OpenMedia}" Click="MediaMenuItem_Click" Tag="{Binding}"
+                                              Visibility="{Binding MediaVisibility}" />
+                                </ContextMenu>
+                            </Border.ContextMenu>
+                            <StackPanel>
+                                <DockPanel Margin="0,0,0,4">
+                                    <TextBlock Text="{Binding Sender}" Foreground="{Binding SenderBrush}"
+                                               FontWeight="SemiBold" FontSize="12" />
+                                    <TextBlock Text="{Binding TimeText}" Foreground="#64748B" FontSize="11"
+                                               Margin="12,1,0,0" HorizontalAlignment="Right" />
+                                </DockPanel>
+                                <Border Visibility="{Binding ReplyVisibility}" Background="#18000000"
+                                        BorderBrush="#3B82F6" BorderThickness="3,0,0,0"
+                                        CornerRadius="4" Padding="8,4" Margin="0,0,0,6">
+                                    <StackPanel>
+                                        <TextBlock Text="{Binding ReplySender}" Foreground="#2563EB"
+                                                   FontWeight="SemiBold" FontSize="11" />
+                                        <TextBlock Text="{Binding ReplyText}" Foreground="#475569"
+                                                   TextTrimming="CharacterEllipsis" MaxWidth="540" />
+                                    </StackPanel>
+                                </Border>
+                                <Button Visibility="{Binding MediaVisibility}" Click="MediaButton_Click" Tag="{Binding}"
+                                        HorizontalContentAlignment="Stretch" Padding="0" Margin="0,0,0,6"
+                                        Background="Transparent" BorderThickness="0" Cursor="Hand">
+                                    <Border Background="{Binding MediaBrush}" CornerRadius="9" Padding="10">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="42" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Width="34" Height="34" CornerRadius="17" Background="#2BFFFFFF">
+                                                <TextBlock Text="{Binding MediaIcon}" FontSize="18"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding MediaTitle}" Foreground="White" FontWeight="SemiBold" />
+                                                <TextBlock Text="{Binding MediaDetails}" Foreground="#DDEBFF" FontSize="11"
+                                                           Visibility="{Binding MediaDetailsVisibility}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </Button>
+                                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Foreground="{Binding TextBrush}"
+                                           FontSize="14" Visibility="{Binding TextVisibility}" />
+                                <TextBlock Text="{DynamicResource MessageRecalled}" Foreground="#F97316" FontStyle="Italic"
+                                           Visibility="{Binding DeletedVisibility}" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+        <Border x:Name="EmptyState" Background="#E7EEF5">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Border Width="64" Height="64" CornerRadius="32" Background="#2A8BD8">
+                    <TextBlock Text="✈" FontSize="30" Foreground="White"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <TextBlock Text="{DynamicResource SelectConversationForVisual}" Foreground="#64748B" Margin="0,12,0,0" />
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

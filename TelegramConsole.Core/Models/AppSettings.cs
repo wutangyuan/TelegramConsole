@@ -6,6 +6,7 @@ public sealed class AppSettings
     public int ApiId { get; set; }
     public string ApiHash { get; set; } = "";
     public string PhoneNumber { get; set; } = "";
+    public string ChatViewMode { get; set; } = "Console";
     public bool MonitorEnabled { get; set; } = true;
     public List<ScheduledMessage> Schedules { get; set; } = [];
     public EmailSettings Email { get; set; } = new();

@@ -167,10 +167,26 @@
                          HeaderTemplate="{StaticResource UnreadTabHeaderTemplate}">
                     <Grid Margin="10">
                         <Grid.RowDefinitions>
+                            <RowDefinition Height="38" />
                             <RowDefinition Height="*" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="48" />
                         </Grid.RowDefinitions>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Top">
+                            <TextBlock Text="{DynamicResource MessageView}" VerticalAlignment="Center" Foreground="#64748B" Margin="0,0,10,0" />
+                            <Button x:Name="ConsoleViewButton" Content="{DynamicResource ConsoleView}" Padding="16,5" Margin="0,0,6,5"
+                                    Click="ConsoleViewButton_Click" />
+                            <Button x:Name="VisualViewButton" Content="{DynamicResource VisualView}" Padding="16,5" Margin="0,0,6,5"
+                                    Click="VisualViewButton_Click" />
+                            <Button x:Name="SplitViewButton" Content="{DynamicResource SplitView}" Padding="16,5" Margin="0,0,6,5"
+                                    Click="SplitViewButton_Click" />
+                        </StackPanel>
+                        <Grid Grid.Row="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition x:Name="ConsoleViewColumn" Width="*" />
+                                <ColumnDefinition x:Name="ChatViewSplitterColumn" Width="0" />
+                                <ColumnDefinition x:Name="VisualViewColumn" Width="0" />
+                            </Grid.ColumnDefinitions>
                         <local:BufferedTerminal x:Name="ChatConsole" FontFamily="Cascadia Mono, Consolas"
                                                 FontSize="14" Background="#090D12" Foreground="#F8FAFC"
                                                 BorderBrush="#1E293B" BorderThickness="1"
@@ -185,7 +201,11 @@
                                 </ContextMenu>
                             </local:BufferedTerminal.ContextMenu>
                         </local:BufferedTerminal>
-                        <Border x:Name="QuotePreviewPanel" Grid.Row="1" Visibility="Collapsed"
+                            <GridSplitter x:Name="ChatViewSplitter" Grid.Column="1" Width="6" Visibility="Collapsed"
+                                          HorizontalAlignment="Stretch" Background="#CBD5E1" />
+                            <local:RichChatView x:Name="VisualChat" Grid.Column="2" Visibility="Collapsed" />
+                        </Grid>
+                        <Border x:Name="QuotePreviewPanel" Grid.Row="2" Visibility="Collapsed"
                                 Background="#EFF6FF" BorderBrush="#60A5FA" BorderThickness="3,0,0,0"
                                 Padding="10,4" Margin="0,8,0,0">
                             <Grid>
@@ -195,7 +215,7 @@
                                         ToolTip="{DynamicResource ClearQuote}" Click="ClearQuoteButton_Click" />
                             </Grid>
                         </Border>
-                        <Grid Grid.Row="2" Margin="0,8,0,0">
+                        <Grid Grid.Row="3" Margin="0,8,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="100" />

@@ -21,6 +21,13 @@
     <sys:String x:Key="BlankScreen">空屏</sys:String>
     <sys:String x:Key="OpenInConsole">在独立控制台中打开</sys:String>
     <sys:String x:Key="ChatTerminal">⌨ 聊天终端</sys:String>
+    <sys:String x:Key="MessageView">消息视图</sys:String>
+    <sys:String x:Key="ConsoleView">控制台</sys:String>
+    <sys:String x:Key="VisualView">可视化</sys:String>
+    <sys:String x:Key="SplitView">分屏</sys:String>
+    <sys:String x:Key="OpenMedia">打开媒体</sys:String>
+    <sys:String x:Key="MessageRecalled">已撤回</sys:String>
+    <sys:String x:Key="SelectConversationForVisual">选择会话后查看可视化消息</sys:String>
     <sys:String x:Key="GroupMonitor">◉ 群消息监控</sys:String>
     <sys:String x:Key="Schedules">◷ 定时签到</sys:String>
     <sys:String x:Key="Mentions">@ 我的消息</sys:String>

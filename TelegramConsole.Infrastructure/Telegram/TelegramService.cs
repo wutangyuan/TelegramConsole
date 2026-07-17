@@ -857,7 +857,7 @@ public sealed class TelegramService : ITelegramService
             message.flags.HasFlag(TLMessage.Flags.out_), IsMentioned(message), message.id, dialog.Kind,
             TopicIdOf(message), replyId,
             replyMessage is null ? "" : NameOf(replyMessage.from_id), replyText,
-            MediaLabel(message.media) ?? "", IsDownloadableMedia(message.media));
+            MediaLabel(message.media) ?? "", IsDownloadableMedia(message.media), MediaInfo(message.media));
     }
 
     private async Task<TLMessage?> ResolveReplyMessageAsync(TLMessage message, DialogItem dialog)
@@ -953,6 +953,44 @@ public sealed class TelegramService : ITelegramService
         MessageMediaUnsupported => "[不支持的媒体]",
         _ => "[媒体消息]"
     };
+
+    private static ChatMediaInfo? MediaInfo(MessageMedia? media)
+    {
+        if (media is null) return null;
+        var label = MediaLabel(media) ?? "[媒体消息]";
+        if (media is MessageMediaDocument documentMedia && documentMedia.document is Document document)
+        {
+            var attributes = document.attributes ?? [];
+            var fileName = attributes.OfType<DocumentAttributeFilename>().FirstOrDefault()?.file_name ?? "";
+            var audio = attributes.OfType<DocumentAttributeAudio>().FirstOrDefault();
+            var video = attributes.OfType<DocumentAttributeVideo>().FirstOrDefault();
+            var kind = attributes.Any(x => x is DocumentAttributeSticker or DocumentAttributeCustomEmoji)
+                ? ChatMediaKind.Sticker
+                : audio is not null
+                    ? audio.flags.HasFlag(DocumentAttributeAudio.Flags.voice) ? ChatMediaKind.Voice : ChatMediaKind.Audio
+                    : video is not null
+                        ? video.flags.HasFlag(DocumentAttributeVideo.Flags.round_message) ? ChatMediaKind.VideoNote
+                        : attributes.Any(x => x is DocumentAttributeAnimated) ? ChatMediaKind.Animation : ChatMediaKind.Video
+                        : attributes.Any(x => x is DocumentAttributeAnimated) ? ChatMediaKind.Animation
+                        : document.mime_type?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true
+                            ? ChatMediaKind.Photo
+                            : ChatMediaKind.Document;
+            var duration = audio is not null ? audio.duration : video is not null ? (int)Math.Round(video.duration) : 0;
+            return new ChatMediaInfo(kind, label, fileName, document.mime_type ?? "", document.size, duration, true);
+        }
+
+        var mediaKind = media switch
+        {
+            MessageMediaPhoto => ChatMediaKind.Photo,
+            MessageMediaPoll => ChatMediaKind.Poll,
+            MessageMediaGeo or MessageMediaGeoLive or MessageMediaVenue => ChatMediaKind.Location,
+            MessageMediaContact => ChatMediaKind.Contact,
+            MessageMediaGame => ChatMediaKind.Game,
+            MessageMediaWebPage => ChatMediaKind.WebPage,
+            _ => ChatMediaKind.Other
+        };
+        return new ChatMediaInfo(mediaKind, label, IsDownloadable: media is MessageMediaPhoto);
+    }
 
     private static string DocumentLabel(DocumentBase? documentBase)
     {

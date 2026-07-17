@@ -35,6 +35,7 @@ public partial class MainWindow : Window
     private bool _loginInProgress;
     private int _exceptionQueryLimit = 10;
     private GridLength _expandedDialogWidth = new(290);
+    private ChatPresentationMode _chatPresentationMode;
 
     public long AccountUserId => _activeAccount?.UserId ?? 0;
     public string WorkspaceDisplayName => _activeAccount?.LocalName is { Length: > 0 } localName
@@ -75,6 +76,12 @@ public partial class MainWindow : Window
         _mentionMonitor = new MentionMonitorService(_store, _telegram, _logger);
         _scheduler = new SchedulerService(_telegram, _store, _settings, _logger);
         _intervalChatAutomation = new IntervalChatAutomationService(_telegram, _store, _logger);
+        VisualChat.QuoteRequested += line => SelectQuoteTarget(QuoteTargetItem.From(line));
+        VisualChat.MediaOpenRequested += VisualChat_MediaOpenRequested;
+        _chatPresentationMode = Enum.TryParse<ChatPresentationMode>(_settings.ChatViewMode, true, out var mode)
+            ? mode
+            : ChatPresentationMode.Console;
+        ApplyChatPresentationMode();
 
         ApiIdBox.Text = _settings.ApiId == 0 ? "" : _settings.ApiId.ToString();
         ApiHashBox.Password = _settings.ApiHash;
@@ -291,6 +298,7 @@ public partial class MainWindow : Window
         OutboxList.ItemsSource = null;
         ClearQuoteSelection();
         ChatConsole.ClearOutput();
+        VisualChat.ClearMessages();
         MonitorConsole.ClearOutput();
     }
 
@@ -490,6 +498,7 @@ public partial class MainWindow : Window
         _allDialogs = [];
         DialogsList.ItemsSource = null;
         ChatConsole.ClearOutput();
+        VisualChat.ClearMessages();
         MonitorConsole.ClearOutput();
         ConfirmationPeerBox.ItemsSource = null;
         ExceptionPeerBox.ItemsSource = null;
@@ -606,6 +615,7 @@ public partial class MainWindow : Window
         DialogsList.SelectedItem = null;
         ClearQuoteSelection();
         ChatConsole.ClearOutput();
+        VisualChat.ClearMessages();
         SetStatus(L("BlankStatus"));
     }
 
@@ -655,7 +665,9 @@ public partial class MainWindow : Window
                 ChatConsole.ClearOutput();
                 ClearQuoteSelection();
                 AppendConsole(ChatConsole, $"--- {dialog.Name} ---");
-                foreach (var line in await _telegram.LoadHistoryAsync(dialog, QuoteHistoryLimit))
+                var history = await _telegram.LoadHistoryAsync(dialog, QuoteHistoryLimit);
+                VisualChat.ReplaceMessages(history);
+                foreach (var line in history)
                     AppendChatLine(ChatConsole, line);
             }
             finally
@@ -669,6 +681,44 @@ public partial class MainWindow : Window
         await RunUiAsync(SendMessageAsync);
 
     private void ClearQuoteButton_Click(object sender, RoutedEventArgs e) => ClearQuoteSelection();
+
+    private void ConsoleViewButton_Click(object sender, RoutedEventArgs e) => SetChatPresentationMode(ChatPresentationMode.Console);
+    private void VisualViewButton_Click(object sender, RoutedEventArgs e) => SetChatPresentationMode(ChatPresentationMode.Visual);
+    private void SplitViewButton_Click(object sender, RoutedEventArgs e) => SetChatPresentationMode(ChatPresentationMode.Split);
+
+    private void SetChatPresentationMode(ChatPresentationMode mode)
+    {
+        _chatPresentationMode = mode;
+        _settings.ChatViewMode = mode.ToString();
+        _store.Save(_settings);
+        ApplyChatPresentationMode();
+    }
+
+    private void ApplyChatPresentationMode()
+    {
+        var showConsole = _chatPresentationMode is ChatPresentationMode.Console or ChatPresentationMode.Split;
+        var showVisual = _chatPresentationMode is ChatPresentationMode.Visual or ChatPresentationMode.Split;
+        ChatConsole.Visibility = showConsole ? Visibility.Visible : Visibility.Collapsed;
+        VisualChat.Visibility = showVisual ? Visibility.Visible : Visibility.Collapsed;
+        ChatViewSplitter.Visibility = _chatPresentationMode == ChatPresentationMode.Split ? Visibility.Visible : Visibility.Collapsed;
+        ConsoleViewColumn.Width = showConsole ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        ChatViewSplitterColumn.Width = _chatPresentationMode == ChatPresentationMode.Split ? new GridLength(6) : new GridLength(0);
+        VisualViewColumn.Width = showVisual ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        ConsoleViewButton.FontWeight = _chatPresentationMode == ChatPresentationMode.Console ? FontWeights.Bold : FontWeights.Normal;
+        VisualViewButton.FontWeight = _chatPresentationMode == ChatPresentationMode.Visual ? FontWeights.Bold : FontWeights.Normal;
+        SplitViewButton.FontWeight = _chatPresentationMode == ChatPresentationMode.Split ? FontWeights.Bold : FontWeights.Normal;
+    }
+
+    private async void VisualChat_MediaOpenRequested(ChatLine line)
+    {
+        if (DialogsList.SelectedItem is not DialogItem dialog || dialog.Id != line.ChatId) return;
+        await RunUiAsync(async () =>
+        {
+            SetStatus(LF("DownloadingMedia", line.MediaLabel));
+            var path = await _telegram.DownloadMediaAsync(dialog, line.MessageId);
+            if (MediaFileLauncher.Open(this, path)) SetStatus(LF("MediaOpened", Path.GetFileName(path)));
+        });
+    }
 
     private async void MessageBox_KeyDown(object sender, KeyEventArgs e)
     {
@@ -773,6 +823,7 @@ public partial class MainWindow : Window
         if (DialogsList.SelectedItem is DialogItem current && current.Id == line.ChatId)
         {
             AppendChatLine(ChatConsole, line);
+            VisualChat.UpsertMessage(line);
             MarkTabUnread(ChatTab);
         }
     }
@@ -791,6 +842,7 @@ public partial class MainWindow : Window
             if (DialogsList.SelectedItem is DialogItem current && current.Id == deletion.ChatId)
             {
                 AppendConsole(ChatConsole, marker, Brushes.Orange);
+                VisualChat.MarkDeleted(message);
                 MarkTabUnread(ChatTab);
             }
         }
@@ -1667,4 +1719,11 @@ public partial class MainWindow : Window
         int AttemptCount,
         string TelegramMessageId,
         string Error);
+}
+
+internal enum ChatPresentationMode
+{
+    Console,
+    Visual,
+    Split
 }
