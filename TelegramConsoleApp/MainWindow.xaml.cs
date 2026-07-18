@@ -22,8 +22,6 @@ public partial class MainWindow : Window
     private readonly IIntervalChatAutomationService _intervalChatAutomation;
     private readonly IExceptionMonitorService _exceptionMonitor;
     private readonly IMentionMonitorService _mentionMonitor;
-    private readonly IApplicationResourceMonitor _resourceMonitor;
-    private readonly DispatcherTimer _resourceTimer;
     private AccountProfile? _activeAccount;
     private System.Windows.Forms.NotifyIcon? _trayIcon;
     private System.Windows.Forms.ToolStripMenuItem? _trayAccountItem;
@@ -40,6 +38,7 @@ public partial class MainWindow : Window
     private bool _initialized;
     private bool _resourcesDisposed;
     private bool _loginInProgress;
+    private Task? _workspaceStartTask;
     private (string Kind, long Id, DateTime ExpiresUtc)? _pendingSentScroll;
     private bool _unreadNotificationsReady;
     private bool _outboxBaselineReady;
@@ -89,12 +88,6 @@ public partial class MainWindow : Window
         _telegram = new TelegramService(_store, _logger);
         _exceptionMonitor = new ExceptionMonitorService(_store, _logger, _telegram, _settings);
         _mentionMonitor = new MentionMonitorService(_store, _telegram, _logger);
-        _resourceMonitor = new ApplicationResourceMonitor(_store.DataDirectory);
-        _resourceTimer = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
-        {
-            Interval = TimeSpan.FromSeconds(2)
-        };
-        _resourceTimer.Tick += (_, _) => UpdateResourceStatistics();
         _scheduler = new SchedulerService(_telegram, _store, _settings, _logger);
         _intervalChatAutomation = new IntervalChatAutomationService(_telegram, _store, _logger);
         VisualChat.QuoteRequested += line => SelectQuoteTarget(QuoteTargetItem.From(line));
@@ -111,6 +104,7 @@ public partial class MainWindow : Window
             ? mode
             : ChatPresentationMode.Console;
         ApplyChatPresentationMode();
+        RuntimeLogsTab.Visibility = Visibility.Collapsed;
 
         ApiIdBox.Text = _settings.ApiId == 0 ? "" : _settings.ApiId.ToString();
         ApiHashBox.Password = _settings.ApiHash;
@@ -152,7 +146,6 @@ public partial class MainWindow : Window
                 RenderIntervalChatRules();
             });
         };
-        _logger.EntryWritten += Logger_EntryWritten;
         _exceptionMonitor.RecordsChanged += ExceptionMonitor_RecordsChanged;
         _mentionMonitor.RecordsChanged += MentionMonitor_RecordsChanged;
         if (!_managedWorkspace)
@@ -172,12 +165,21 @@ public partial class MainWindow : Window
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
-        UpdateResourceStatistics();
-        _resourceTimer.Start();
+        await RunUiAsync(EnsureWorkspaceStartedAsync);
+    }
+
+    private Task EnsureWorkspaceStartedAsync() =>
+        _workspaceStartTask ??= InitializeWorkspaceAsync();
+
+    private async Task InitializeWorkspaceAsync()
+    {
         await RefreshExceptionsAsync();
         if (_launchRequest?.AutoLogin == true && !_telegram.IsLoggedIn)
-            await RunUiAsync(BeginLoginAsync);
+            await BeginLoginAsync();
     }
+
+    internal async void StartWorkspaceInBackground() =>
+        await RunUiAsync(EnsureWorkspaceStartedAsync);
 
     private void InitializeTrayIcon()
     {
@@ -240,17 +242,14 @@ public partial class MainWindow : Window
 
     private void AccountManager_Click(object sender, RoutedEventArgs e)
     {
-        AccountWorkspaceManager.Register(this, AccountUserId);
-        new AccountManagerWindow(_store) { Owner = this }.Show();
+        ((App)System.Windows.Application.Current).ShowManagementCenter();
     }
 
     private void ToggleLoginPanel_Click(object sender, RoutedEventArgs e)
     {
         if (_telegram.IsLoggedIn)
         {
-            var dialog = new AddAccountWindow { Owner = this };
-            if (dialog.ShowDialog() == true && dialog.Request is not null)
-                AccountWorkspaceManager.OpenNew(dialog.Request);
+            ((App)System.Windows.Application.Current).ShowManagementCenter();
             return;
         }
 
@@ -300,11 +299,17 @@ public partial class MainWindow : Window
         }
     }
 
-    internal async void StartLoginFromManager()
+    internal async void StartLoginFromManager(bool activate = true)
     {
-        ShowWorkspace();
-        if (_telegram.IsLoggedIn || _loginInProgress) return;
-        await RunUiAsync(BeginLoginAsync);
+        if (activate) ShowWorkspace();
+        await RunUiAsync(async () =>
+        {
+            await EnsureWorkspaceStartedAsync();
+            // Auto-login is already performed by InitializeWorkspaceAsync. Do not
+            // restart it after a verification prompt or during recovery.
+            if (_launchRequest?.AutoLogin != true && !_telegram.IsLoggedIn && !_loginInProgress)
+                await BeginLoginAsync();
+        });
     }
 
     private async Task DeactivateAccountAsync()
@@ -400,7 +405,7 @@ public partial class MainWindow : Window
         TopConnectionDot.Background = Brushes.LimeGreen;
         TopConnectionText.Text = L("Online");
         TopConnectionText.Foreground = Brushes.ForestGreen;
-        TopLoginButton.Content = "＋ 添加账户";
+        TopLoginButton.Visibility = Visibility.Collapsed;
     }
 
     private void HandleConnectionState(TelegramConnectionState state)
@@ -454,6 +459,7 @@ public partial class MainWindow : Window
         TopConnectionDot.Background = Brushes.OrangeRed;
         TopConnectionText.Text = "需要重新登录";
         TopConnectionText.Foreground = Brushes.OrangeRed;
+        TopLoginButton.Visibility = Visibility.Visible;
         TopLoginButton.Content = "登录 / 添加账户";
         LoginPromptLabel.Visibility = LoginValueBox.Visibility = LoginPasswordBox.Visibility =
             ContinueLoginButton.Visibility = Visibility.Collapsed;
@@ -1556,9 +1562,6 @@ public partial class MainWindow : Window
     {
         if (_resourcesDisposed) return;
         _resourcesDisposed = true;
-        _resourceTimer.Stop();
-        _resourceMonitor.Dispose();
-
         _logger.Info("Application", "应用正在退出");
         if (int.TryParse(ApiIdBox.Text, out var apiId)) _settings.ApiId = apiId;
         _settings.ApiHash = ApiHashBox.Password.Trim();
@@ -1581,7 +1584,6 @@ public partial class MainWindow : Window
             TaskScheduler.UnobservedTaskException -= TaskScheduler_UnobservedTaskException;
             AppDomain.CurrentDomain.UnhandledException -= CurrentDomain_UnhandledException;
         }
-        _logger.EntryWritten -= Logger_EntryWritten;
         _logger.Dispose();
         DisposeTrayIcon();
     }
@@ -1635,62 +1637,6 @@ public partial class MainWindow : Window
     }
 
     private void ClearLogDisplay_Click(object sender, RoutedEventArgs e) => LogConsole.ClearOutput();
-
-    private void UpdateResourceStatistics()
-    {
-        try
-        {
-            var snapshot = _resourceMonitor.Capture();
-            ResourceMemoryText.Text = FormatBytes(snapshot.WorkingSetBytes);
-            ResourceMemoryDetailText.Text = LF(
-                "ResourceMemoryDetail",
-                FormatBytes(snapshot.PrivateMemoryBytes),
-                FormatBytes(snapshot.ManagedHeapBytes));
-            ResourceStorageText.Text = FormatBytes(snapshot.DataDirectoryBytes);
-            ResourceStorageDetailText.Text = LF("ResourceStorageDetail", FormatBytes(snapshot.MediaCacheBytes));
-            ResourceDiskText.Text = LF(
-                "ResourceDiskTotal",
-                FormatBytes(snapshot.DiskReadBytes),
-                FormatBytes(snapshot.DiskWriteBytes));
-            ResourceDiskDetailText.Text = LF(
-                "ResourceDiskRate",
-                FormatRate(snapshot.DiskReadBytesPerSecond),
-                FormatRate(snapshot.DiskWriteBytesPerSecond));
-            ResourceNetworkText.Text = LF(
-                "ResourceNetworkTotal",
-                FormatBytes(snapshot.DownloadedBytes),
-                FormatBytes(snapshot.UploadedBytes));
-            ResourceNetworkDetailText.Text = LF(
-                "ResourceNetworkRate",
-                FormatRate(snapshot.DownloadBytesPerSecond),
-                FormatRate(snapshot.UploadBytesPerSecond),
-                FormatUptime(snapshot.Uptime));
-        }
-        catch (Exception ex)
-        {
-            _logger.Warning("Application.Resource", "资源统计刷新失败", ex);
-            _resourceTimer.Stop();
-        }
-    }
-
-    private static string FormatRate(double bytesPerSecond) => $"{FormatBytes(bytesPerSecond)}/s";
-
-    private static string FormatBytes(double bytes)
-    {
-        string[] units = ["B", "KB", "MB", "GB", "TB"];
-        var value = Math.Max(0, bytes);
-        var unit = 0;
-        while (value >= 1024 && unit < units.Length - 1)
-        {
-            value /= 1024;
-            unit++;
-        }
-        return unit == 0 ? $"{value:0} {units[unit]}" : $"{value:0.##} {units[unit]}";
-    }
-
-    private static string FormatUptime(TimeSpan uptime) => uptime.TotalDays >= 1
-        ? $"{(int)uptime.TotalDays}d {uptime:hh\\:mm\\:ss}"
-        : uptime.ToString(@"hh\:mm\:ss");
 
     private void Telegram_OutboxChanged()
     {

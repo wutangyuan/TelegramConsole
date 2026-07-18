@@ -53,6 +53,23 @@ public interface IExceptionMonitorService : IDisposable
     Task SendTestNotificationAsync();
 }
 
+public sealed record GlobalExceptionRecord(
+    long Id,
+    long AccountId,
+    DateTimeOffset OccurredAt,
+    AppLogLevel Level,
+    string Category,
+    string Message,
+    string Details,
+    string TelegramStatus,
+    string EmailStatus);
+
+public interface IExceptionLogQueryService
+{
+    string DatabasePath { get; }
+    Task<IReadOnlyList<GlobalExceptionRecord>> GetRecentAsync(int limit = 200);
+}
+
 public sealed record MentionRecord(
     long Id,
     DateTimeOffset OccurredAt,

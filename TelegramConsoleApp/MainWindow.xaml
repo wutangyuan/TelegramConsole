@@ -33,8 +33,8 @@
                 </StackPanel>
                 <Button Grid.Column="1" x:Name="TopLoginButton" Content="登录 / 添加账户"
                         Style="{StaticResource PrimaryButtonStyle}" Click="ToggleLoginPanel_Click" MinWidth="140" />
-                <Button Grid.Column="2" Content="{DynamicResource Settings}" Click="SettingsButton_Click" MinWidth="96" />
-                <Button Grid.Column="3" Content="账户管理" Click="AccountManager_Click" MinWidth="106" />
+                <Button Grid.Column="2" Content="{DynamicResource Settings}" Click="SettingsButton_Click" MinWidth="96" Visibility="Collapsed" />
+                <Button Grid.Column="3" Content="管理中心" Click="AccountManager_Click" MinWidth="106" />
             </Grid>
         </Border>
 
@@ -100,8 +100,8 @@
                                FontWeight="SemiBold" Foreground="#16A34A" />
                 </StackPanel>
                 <Button Grid.Column="2" Content="{DynamicResource ProductivityTools}" Click="ProductivityTools_Click" />
-                <Button Grid.Column="3" Content="账户管理" Click="AccountManager_Click" />
-                <Button Grid.Column="4" Content="{DynamicResource Settings}" Click="SettingsButton_Click" />
+                <Button Grid.Column="3" Content="管理中心" Click="AccountManager_Click" />
+                <Button Grid.Column="4" Content="{DynamicResource Settings}" Click="SettingsButton_Click" Visibility="Collapsed" />
               </Grid>
             </Grid>
         </GroupBox>

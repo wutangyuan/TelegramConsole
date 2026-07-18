@@ -33,13 +33,13 @@ internal static class AccountWorkspaceManager
         NotifyChanged();
     }
 
-    public static void Open(AccountProfile account)
+    public static void Open(AccountProfile account, bool activate = true)
     {
         MainWindow? existing;
         lock (Sync) Accounts.TryGetValue(account.UserId, out existing);
         if (existing is not null)
         {
-            existing.ShowWorkspace();
+            if (activate) existing.ShowWorkspace();
             return;
         }
 
@@ -47,10 +47,10 @@ internal static class AccountWorkspaceManager
             string.IsNullOrWhiteSpace(account.LocalName) ? account.DisplayName : account.LocalName,
             account.PhoneNumber,
             AutoLogin: true);
-        OpenNew(request);
+        OpenNew(request, activate, account.UserId);
     }
 
-    public static void OpenNew(AccountLaunchRequest request)
+    public static void OpenNew(AccountLaunchRequest request, bool activate = true, long expectedUserId = 0)
     {
         MainWindow? duplicate;
         lock (Sync)
@@ -58,14 +58,23 @@ internal static class AccountWorkspaceManager
                 string.Equals(x.PhoneNumber, request.PhoneNumber, StringComparison.OrdinalIgnoreCase));
         if (duplicate is not null)
         {
-            if (request.AutoLogin) duplicate.StartLoginFromManager();
-            else duplicate.ShowWorkspace();
+            if (request.AutoLogin) duplicate.StartLoginFromManager(activate);
+            else if (activate) duplicate.ShowWorkspace();
             return;
         }
 
         var window = new MainWindow(request, managedWorkspace: true);
-        Register(window);
-        window.Show();
+        Register(window, expectedUserId);
+        if (activate)
+        {
+            window.Show();
+        }
+        else
+        {
+            // Auto-start the account services without ever making the workspace
+            // visible. Show()+Hide() caused one startup flash per account.
+            window.StartWorkspaceInBackground();
+        }
     }
 
     public static bool IsRunning(long userId)
@@ -96,8 +105,9 @@ internal static class AccountWorkspaceManager
         MainWindow? window;
         lock (Sync) Accounts.TryGetValue(userId, out window);
         if (window is null) return;
-        if (window.IsWorkspaceOnline) window.ShowWorkspace();
-        else window.StartLoginFromManager();
+        // Opening an existing workspace must not start a second login while the
+        // first login is awaiting verification or the client is recovering.
+        window.ShowWorkspace();
     }
 
     public static void Stop(long userId)

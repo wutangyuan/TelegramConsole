@@ -62,7 +62,8 @@ public sealed record ChatLine(
     int ViewCount = 0,
     int ForwardCount = 0,
     long GroupedId = 0,
-    IReadOnlyList<ChatReaction>? Reactions = null)
+    IReadOnlyList<ChatReaction>? Reactions = null,
+    bool IsDeleted = false)
 {
     public string DisplayText => string.IsNullOrWhiteSpace(MediaLabel) || Text == MediaLabel
         ? Text

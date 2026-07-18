@@ -213,6 +213,38 @@ api.MapPost("/accounts/{id:guid}/messages", async (Guid id, SendChatMessageReque
     await manager.SendAsync(id, request);
     return Results.Accepted();
 });
+api.MapPost("/accounts/{id:guid}/messages/{messageId:int}/reply", async (
+    Guid id, int messageId, SendChatMessageRequest request, AccountRuntimeManager manager) =>
+{
+    await manager.SendReplyAsync(id, messageId, request);
+    return Results.Accepted();
+});
+api.MapPut("/accounts/{id:guid}/messages/{messageId:int}", async (
+    Guid id, int messageId, SendChatMessageRequest request, AccountRuntimeManager manager) =>
+{
+    await manager.EditMessageAsync(id, messageId, request);
+    return Results.Accepted();
+});
+api.MapDelete("/accounts/{id:guid}/messages/{messageId:int}", async (
+    Guid id, int messageId, long dialogId, string dialogKind, string dialogName, AccountRuntimeManager manager) =>
+{
+    await manager.DeleteMessageAsync(
+        id, messageId, new DialogItem(dialogName, dialogId, dialogKind, dialogKind != "User"));
+    return Results.NoContent();
+});
+api.MapGet("/accounts/{id:guid}/reactions", async (
+    Guid id, long dialogId, string dialogKind, string dialogName, AccountRuntimeManager manager) =>
+    Results.Ok(await manager.LoadAvailableReactionsAsync(
+        id, new DialogItem(dialogName, dialogId, dialogKind, dialogKind != "User"))));
+api.MapPost("/accounts/{id:guid}/messages/{messageId:int}/reaction", async (
+    Guid id, int messageId, SendReactionInput request, AccountRuntimeManager manager) =>
+{
+    await manager.SendReactionAsync(
+        id, messageId,
+        new DialogItem(request.DialogName, request.DialogId, request.DialogKind, request.DialogKind != "User"),
+        request.Emoji);
+    return Results.Accepted();
+});
 api.MapGet("/accounts/{id:guid}/schedules", (Guid id, AccountRuntimeManager manager) => manager.GetSchedules(id));
 api.MapPost("/accounts/{id:guid}/schedules", async (Guid id, ScheduleInput request, AccountRuntimeManager manager) =>
 {
@@ -332,6 +364,8 @@ internal sealed record EmailSettingsInput(
     string Password, string FromAddress, bool ClearPassword);
 internal sealed record EmailTestInput(string Recipient);
 internal sealed record ProxyTestInput(string Host, int Port);
+internal sealed record SendReactionInput(
+    long DialogId, string DialogKind, string DialogName, string Emoji);
 
 internal sealed record ScheduleInput(
     Guid? Id,

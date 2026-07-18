@@ -79,6 +79,16 @@ public sealed class AccountRuntimeManager : IAsyncDisposable
         Get(id).LoadHistoryAsync(dialog, limit);
     public IReadOnlyList<ChatLine> GetRecentMessages(Guid id, int limit = 300) => Get(id).GetRecentMessages(limit);
     public Task SendAsync(Guid id, SendChatMessageRequest request) => Get(id).SendAsync(request);
+    public Task SendReplyAsync(Guid id, int messageId, SendChatMessageRequest request) =>
+        Get(id).SendReplyAsync(messageId, request);
+    public Task EditMessageAsync(Guid id, int messageId, SendChatMessageRequest request) =>
+        Get(id).EditMessageAsync(messageId, request);
+    public Task DeleteMessageAsync(Guid id, int messageId, DialogItem dialog) =>
+        Get(id).DeleteMessageAsync(messageId, dialog);
+    public Task<IReadOnlyList<string>> LoadAvailableReactionsAsync(Guid id, DialogItem dialog) =>
+        Get(id).LoadAvailableReactionsAsync(dialog);
+    public Task SendReactionAsync(Guid id, int messageId, DialogItem dialog, string emoji) =>
+        Get(id).SendReactionAsync(messageId, dialog, emoji);
     public IReadOnlyList<ScheduledMessage> GetSchedules(Guid id) => Get(id).GetSchedules();
     public Task UpsertScheduleAsync(Guid id, ScheduledMessage schedule) => Get(id).UpsertScheduleAsync(schedule);
     public Task DeleteScheduleAsync(Guid id, Guid scheduleId) => Get(id).DeleteScheduleAsync(scheduleId);
@@ -143,7 +153,7 @@ internal sealed class AccountRuntime : IAsyncDisposable
     private readonly ISettingsStore _store;
     private readonly string _dataDirectory;
     private readonly SemaphoreSlim _lifecycle = new(1, 1);
-    private readonly Queue<ChatLine> _messages = new();
+    private readonly List<ChatLine> _messages = [];
     private readonly object _messagesSync = new();
     private readonly Queue<AppLogEntry> _logs = new();
     private readonly object _logsSync = new();
@@ -200,6 +210,7 @@ internal sealed class AccountRuntime : IAsyncDisposable
             _runtimeSettings = settings;
             _telegram = new TelegramService(_store, _logger);
             _telegram.MessageReceived += OnMessageReceived;
+            _telegram.MessageDeleted += OnMessageDeleted;
             _telegram.ConnectionStateChanged += OnConnectionStateChanged;
             _scheduler = new SchedulerService(_telegram, _store, settings, _logger);
             _intervalChatAutomation = new IntervalChatAutomationService(_telegram, _store, _logger);
@@ -320,11 +331,42 @@ internal sealed class AccountRuntime : IAsyncDisposable
     {
         lock (_messagesSync)
         {
-            _messages.Enqueue(line);
-            while (_messages.Count > 500) _messages.Dequeue();
+            UpsertMessage(line);
         }
         _lastActivityAt = DateTimeOffset.Now;
     }
+
+    private void OnMessageDeleted(MessageDeletion deletion)
+    {
+        lock (_messagesSync)
+        {
+            foreach (var deleted in deletion.Messages)
+            {
+                var index = _messages.FindIndex(x => SameMessage(x, deletion.ChatKind, deletion.ChatId, deleted.MessageId));
+                if (index < 0) continue; // Only show withdrawals whose original text is cached.
+                _messages[index] = _messages[index] with
+                {
+                    Text = string.IsNullOrWhiteSpace(deleted.Text) ? _messages[index].Text : deleted.Text,
+                    IsDeleted = true
+                };
+            }
+        }
+        _lastActivityAt = DateTimeOffset.Now;
+    }
+
+    private void UpsertMessage(ChatLine line)
+    {
+        var index = line.MessageId > 0
+            ? _messages.FindIndex(x => SameMessage(x, line.ChatKind, line.ChatId, line.MessageId))
+            : -1;
+        if (index >= 0) _messages[index] = line;
+        else _messages.Add(line);
+        while (_messages.Count > 500) _messages.RemoveAt(0);
+    }
+
+    private static bool SameMessage(ChatLine line, string kind, long chatId, int messageId) =>
+        line.MessageId == messageId && line.ChatId == chatId &&
+        string.Equals(line.ChatKind, kind, StringComparison.OrdinalIgnoreCase);
 
     private void OnLogEntry(AppLogEntry entry)
     {
@@ -408,7 +450,10 @@ internal sealed class AccountRuntime : IAsyncDisposable
     public async Task<IReadOnlyList<ChatLine>> LoadHistoryAsync(DialogItem dialog, int limit)
     {
         EnsureOnline();
-        return await _telegram!.LoadHistoryAsync(dialog, Math.Clamp(limit, 1, 300));
+        var history = await _telegram!.LoadHistoryAsync(dialog, Math.Clamp(limit, 1, 300));
+        lock (_messagesSync)
+            foreach (var line in history) UpsertMessage(line);
+        return history;
     }
 
     public Task SendAsync(SendChatMessageRequest request)
@@ -418,6 +463,50 @@ internal sealed class AccountRuntime : IAsyncDisposable
         return _telegram!.SendAsync(
             new DialogItem(request.DialogName, request.DialogId, request.DialogKind, request.DialogKind != "User"),
             request.Message.Trim());
+    }
+
+    public Task SendReplyAsync(int messageId, SendChatMessageRequest request)
+    {
+        EnsureOnline();
+        ValidateMessageOperation(messageId, request.Message);
+        return _telegram!.SendReplyAsync(ToDialog(request), messageId, request.Message.Trim());
+    }
+
+    public Task EditMessageAsync(int messageId, SendChatMessageRequest request)
+    {
+        EnsureOnline();
+        ValidateMessageOperation(messageId, request.Message);
+        return _telegram!.EditMessageAsync(ToDialog(request), messageId, request.Message.Trim());
+    }
+
+    public Task DeleteMessageAsync(int messageId, DialogItem dialog)
+    {
+        EnsureOnline();
+        if (messageId <= 0) throw new ArgumentException("消息 ID 无效");
+        return _telegram!.DeleteMessagesAsync(dialog, [messageId], revoke: true);
+    }
+
+    public Task<IReadOnlyList<string>> LoadAvailableReactionsAsync(DialogItem dialog)
+    {
+        EnsureOnline();
+        return _telegram!.LoadAvailableReactionsAsync(dialog);
+    }
+
+    public Task SendReactionAsync(int messageId, DialogItem dialog, string emoji)
+    {
+        EnsureOnline();
+        if (messageId <= 0) throw new ArgumentException("消息 ID 无效");
+        if (string.IsNullOrWhiteSpace(emoji)) throw new ArgumentException("请选择回应表情");
+        return _telegram!.SendReactionAsync(dialog, messageId, emoji.Trim());
+    }
+
+    private static DialogItem ToDialog(SendChatMessageRequest request) =>
+        new(request.DialogName, request.DialogId, request.DialogKind, request.DialogKind != "User");
+
+    private static void ValidateMessageOperation(int messageId, string message)
+    {
+        if (messageId <= 0) throw new ArgumentException("消息 ID 无效");
+        if (string.IsNullOrWhiteSpace(message)) throw new ArgumentException("消息不能为空");
     }
 
     public IReadOnlyList<ScheduledMessage> GetSchedules() => _profile?.Schedules.ToArray() ?? [];
@@ -495,6 +584,7 @@ internal sealed class AccountRuntime : IAsyncDisposable
     private void DisposeServices()
     {
         if (_telegram is not null) _telegram.MessageReceived -= OnMessageReceived;
+        if (_telegram is not null) _telegram.MessageDeleted -= OnMessageDeleted;
         if (_telegram is not null) _telegram.ConnectionStateChanged -= OnConnectionStateChanged;
         _mentionMonitor?.Dispose();
         _exceptionMonitor?.Dispose();

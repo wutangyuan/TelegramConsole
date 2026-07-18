@@ -36,6 +36,12 @@
           <article><span>等待验证</span><strong id="waitingCount">0</strong></article>
           <article><span>连接异常</span><strong id="faultCount">0</strong></article>
         </div>
+        <div class="stats resource-stats">
+          <article><span>应用内存</span><strong id="resourceMemory">0 B</strong><small id="resourceMemoryDetail">专用 0 B · 托管堆 0 B</small></article>
+          <article><span>应用数据</span><strong id="resourceStorage">0 B</strong><small id="resourceStorageDetail">媒体缓存 0 B</small></article>
+          <article><span>磁盘 I/O</span><strong id="resourceDisk">↓ 0 B · ↑ 0 B</strong><small id="resourceDiskDetail">当前 ↓ 0 B/s · ↑ 0 B/s</small></article>
+          <article><span>Telegram 流量</span><strong id="resourceTraffic">↓ 0 B · ↑ 0 B</strong><small id="resourceTrafficDetail">当前 ↓ 0 B/s · ↑ 0 B/s</small></article>
+        </div>
         <div class="panel">
           <div class="panel-head"><div><h2>账户工作区</h2><p>可同时运行多个账户，每个账户使用独立 Session。</p></div></div>
           <div id="accountGrid" class="account-grid empty-state">尚未添加账户</div>
@@ -46,6 +52,7 @@
         <div class="page-title"><div><h1>消息终端</h1><p>显示后台实时收到的最近 300 条消息。</p></div></div>
         <div class="toolbar"><label>账户<select id="chatAccount"></select></label><label class="grow">会话<select id="chatDialog"></select></label><button id="loadDialogsButton" class="secondary">加载会话</button></div>
         <div id="messageTerminal" class="terminal"><div class="terminal-empty">请选择在线账户并加载会话</div></div>
+        <div id="composeBar" class="compose-bar" hidden><span id="composeText"></span><button type="button" onclick="cancelCompose()" aria-label="取消回复或编辑">×</button></div>
         <div class="send-row"><input id="messageInput" placeholder="输入消息，按 Enter 发送" autocomplete="off"><button id="sendButton" class="primary" disabled>发送</button></div>
       </section>
 

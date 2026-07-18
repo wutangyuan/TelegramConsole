@@ -326,7 +326,13 @@ public sealed class ExceptionMonitorService : IExceptionMonitorService
         {
             DataSource = DatabasePath,
             Mode = SqliteOpenMode.ReadWriteCreate,
-            Cache = SqliteCacheMode.Shared
+            // Every account owns an exception-monitor instance, but they write to
+            // the same WAL database. Independent private connections avoid a
+            // read-only/shared-cache state leaking between the management center
+            // and account workspaces.
+            Cache = SqliteCacheMode.Private,
+            Pooling = false,
+            DefaultTimeout = 10
         }.ToString());
         connection.Open();
         return connection;
