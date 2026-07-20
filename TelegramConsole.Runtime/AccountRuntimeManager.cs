@@ -103,6 +103,8 @@ public sealed class AccountRuntimeManager : IAsyncDisposable
         Get(id).QueryExceptionsAsync(query);
     public Task RetryExceptionNotificationsAsync(Guid id, IEnumerable<long> recordIds) =>
         Get(id).RetryExceptionNotificationsAsync(recordIds);
+    public ExceptionAlertSettings GetExceptionAlerts(Guid id) => Get(id).GetExceptionAlerts();
+    public void SaveExceptionAlerts(Guid id, ExceptionAlertSettings settings) => Get(id).SaveExceptionAlerts(settings);
     public Task<IReadOnlyList<MentionRecord>> QueryMentionsAsync(Guid id, MentionQuery query) =>
         Get(id).QueryMentionsAsync(query);
     public Task<IReadOnlyList<OutgoingMessageRecord>> QueryOutboxAsync(Guid id, int limit = 200) =>
@@ -118,7 +120,7 @@ public sealed class AccountRuntimeManager : IAsyncDisposable
     {
         var settings = _settingsStore.Load();
         settings.Email = CloneEmail(email);
-        _settingsStore.Save(settings);
+        _settingsStore.SaveGlobalSettings(settings);
         foreach (var runtime in _runtimes.Values) runtime.UpdateEmailSettings(email);
     }
 
@@ -171,6 +173,7 @@ internal sealed class AccountRuntime : IAsyncDisposable
     private DateTimeOffset? _startedAt;
     private DateTimeOffset? _lastActivityAt;
     private bool _disposed;
+    private bool _manualLoginEmailSent;
 
     public ManagedAccountDefinition Definition { get; }
     public AccountRuntimeSnapshot Snapshot => new(
@@ -188,6 +191,20 @@ internal sealed class AccountRuntime : IAsyncDisposable
         _catalog = catalog;
         _store = store;
         _dataDirectory = dataDirectory;
+    }
+
+    public ExceptionAlertSettings GetExceptionAlerts()
+    {
+        var profile = _profile ?? throw new InvalidOperationException("请先完成 Telegram 登录后再配置异常通知");
+        return CloneExceptionAlerts(profile.ExceptionAlerts);
+    }
+
+    public void SaveExceptionAlerts(ExceptionAlertSettings settings)
+    {
+        var profile = _profile ?? throw new InvalidOperationException("请先完成 Telegram 登录后再配置异常通知");
+        profile.ExceptionAlerts = CloneExceptionAlerts(settings);
+        _store.SaveAccount(profile);
+        _exceptionMonitor?.ActivateAccount(profile.UserId, profile.ExceptionAlerts);
     }
 
     public async Task<AccountRuntimeSnapshot> StartAsync(CancellationToken cancellationToken)
@@ -262,6 +279,18 @@ internal sealed class AccountRuntime : IAsyncDisposable
         return settings;
     }
 
+    private static ExceptionAlertSettings CloneExceptionAlerts(ExceptionAlertSettings settings) => new()
+    {
+        NotificationsEnabled = settings.NotificationsEnabled,
+        EmailNotificationsEnabled = settings.EmailNotificationsEnabled,
+        ManualLoginEmailReminderEnabled = settings.ManualLoginEmailReminderEnabled,
+        MinimumLevel = settings.MinimumLevel,
+        TelegramPeerId = settings.TelegramPeerId,
+        TelegramPeerKind = settings.TelegramPeerKind,
+        TelegramPeerTitle = settings.TelegramPeerTitle,
+        EmailRecipient = settings.EmailRecipient
+    };
+
     private async Task CompleteLoginAsync()
     {
         if (_telegram is null || _scheduler is null || _exceptionMonitor is null || _mentionMonitor is null) return;
@@ -325,6 +354,33 @@ internal sealed class AccountRuntime : IAsyncDisposable
             TelegramConnectionStatus.Disconnected => AccountRuntimeStatus.Faulted,
             _ => AccountRuntimeStatus.Starting
         };
+        if (state.Status == TelegramConnectionStatus.Connected) _manualLoginEmailSent = false;
+        if (state.Status == TelegramConnectionStatus.Disconnected)
+            _ = SendManualLoginRequiredEmailAsync(state.Message);
+    }
+
+    private async Task SendManualLoginRequiredEmailAsync(string reason)
+    {
+        var profile = _profile;
+        var settings = _runtimeSettings;
+        if (_manualLoginEmailSent || profile is null || settings is null || !profile.ExceptionAlerts.ManualLoginEmailReminderEnabled) return;
+        var recipient = profile.ExceptionAlerts.EmailRecipient.Trim();
+        var email = settings.Email;
+        if (string.IsNullOrWhiteSpace(recipient) || string.IsNullOrWhiteSpace(email.SmtpHost) ||
+            string.IsNullOrWhiteSpace(email.FromAddress)) return;
+
+        _manualLoginEmailSent = true;
+        var account = string.IsNullOrWhiteSpace(profile.DisplayName) ? profile.LocalName : profile.DisplayName;
+        var body = $"【Telegram 控制台登录提醒】\n账户：{account}\n时间：{DateTime.Now:yyyy-MM-dd HH:mm:ss}\n状态：连接已确认无法自动恢复，需要手动重新登录。\n原因：{reason}";
+        try
+        {
+            await EmailNotificationService.SendAsync(email, recipient, "Telegram 账户需要重新登录", body);
+            _logger?.Info("Telegram.Connection", $"已向 {recipient} 发送账户重新登录邮件提醒");
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warning("Telegram.Connection", "账户重新登录邮件提醒发送失败", ex);
+        }
     }
 
     private void OnMessageReceived(ChatLine line)

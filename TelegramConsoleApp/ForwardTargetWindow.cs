@@ -30,7 +30,7 @@ public sealed class ForwardTargetWindow : Window
             Margin = new Thickness(0, 0, 0, 8),
             Foreground = System.Windows.Media.Brushes.SlateGray
         });
-        _targetBox = new ComboBox { ItemsSource = dialogs.ToList(), DisplayMemberPath = "Name" };
+        _targetBox = new ComboBox { ItemsSource = dialogs.ToList(), DisplayMemberPath = "DisplayName" };
         SearchableComboBoxBehavior.SetIsEnabled(_targetBox, true);
         Grid.SetRow(_targetBox, 1);
         root.Children.Add(_targetBox);

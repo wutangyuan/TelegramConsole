@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>TelegramConsole NAS</title>
-  <link rel="stylesheet" href="/styles.css?v=20260717-settings">
+  <link rel="stylesheet" href="/styles.css?v=20260720-web-sync">
 </head>
 <body>
   <header class="topbar">
@@ -50,10 +50,11 @@
 
       <section id="chatPage" class="page">
         <div class="page-title"><div><h1>消息终端</h1><p>显示后台实时收到的最近 300 条消息。</p></div></div>
-        <div class="toolbar"><label>账户<select id="chatAccount"></select></label><label class="grow">会话<select id="chatDialog"></select></label><button id="loadDialogsButton" class="secondary">加载会话</button></div>
+        <div class="toolbar toolbar-wrap"><label>账户<select id="chatAccount"></select></label><label>类型<select id="chatDialogType"><option value="All">全部会话</option><option value="User">私聊</option><option value="Group">群聊与频道</option><option value="Bot">机器人</option></select></label><label class="grow">会话<select id="chatDialog"></select></label><button id="loadDialogsButton" class="secondary">加载会话</button><div class="view-switch" aria-label="消息视图"><button id="terminalViewButton" class="active" type="button">终端</button><button id="visualViewButton" type="button">可视化</button></div></div>
         <div id="messageTerminal" class="terminal"><div class="terminal-empty">请选择在线账户并加载会话</div></div>
+        <div id="messageVisual" class="visual-chat" hidden><div class="terminal-empty">请选择会话</div></div>
         <div id="composeBar" class="compose-bar" hidden><span id="composeText"></span><button type="button" onclick="cancelCompose()" aria-label="取消回复或编辑">×</button></div>
-        <div class="send-row"><input id="messageInput" placeholder="输入消息，按 Enter 发送" autocomplete="off"><button id="sendButton" class="primary" disabled>发送</button></div>
+        <div class="send-row"><textarea id="messageInput" rows="2" placeholder="输入消息；Enter 发送，Alt+Enter 换行" autocomplete="off"></textarea><button id="sendButton" class="primary" disabled>发送</button></div>
       </section>
 
       <section id="monitorPage" class="page">
@@ -81,7 +82,7 @@
       </section>
 
       <section id="exceptionsPage" class="page">
-        <div class="page-title"><div><h1>异常中心</h1><p>仅展示已入库的异常日志，可查看完整堆栈并重试通知。</p></div><button id="refreshExceptionsButton" class="secondary">刷新记录</button></div>
+        <div class="page-title"><div><h1>异常中心</h1><p>仅展示已入库的异常日志，可查看完整堆栈并重试通知。</p></div><div><button id="exceptionAlertSettingsButton" class="secondary">通知配置</button><button id="refreshExceptionsButton" class="secondary">刷新记录</button></div></div>
         <div class="toolbar toolbar-wrap">
           <label>账户<select id="exceptionAccount"></select></label>
           <label>开始日期<input id="exceptionFrom" type="date"></label>
@@ -202,7 +203,24 @@
     <div class="dialog-actions"><button type="button" class="secondary close-dialog">关闭</button></div>
   </dialog>
 
+  <dialog id="exceptionAlertDialog">
+    <form id="exceptionAlertForm" method="dialog">
+      <div class="dialog-head"><h2>账户异常通知配置</h2><button type="button" class="icon-button close-dialog">×</button></div>
+      <p class="hint">Telegram 异常通知、异常邮件通知和“需手动登录”邮件提醒相互独立。SMTP 在系统设置中统一配置。</p>
+      <div class="form-grid">
+        <label>账户<select id="exceptionAlertAccount" required></select></label>
+        <label>最低级别<select id="exceptionAlertLevel"><option value="Error">Error 及以上</option><option value="Critical">仅 Critical</option></select></label>
+        <label class="wide">Telegram 接收目标<select id="exceptionAlertTelegramTarget"><option value="">不发送 Telegram 通知</option></select></label>
+        <label class="wide">通知邮箱<input id="exceptionAlertEmail" type="email" placeholder="仅作为已开启的邮件通知接收地址"></label>
+        <label class="check"><input id="exceptionAlertTelegramEnabled" type="checkbox"> 启用异常 Telegram 通知</label>
+        <label class="check"><input id="exceptionAlertEmailEnabled" type="checkbox"> 启用异常邮件通知</label>
+        <label class="check wide"><input id="exceptionAlertManualLoginEnabled" type="checkbox"> 账户断线且需手动登录时发送邮件提醒</label>
+      </div>
+      <div class="dialog-actions"><button type="button" class="secondary close-dialog">取消</button><button type="submit" class="primary">保存通知配置</button></div>
+    </form>
+  </dialog>
+
   <div id="toast" class="toast"></div>
-  <script src="/app.js?v=20260717-settings"></script>
+  <script src="/app.js?v=20260720-web-sync"></script>
 </body>
 </html>

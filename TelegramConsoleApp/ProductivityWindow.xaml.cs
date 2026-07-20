@@ -33,7 +33,7 @@ public partial class ProductivityWindow : Window
         _logger = logger;
 
         var scopes = new[] { new SearchScope(LocalizationManager.Get("AllDialogs"), null) }
-            .Concat(dialogs.Select(x => new SearchScope(x.Name, x))).ToArray();
+            .Concat(dialogs.Select(x => new SearchScope(x.DisplayName, x))).ToArray();
         SearchScopeBox.ItemsSource = scopes;
         SearchScopeBox.SelectedIndex = 0;
         ServerScheduleDialogBox.ItemsSource = dialogs;

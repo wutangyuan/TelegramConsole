@@ -38,6 +38,8 @@ public partial class MainWindow : Window
     private bool _initialized;
     private bool _resourcesDisposed;
     private bool _loginInProgress;
+    private bool _workspaceConnectionFailed;
+    private bool _manualLoginEmailSent;
     private Task? _workspaceStartTask;
     private (string Kind, long Id, DateTime ExpiresUtc)? _pendingSentScroll;
     private bool _unreadNotificationsReady;
@@ -48,7 +50,7 @@ public partial class MainWindow : Window
     private HashSet<long> _knownMentionIds = [];
     private HashSet<long> _knownExceptionIds = [];
     private int _exceptionQueryLimit = 10;
-    private GridLength _expandedDialogWidth = new(290);
+    private GridLength _expandedDialogWidth = new(320);
     private ChatPresentationMode _chatPresentationMode;
 
     public long AccountUserId => _activeAccount?.UserId ?? 0;
@@ -61,6 +63,7 @@ public partial class MainWindow : Window
             ? _activeAccount.DisplayName
             : $"{_activeAccount.LocalName} · {_activeAccount.DisplayName}";
     public bool IsWorkspaceOnline => _telegram.IsLoggedIn;
+    public bool IsWorkspaceConnectionFailed => _workspaceConnectionFailed;
     public string PhoneNumber => PhoneBox.Text.Trim();
 
     public MainWindow() : this(null, false)
@@ -168,8 +171,12 @@ public partial class MainWindow : Window
         await RunUiAsync(EnsureWorkspaceStartedAsync);
     }
 
-    private Task EnsureWorkspaceStartedAsync() =>
-        _workspaceStartTask ??= InitializeWorkspaceAsync();
+    private async Task EnsureWorkspaceStartedAsync()
+    {
+        if (_workspaceStartTask is null || _workspaceStartTask.IsFaulted || _workspaceStartTask.IsCanceled)
+            _workspaceStartTask = InitializeWorkspaceAsync();
+        await _workspaceStartTask;
+    }
 
     private async Task InitializeWorkspaceAsync()
     {
@@ -277,6 +284,8 @@ public partial class MainWindow : Window
     {
         if (_loginInProgress) return;
         _loginInProgress = true;
+        _workspaceConnectionFailed = false;
+        AccountWorkspaceManager.NotifyChanged();
         try
         {
         if (!int.TryParse(ApiIdBox.Text.Trim(), out var apiId) || apiId <= 0)
@@ -292,6 +301,13 @@ public partial class MainWindow : Window
         SetLoginBusy(true);
         SetStatus(L("ConnectingTelegram"));
         await HandleLoginResultAsync(await _telegram.BeginLoginAsync(_settings));
+        }
+        catch (Exception ex)
+        {
+            _workspaceConnectionFailed = true;
+            ShowDisconnectedLogin(UserMessageFormatter.From(ex));
+            AccountWorkspaceManager.NotifyChanged();
+            throw;
         }
         finally
         {
@@ -393,6 +409,8 @@ public partial class MainWindow : Window
 
     private void ShowAuthenticatedAccount()
     {
+        _manualLoginEmailSent = false;
+        _workspaceConnectionFailed = false;
         LoggedInAccountText.Text = _telegram.CurrentUser;
         UpdateTrayAccount(_telegram.CurrentUser);
         ConnectionStatusText.Text = L("Online");
@@ -441,10 +459,12 @@ public partial class MainWindow : Window
                 SetStatus(state.Message, Brushes.DarkOrange);
                 break;
             case TelegramConnectionStatus.Connected:
+                _workspaceConnectionFailed = false;
                 if (_telegram.CurrentUserId != 0) ShowAuthenticatedAccount();
                 SetStatus(state.Message, Brushes.ForestGreen);
                 break;
             case TelegramConnectionStatus.Disconnected:
+                _workspaceConnectionFailed = true;
                 ShowDisconnectedLogin(state.Message);
                 break;
         }
@@ -465,12 +485,35 @@ public partial class MainWindow : Window
             ContinueLoginButton.Visibility = Visibility.Collapsed;
         SetLoginBusy(false);
         SetStatus(message, Brushes.OrangeRed);
+        _ = SendManualLoginRequiredEmailAsync(message);
         if (!IsVisible && _trayIcon is not null)
             _trayIcon.ShowBalloonTip(
                 5000,
                 L("ConnectionErrorTitle"),
                 L("ConnectionErrorBody"),
                 System.Windows.Forms.ToolTipIcon.Error);
+    }
+
+    private async Task SendManualLoginRequiredEmailAsync(string reason)
+    {
+        if (_manualLoginEmailSent || _activeAccount is null || !_activeAccount.ExceptionAlerts.ManualLoginEmailReminderEnabled) return;
+        var recipient = _activeAccount.ExceptionAlerts.EmailRecipient.Trim();
+        if (string.IsNullOrWhiteSpace(recipient) || !IsEmailConfigured()) return;
+
+        _manualLoginEmailSent = true;
+        var account = string.IsNullOrWhiteSpace(_activeAccount.DisplayName)
+            ? _activeAccount.LocalName
+            : _activeAccount.DisplayName;
+        var body = $"【Telegram 控制台登录提醒】\n账户：{account}\n时间：{DateTime.Now:yyyy-MM-dd HH:mm:ss}\n状态：连接已确认无法自动恢复，需要手动重新登录。\n原因：{reason}";
+        try
+        {
+            await EmailNotificationService.SendAsync(_settings.Email, recipient, "Telegram 账户需要重新登录", body);
+            _logger.Info("Telegram.Connection", $"已向 {recipient} 发送账户重新登录邮件提醒");
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning("Telegram.Connection", "账户重新登录邮件提醒发送失败", ex);
+        }
     }
 
     private void UpdateTrayAccount(string? accountName = null)
@@ -556,6 +599,8 @@ public partial class MainWindow : Window
         ConfirmationPeerBox.ItemsSource = null;
         ExceptionPeerBox.ItemsSource = null;
         ExceptionNotifyEnabledBox.IsChecked = account.ExceptionAlerts.NotificationsEnabled;
+        ExceptionEmailNotifyEnabledBox.IsChecked = account.ExceptionAlerts.EmailNotificationsEnabled;
+        ManualLoginEmailReminderBox.IsChecked = account.ExceptionAlerts.ManualLoginEmailReminderEnabled;
         ExceptionMinimumLevelBox.SelectedIndex = account.ExceptionAlerts.MinimumLevel == AppLogLevel.Critical ? 1 : 0;
         ExceptionEmailBox.Text = account.ExceptionAlerts.EmailRecipient;
         _exceptionMonitor.ActivateAccount(userId, account.ExceptionAlerts);
@@ -611,6 +656,15 @@ public partial class MainWindow : Window
     private async Task LoadDialogsAsync()
     {
         _allDialogs = await _telegram.LoadDialogsAsync();
+        DialogTypeFilterBox.ItemsSource = new List<DialogTypeFilter>
+        {
+            new DialogTypeFilter(null, L("DialogTypeAll")),
+            new DialogTypeFilter(DialogCategory.Private, L("DialogTypePrivate")),
+            new DialogTypeFilter(DialogCategory.Bot, L("DialogTypeBot")),
+            new DialogTypeFilter(DialogCategory.Group, L("DialogTypeGroup")),
+            new DialogTypeFilter(DialogCategory.Channel, L("DialogTypeChannel"))
+        };
+        DialogTypeFilterBox.SelectedIndex = 0;
         FilterDialogs();
         var groups = _allDialogs.Where(x => x.IsGroup).ToList();
         ScheduleChatBox.ItemsSource = groups;
@@ -626,7 +680,7 @@ public partial class MainWindow : Window
         {
             new(null, "", "（不发送 Telegram 确认）")
         };
-        confirmationTargets.AddRange(_allDialogs.Select(x => new ConfirmationTarget(x, x.Kind, x.Name)));
+        confirmationTargets.AddRange(_allDialogs.Select(x => new ConfirmationTarget(x, x.Kind, x.DisplayName)));
         ConfirmationPeerBox.ItemsSource = confirmationTargets;
         ConfirmationPeerBox.SelectedIndex = 0;
         ExceptionPeerBox.ItemsSource = confirmationTargets;
@@ -640,7 +694,7 @@ public partial class MainWindow : Window
             new(null, "", "（仅记录，不发送通知）")
         };
         mentionTargets.AddRange(_allDialogs.Where(x => !x.IsGroup)
-            .Select(x => new ConfirmationTarget(x, x.Kind, x.Name)));
+            .Select(x => new ConfirmationTarget(x, x.Kind, x.DisplayName)));
         MentionTargetBox.ItemsSource = mentionTargets;
         MentionTargetBox.SelectedItem = _activeAccount?.MentionAlerts.TargetPeerId is long mentionPeerId
             ? mentionTargets.FirstOrDefault(x => x.Dialog?.Id == mentionPeerId &&
@@ -686,7 +740,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            DialogColumn.Width = _expandedDialogWidth.Value > 0 ? _expandedDialogWidth : new GridLength(290);
+            DialogColumn.Width = _expandedDialogWidth.Value > 0 ? _expandedDialogWidth : new GridLength(320);
             ToggleDialogsButton.Content = "❮";
             ToggleDialogsButton.ToolTip = L("CollapseDialogs");
         }
@@ -697,18 +751,31 @@ public partial class MainWindow : Window
         if (_initialized) FilterDialogs();
     }
 
+    private void DialogTypeFilterBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_initialized) FilterDialogs();
+    }
+
     private void FilterDialogs()
     {
         var selected = DialogsList.SelectedItem as DialogItem;
         var keyword = DialogFilterBox.Text.Trim();
-        var items = string.IsNullOrEmpty(keyword)
-            ? _allDialogs
-            : _allDialogs.Where(x => x.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase)).ToList();
+        var selectedType = (DialogTypeFilterBox.SelectedItem as DialogTypeFilter)?.Category;
+        var items = _allDialogs
+            .Where(x => selectedType is null || MatchesDialogCategory(x, selectedType.Value))
+            .Where(x => string.IsNullOrEmpty(keyword) || x.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            .ToList();
         DialogsList.ItemsSource = null;
         DialogsList.ItemsSource = items;
         if (selected is not null)
             DialogsList.SelectedItem = items.FirstOrDefault(x => x.Id == selected.Id && x.Kind == selected.Kind);
     }
+
+    private static bool MatchesDialogCategory(DialogItem dialog, DialogCategory category) => category switch
+    {
+        DialogCategory.Group => dialog.EffectiveCategory is DialogCategory.Group or DialogCategory.Supergroup,
+        _ => dialog.EffectiveCategory == category
+    };
 
     private async void DialogsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -1825,6 +1892,8 @@ public partial class MainWindow : Window
         var target = ExceptionPeerBox.SelectedItem as ConfirmationTarget;
         var alerts = _activeAccount.ExceptionAlerts;
         alerts.NotificationsEnabled = ExceptionNotifyEnabledBox.IsChecked == true;
+        alerts.EmailNotificationsEnabled = ExceptionEmailNotifyEnabledBox.IsChecked == true;
+        alerts.ManualLoginEmailReminderEnabled = ManualLoginEmailReminderBox.IsChecked == true;
         alerts.MinimumLevel = ExceptionMinimumLevelBox.SelectedIndex == 1
             ? AppLogLevel.Critical
             : AppLogLevel.Error;
@@ -2076,6 +2145,8 @@ public partial class MainWindow : Window
     {
         public override string ToString() => Name;
     }
+
+    private sealed record DialogTypeFilter(DialogCategory? Category, string Name);
 
     private sealed record MentionRow(
         long Id,

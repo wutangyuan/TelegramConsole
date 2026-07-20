@@ -75,6 +75,10 @@
     <sys:String x:Key="Keyword">关键字</sys:String><sys:String x:Key="Search">查询</sys:String><sys:String x:Key="Reset">重置</sys:String>
     <sys:String x:Key="OccurredAt">发生时间</sys:String><sys:String x:Key="Sender">发送人</sys:String>
     <sys:String x:Key="NotificationStatus">通知状态</sys:String><sys:String x:Key="EnableAutoNotification">启用自动通知</sys:String>
+    <sys:String x:Key="EnableExceptionTelegramNotification">启用异常 Telegram 通知</sys:String>
+    <sys:String x:Key="EnableExceptionEmailNotification">启用异常邮件通知</sys:String>
+    <sys:String x:Key="ManualLoginEmailReminder">账户断线且需手动登录时发送邮件提醒</sys:String>
+    <sys:String x:Key="ManualLoginEmailReminderHint">此项独立于“启用自动通知”；使用上方通知邮箱，每次断线确认无法自动恢复时仅发送一次。SMTP 请在“管理中心 → 设置 → 邮件 SMTP”配置。</sys:String>
     <sys:String x:Key="ErrorOrHigher">错误及以上</sys:String><sys:String x:Key="CriticalOnly">仅严重异常</sys:String>
     <sys:String x:Key="NotificationEmail">通知邮箱</sys:String><sys:String x:Key="SaveNotificationSettings">保存通知配置</sys:String>
     <sys:String x:Key="RetryNotification">重发选中通知</sys:String><sys:String x:Key="OpenDatabaseDirectory">打开数据库目录</sys:String>
@@ -127,8 +131,10 @@
     <sys:String x:Key="DailySchedule">每天 {0}</sys:String><sys:String x:Key="WeeklySchedule">每周{0} {1}</sys:String>
     <sys:String x:Key="EmailPrefix">邮件: </sys:String><sys:String x:Key="EmailSettingsSaved">邮件配置已加密保存</sys:String>
     <sys:String x:Key="EnableSsl">启用 SSL/TLS 加密连接</sys:String>
-    <sys:String x:Key="EmailConfigHint">这里是全局邮件发送配置。定时任务和异常通知只需填写各自的收件邮箱，发送时统一使用此 SMTP 账号。</sys:String>
+    <sys:String x:Key="EmailConfigHint">填写指引：服务器填写邮箱服务商提供的 SMTP 地址，通常优先使用端口 587 并启用 SSL/TLS；账号通常填写完整邮箱；密码填写 SMTP 授权码／应用专用密码，不是网页登录密码；发件地址一般与账号一致。示例：QQ 邮箱 smtp.qq.com:587、163 邮箱 smtp.163.com:587、Gmail smtp.gmail.com:587、Microsoft 365 smtp.office365.com:587。定时任务和异常通知只需填写各自的收件邮箱，发送时统一使用此 SMTP 账号。</sys:String>
+    <sys:String x:Key="TestRecipient">测试收件人</sys:String><sys:String x:Key="TestRecipientHint">留空时默认发送到上方“发件地址”</sys:String><sys:String x:Key="SendTestEmail">测试发送</sys:String><sys:String x:Key="SendingTestEmail">正在使用当前页面的 SMTP 参数发送测试邮件…</sys:String><sys:String x:Key="TestEmailSubject">TelegramConsole SMTP 测试邮件</sys:String><sys:String x:Key="TestEmailBody">这是一封由 TelegramConsole 发出的测试邮件。收到此邮件说明 SMTP 配置可用。</sys:String><sys:String x:Key="TestEmailSuccess">测试邮件已发送到：{0}</sys:String><sys:String x:Key="TestEmailSuccessHint">测试邮件已发送到：{0}。如未收到，请检查垃圾邮件箱。</sys:String><sys:String x:Key="TestEmailFailed">测试邮件发送失败</sys:String>
     <sys:String x:Key="SmtpPortInvalid">SMTP 端口必须是 1 到 65535 之间的整数</sys:String>
+    <sys:String x:Key="DialogTypeAll">全部会话</sys:String><sys:String x:Key="DialogTypePrivate">私聊</sys:String><sys:String x:Key="DialogTypeBot">机器人</sys:String><sys:String x:Key="DialogTypeGroup">群聊</sys:String><sys:String x:Key="DialogTypeChannel">频道</sys:String>
     <sys:String x:Key="EmailConfigIncomplete">邮件配置不完整，请至少填写 SMTP 服务器和发件地址</sys:String>
     <sys:String x:Key="EmailNotConfigured">已填写收件邮箱，但尚未配置邮件发送服务。请先进入“设置 → 邮件 SMTP”完成配置。</sys:String>
     <sys:String x:Key="Outbox">发件箱</sys:String><sys:String x:Key="Refresh">刷新</sys:String><sys:String x:Key="RetrySelected">重试选中</sys:String>

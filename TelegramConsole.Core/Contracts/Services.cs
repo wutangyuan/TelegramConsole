@@ -8,6 +8,7 @@ public interface ISettingsStore
     bool IsSessionInUse(string phoneNumber);
     AppSettings Load();
     void Save(AppSettings settings);
+    void SaveGlobalSettings(AppSettings settings);
     void SaveAccount(AccountProfile account);
     void RemoveAccount(long userId);
 }

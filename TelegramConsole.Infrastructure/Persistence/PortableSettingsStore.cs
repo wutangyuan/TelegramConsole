@@ -10,6 +10,7 @@ public sealed class PortableSettingsStore : ISettingsStore
 {
     private readonly object _sync = new();
     private readonly PortableDataProtection _protection;
+    private readonly EncryptedSettingsHistoryStore _history;
     private readonly JsonSerializerOptions _json = new()
     {
         WriteIndented = true,
@@ -26,6 +27,7 @@ public sealed class PortableSettingsStore : ISettingsStore
         Directory.CreateDirectory(DataDirectory);
         Directory.CreateDirectory(Path.Combine(DataDirectory, "sessions"));
         _protection = new PortableDataProtection(DataDirectory);
+        _history = new EncryptedSettingsHistoryStore(DataDirectory);
     }
 
     public string GetSessionPath(string phoneNumber)
@@ -61,7 +63,31 @@ public sealed class PortableSettingsStore : ISettingsStore
     public void Save(AppSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        lock (_sync) SaveCore(settings);
+        lock (_sync)
+        {
+            var latest = LoadUnsafe();
+            latest.ApiId = settings.ApiId;
+            latest.ApiHash = settings.ApiHash;
+            latest.PhoneNumber = settings.PhoneNumber;
+            latest.MonitorEnabled = settings.MonitorEnabled;
+            latest.ChatViewMode = settings.ChatViewMode;
+            foreach (var (userId, account) in settings.Accounts)
+                if (!latest.Accounts.ContainsKey(userId)) latest.Accounts[userId] = account;
+            SaveCore(latest);
+        }
+    }
+
+    public void SaveGlobalSettings(AppSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        lock (_sync)
+        {
+            var latest = LoadUnsafe();
+            latest.Language = settings.Language;
+            latest.Email = settings.Email;
+            latest.Proxy = settings.Proxy;
+            SaveCore(latest);
+        }
     }
 
     public void SaveAccount(AccountProfile account)
@@ -94,10 +120,19 @@ public sealed class PortableSettingsStore : ISettingsStore
 
     private void SaveCore(AppSettings settings)
     {
+        try
+        {
+            if (File.Exists(SettingsPath)) _history.Snapshot(File.ReadAllBytes(SettingsPath), "before-save");
+        }
+        catch
+        {
+            // The next primary save remains valid even if an old snapshot cannot be read.
+        }
         var bytes = JsonSerializer.SerializeToUtf8Bytes(settings, _json);
         var temporary = SettingsPath + ".tmp";
-        File.WriteAllBytes(temporary, _protection.Protect(bytes));
+        var encrypted = _protection.Protect(bytes);
+        File.WriteAllBytes(temporary, encrypted);
         File.Move(temporary, SettingsPath, true);
+        _history.Snapshot(encrypted, "saved");
     }
 }
-

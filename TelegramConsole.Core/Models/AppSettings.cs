@@ -61,7 +61,12 @@ public sealed class MentionAlertSettings
 
 public sealed class ExceptionAlertSettings
 {
+    // Existing setting: controls Telegram exception alerts.
     public bool NotificationsEnabled { get; set; } = true;
+    // Keep email exception alerts opt-in, independent of the Telegram channel.
+    public bool EmailNotificationsEnabled { get; set; }
+    /// <summary>Whether a disconnected account that needs a manual sign-in sends an email reminder.</summary>
+    public bool ManualLoginEmailReminderEnabled { get; set; } = true;
     public AppLogLevel MinimumLevel { get; set; } = AppLogLevel.Error;
     public long? TelegramPeerId { get; set; }
     public string TelegramPeerKind { get; set; } = "";

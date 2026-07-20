@@ -14,22 +14,23 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         _settings = settings;
         _store = store;
-        LanguageBox.SelectedIndex = settings.Language.Equals("zh-CN", StringComparison.OrdinalIgnoreCase) ? 1
-            : settings.Language.Equals("en-US", StringComparison.OrdinalIgnoreCase) ? 2
+        var globalSettings = store.Load();
+        LanguageBox.SelectedIndex = globalSettings.Language.Equals("zh-CN", StringComparison.OrdinalIgnoreCase) ? 1
+            : globalSettings.Language.Equals("en-US", StringComparison.OrdinalIgnoreCase) ? 2
             : 0;
-        EnabledBox.IsChecked = settings.Proxy.Enabled;
-        TypeBox.SelectedIndex = settings.Proxy.Type.Equals("MtProxy", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
-        HostBox.Text = string.IsNullOrWhiteSpace(settings.Proxy.Host) ? "127.0.0.1" : settings.Proxy.Host;
-        PortBox.Text = settings.Proxy.Port is > 0 and <= 65535 ? settings.Proxy.Port.ToString() : "7890";
-        UserNameBox.Text = settings.Proxy.UserName;
-        PasswordBox.Password = settings.Proxy.Password;
-        MtProxyUrlBox.Text = settings.Proxy.MtProxyUrl;
-        SmtpHostBox.Text = settings.Email.SmtpHost;
-        SmtpPortBox.Text = settings.Email.SmtpPort.ToString();
-        SmtpUserBox.Text = settings.Email.UserName;
-        SmtpPasswordBox.Password = settings.Email.Password;
-        SmtpFromBox.Text = settings.Email.FromAddress;
-        SmtpSslBox.IsChecked = settings.Email.EnableSsl;
+        EnabledBox.IsChecked = globalSettings.Proxy.Enabled;
+        TypeBox.SelectedIndex = globalSettings.Proxy.Type.Equals("MtProxy", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+        HostBox.Text = string.IsNullOrWhiteSpace(globalSettings.Proxy.Host) ? "127.0.0.1" : globalSettings.Proxy.Host;
+        PortBox.Text = globalSettings.Proxy.Port is > 0 and <= 65535 ? globalSettings.Proxy.Port.ToString() : "7890";
+        UserNameBox.Text = globalSettings.Proxy.UserName;
+        PasswordBox.Password = globalSettings.Proxy.Password;
+        MtProxyUrlBox.Text = globalSettings.Proxy.MtProxyUrl;
+        SmtpHostBox.Text = globalSettings.Email.SmtpHost;
+        SmtpPortBox.Text = globalSettings.Email.SmtpPort.ToString();
+        SmtpUserBox.Text = globalSettings.Email.UserName;
+        SmtpPasswordBox.Password = globalSettings.Email.Password;
+        SmtpFromBox.Text = globalSettings.Email.FromAddress;
+        SmtpSslBox.IsChecked = globalSettings.Email.EnableSsl;
         UpdateAvailability();
     }
 
@@ -119,13 +120,61 @@ public partial class SettingsWindow : Window
             _settings.Proxy.MtProxyUrl = MtProxyUrlBox.Text.Trim();
             _settings.Email = email;
             _settings.Language = (LanguageBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "";
-            _store.Save(_settings);
+            _store.SaveGlobalSettings(_settings);
             LocalizationManager.ApplyLanguage(_settings.Language);
             DialogResult = true;
         }
         catch (Exception ex)
         {
             System.Windows.MessageBox.Show(this, UserMessageFormatter.From(ex), LocalizationManager.Text("ProxySettingsTitle"), MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private async void SmtpTestButton_Click(object sender, RoutedEventArgs e)
+    {
+        var originalContent = SmtpTestButton.Content;
+        try
+        {
+            var email = ReadEmailSettings();
+            var recipient = SmtpTestRecipientBox.Text.Trim();
+            if (recipient.Length == 0) recipient = email.FromAddress;
+            _ = new System.Net.Mail.MailAddress(recipient);
+
+            SmtpTestButton.IsEnabled = false;
+            SmtpTestButton.Content = LocalizationManager.Text("Testing");
+            SmtpHintText.Text = LocalizationManager.Text("SendingTestEmail");
+            System.Windows.Input.Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
+
+            await EmailNotificationService.SendAsync(
+                email,
+                recipient,
+                LocalizationManager.Text("TestEmailSubject"),
+                LocalizationManager.Text("TestEmailBody"));
+
+            SmtpHintText.Text = LocalizationManager.Format("TestEmailSuccessHint", recipient);
+            System.Windows.MessageBox.Show(
+                this,
+                LocalizationManager.Format("TestEmailSuccess", recipient),
+                LocalizationManager.Text("SendTestEmail"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            var message = UserMessageFormatter.From(ex);
+            SmtpHintText.Text = LocalizationManager.Format("ErrorPrefix", message);
+            System.Windows.MessageBox.Show(
+                this,
+                message,
+                LocalizationManager.Text("TestEmailFailed"),
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+        finally
+        {
+            System.Windows.Input.Mouse.OverrideCursor = null;
+            SmtpTestButton.Content = originalContent;
+            SmtpTestButton.IsEnabled = true;
         }
     }
 

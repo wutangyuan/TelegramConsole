@@ -47,8 +47,7 @@ public sealed class ExceptionMonitorService : IExceptionMonitorService
         {
             var id = Insert(entry);
             RecordsChanged?.Invoke();
-            if (_activeAlerts?.NotificationsEnabled == true &&
-                entry.Level >= _activeAlerts.MinimumLevel)
+            if (ShouldNotify(_activeAlerts, entry.Level))
                 _notificationQueue.Writer.TryWrite(id);
         }
         catch
@@ -116,11 +115,8 @@ public sealed class ExceptionMonitorService : IExceptionMonitorService
     private long Insert(AppLogEntry entry)
     {
         var alert = _activeAlerts ?? new ExceptionAlertSettings { NotificationsEnabled = false };
-        var notificationStatus = !alert.NotificationsEnabled
-            ? "通知已关闭"
-            : entry.Level < alert.MinimumLevel ? "低于通知级别" : "待处理";
-        var telegramStatus = alert.TelegramPeerId is null ? "未配置" : notificationStatus;
-        var emailStatus = string.IsNullOrWhiteSpace(alert.EmailRecipient) ? "未配置" : notificationStatus;
+        var telegramStatus = ChannelStatus(alert.NotificationsEnabled, alert.TelegramPeerId is not null, entry.Level, alert.MinimumLevel);
+        var emailStatus = ChannelStatus(alert.EmailNotificationsEnabled, !string.IsNullOrWhiteSpace(alert.EmailRecipient), entry.Level, alert.MinimumLevel);
         using var connection = OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = """
@@ -205,13 +201,13 @@ public sealed class ExceptionMonitorService : IExceptionMonitorService
     public async Task SendTestNotificationAsync()
     {
         var alert = _activeAlerts ?? throw new InvalidOperationException("请先登录 Telegram 账号");
-        if (!alert.NotificationsEnabled)
-            throw new InvalidOperationException("请先启用异常自动通知");
+        if (!alert.NotificationsEnabled && !alert.EmailNotificationsEnabled)
+            throw new InvalidOperationException("请先启用 Telegram 异常通知或异常邮件通知");
 
         var text = $"【Telegram 控制台异常通知测试】\n时间：{DateTime.Now:yyyy-MM-dd HH:mm:ss}\n设备：{Environment.MachineName}\n如果收到此消息，说明通知配置正常。";
         var attempts = 0;
         var errors = new List<string>();
-        if (alert.TelegramPeerId is long peerId)
+        if (alert.NotificationsEnabled && alert.TelegramPeerId is long peerId)
         {
             attempts++;
             try
@@ -222,7 +218,7 @@ public sealed class ExceptionMonitorService : IExceptionMonitorService
             }
             catch (Exception ex) { errors.Add("Telegram：" + ex.Message); }
         }
-        if (!string.IsNullOrWhiteSpace(alert.EmailRecipient))
+        if (alert.EmailNotificationsEnabled && !string.IsNullOrWhiteSpace(alert.EmailRecipient))
         {
             attempts++;
             try
@@ -232,7 +228,7 @@ public sealed class ExceptionMonitorService : IExceptionMonitorService
             }
             catch (Exception ex) { errors.Add("邮件：" + ex.Message); }
         }
-        if (attempts == 0) throw new InvalidOperationException("请至少配置一个 Telegram 或邮件通知目标");
+        if (attempts == 0) throw new InvalidOperationException("请为已启用的通知渠道配置目标");
         if (errors.Count > 0) throw new InvalidOperationException(string.Join(Environment.NewLine, errors));
     }
 
@@ -253,7 +249,7 @@ public sealed class ExceptionMonitorService : IExceptionMonitorService
         var text = BuildNotification(record);
 
         var telegramStatus = "未配置";
-        if (alert.TelegramPeerId is long peerId)
+        if (alert.NotificationsEnabled && alert.TelegramPeerId is long peerId)
         {
             try
             {
@@ -266,7 +262,7 @@ public sealed class ExceptionMonitorService : IExceptionMonitorService
         }
 
         var emailStatus = "未配置";
-        if (!string.IsNullOrWhiteSpace(alert.EmailRecipient))
+        if (alert.EmailNotificationsEnabled && !string.IsNullOrWhiteSpace(alert.EmailRecipient))
         {
             try
             {
@@ -284,6 +280,16 @@ public sealed class ExceptionMonitorService : IExceptionMonitorService
         RecordsChanged?.Invoke();
         _logger.Info("ExceptionMonitor", $"异常 #{id} 通知处理完成，Telegram={telegramStatus}，Email={emailStatus}");
     }
+
+    private static bool ShouldNotify(ExceptionAlertSettings? alert, AppLogLevel level) =>
+        alert is not null && level >= alert.MinimumLevel &&
+        (alert.NotificationsEnabled && alert.TelegramPeerId is not null ||
+         alert.EmailNotificationsEnabled && !string.IsNullOrWhiteSpace(alert.EmailRecipient));
+
+    private static string ChannelStatus(bool enabled, bool configured, AppLogLevel level, AppLogLevel minimumLevel) =>
+        !enabled ? "通知已关闭" :
+        !configured ? "未配置" :
+        level < minimumLevel ? "低于通知级别" : "待处理";
 
     private async Task<ExceptionRecord?> GetByIdAsync(long id)
     {

@@ -321,7 +321,7 @@
           const problem = await response.json().catch(() => ({}));
           throw new Error(problem.detail || '登录失败');
         }
-        location.replace('/index.html?v=20260717-settings');
+        location.replace('/index.html?v=20260720-web-sync');
       } catch (ex) {
         error.textContent = ex.message || '登录失败，请稍后重试';
       } finally {

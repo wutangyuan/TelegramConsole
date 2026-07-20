@@ -108,7 +108,7 @@
 
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition x:Name="DialogColumn" Width="290" MinWidth="0" />
+                <ColumnDefinition x:Name="DialogColumn" Width="380" MinWidth="0" />
                 <ColumnDefinition Width="34" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
@@ -116,7 +116,7 @@
             <Grid Grid.Column="0" Background="White">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="42" />
-                    <RowDefinition Height="42" />
+                    <RowDefinition Height="46" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
                 <Grid Margin="0,0,0,6">
@@ -130,11 +130,23 @@
                     <Button Grid.Column="2" Content="{DynamicResource BlankScreen}" Click="BlankConsole_Click" Margin="6,0,0,0" Padding="7,5" FontSize="12"
                             ToolTip="取消当前会话并停止在聊天终端显示消息" />
                 </Grid>
-                <TextBox x:Name="DialogFilterBox" Grid.Row="1" TextChanged="DialogFilterBox_TextChanged"
-                         ToolTip="输入名称筛选会话" Margin="0,0,0,6" />
+                <Border Grid.Row="1" Margin="8,4,8,4" Padding="4" Background="#F8FAFC"
+                        BorderBrush="#D8E3EF" BorderThickness="1" CornerRadius="6">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="132" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="DialogFilterBox" TextChanged="DialogFilterBox_TextChanged"
+                                 ToolTip="输入名称筛选会话" Margin="0,0,6,0" Height="34" VerticalAlignment="Center" />
+                        <ComboBox x:Name="DialogTypeFilterBox" Grid.Column="1" Margin="0" Height="34" VerticalAlignment="Center"
+                                  DisplayMemberPath="Name" SelectionChanged="DialogTypeFilterBox_SelectionChanged"
+                                  ToolTip="按会话类型筛选" />
+                    </Grid>
+                </Border>
                 <ListBox x:Name="DialogsList" Grid.Row="2" SelectionChanged="DialogsList_SelectionChanged"
-                         MouseDoubleClick="DialogsList_MouseDoubleClick"
-                         DisplayMemberPath="Name" BorderBrush="#CBD5E1">
+                          MouseDoubleClick="DialogsList_MouseDoubleClick"
+                          DisplayMemberPath="DisplayName" BorderBrush="#CBD5E1" Margin="8,0,8,8">
                     <ListBox.ContextMenu>
                         <ContextMenu>
                             <MenuItem Header="{DynamicResource OpenInConsole}" Click="OpenConsole_Click" />
@@ -270,44 +282,37 @@
                             <RowDefinition Height="32" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
-                        <Grid>
+                        <Grid Margin="4,8,4,0">
                             <Grid.RowDefinitions>
+                                <RowDefinition Height="42" />
+                                <RowDefinition Height="42" />
+                                <RowDefinition Height="42" />
                                 <RowDefinition Height="Auto" />
-                                <RowDefinition Height="38" />
                             </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="180" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="90" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="100" />
-                                <ColumnDefinition Width="100" />
-                                <ColumnDefinition Width="100" />
-                                <ColumnDefinition Width="100" />
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="{DynamicResource Chat}" VerticalAlignment="Center" />
-                            <ComboBox x:Name="ScheduleChatBox" Grid.Column="1" DisplayMemberPath="Name"
+                            <ComboBox x:Name="ScheduleChatBox" Grid.Column="1" DisplayMemberPath="DisplayName"
                                       local:SearchableComboBoxBehavior.IsEnabled="True" />
                             <TextBlock Grid.Column="2" Text="{DynamicResource Time}" VerticalAlignment="Center" Margin="8,0,0,0" />
                             <TextBox x:Name="ScheduleTimeBox" Grid.Column="3" Text="08:00" />
-                            <TextBlock Grid.Column="4" Text="{DynamicResource Content}" VerticalAlignment="Center" Margin="8,0,0,0" />
-                            <TextBox x:Name="ScheduleMessageBox" Grid.Column="5" Text="今日签到" />
-                            <Button Grid.Column="6" Content="{DynamicResource AddTask}" Click="AddSchedule_Click" />
-                            <Button x:Name="RunNowButton" Grid.Column="7" Content="{DynamicResource RunNow}" Click="RunNow_Click"
-                                    Style="{StaticResource PrimaryButtonStyle}" />
-                            <Button Grid.Column="8" Content="{DynamicResource EditSelected}" Click="EditSchedule_Click" />
-                            <Button Grid.Column="9" Content="{DynamicResource DeleteSelected}" Click="RemoveSchedule_Click" />
-                            <TextBlock Grid.Row="1" Text="{DynamicResource Period}" VerticalAlignment="Center" />
-                            <ComboBox x:Name="SchedulePeriodBox" Grid.Row="1" Grid.Column="1"
+                            <TextBlock Grid.Row="1" Text="{DynamicResource Content}" VerticalAlignment="Center" />
+                            <TextBox x:Name="ScheduleMessageBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="5" Text="今日签到" />
+                            <TextBlock Grid.Row="2" Text="{DynamicResource Period}" VerticalAlignment="Center" />
+                            <ComboBox x:Name="SchedulePeriodBox" Grid.Row="2" Grid.Column="1"
                                       SelectionChanged="SchedulePeriodBox_SelectionChanged">
                                 <ComboBoxItem Content="{DynamicResource Daily}" Tag="Daily" />
                                 <ComboBoxItem Content="{DynamicResource Weekly}" Tag="Weekly" />
                             </ComboBox>
-                            <TextBlock Grid.Row="1" Grid.Column="2" Text="{DynamicResource Weekday}" VerticalAlignment="Center" Margin="8,0,0,0" />
-                            <UniformGrid x:Name="ScheduleWeekDaysPanel" Grid.Row="1" Grid.Column="3"
-                                         Grid.ColumnSpan="7" Rows="1" IsEnabled="False" Margin="4,0">
+                            <TextBlock Grid.Row="2" Grid.Column="2" Text="{DynamicResource Weekday}" VerticalAlignment="Center" Margin="8,0,0,0" />
+                            <UniformGrid x:Name="ScheduleWeekDaysPanel" Grid.Row="2" Grid.Column="3"
+                                         Grid.ColumnSpan="3" Rows="1" IsEnabled="False" Margin="4,0">
                                 <CheckBox x:Name="AddMonday" Content="{DynamicResource MondayShort}" VerticalAlignment="Center" />
                                 <CheckBox x:Name="AddTuesday" Content="{DynamicResource TuesdayShort}" VerticalAlignment="Center" />
                                 <CheckBox x:Name="AddWednesday" Content="{DynamicResource WednesdayShort}" VerticalAlignment="Center" />
@@ -316,28 +321,37 @@
                                 <CheckBox x:Name="AddSaturday" Content="{DynamicResource SaturdayShort}" VerticalAlignment="Center" />
                                 <CheckBox x:Name="AddSunday" Content="{DynamicResource SundayShort}" VerticalAlignment="Center" />
                             </UniformGrid>
+                            <WrapPanel Grid.Row="3" Grid.ColumnSpan="6" Margin="4,6,4,4">
+                                <Button Content="{DynamicResource AddTask}" Click="AddSchedule_Click" />
+                                <Button x:Name="RunNowButton" Content="{DynamicResource RunNow}" Click="RunNow_Click"
+                                        Style="{StaticResource PrimaryButtonStyle}" />
+                                <Button Content="{DynamicResource EditSelected}" Click="EditSchedule_Click" />
+                                <Button Content="{DynamicResource DeleteSelected}" Click="RemoveSchedule_Click" />
+                            </WrapPanel>
                         </Grid>
-                        <StackPanel Grid.Row="1">
-                            <Grid Margin="0,5,0,0">
+                        <StackPanel Grid.Row="1" Margin="4,8,4,4">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="270" />
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="210" />
+                                    <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Text="{DynamicResource TelegramConfirmation}" VerticalAlignment="Center" />
                                 <ComboBox x:Name="ConfirmationPeerBox" Grid.Column="1" DisplayMemberPath="Name"
-                                          local:SearchableComboBoxBehavior.IsEnabled="True" />
-                                <TextBlock Grid.Column="2" Text="{DynamicResource ConfirmationEmail}" VerticalAlignment="Center" Margin="8,0,0,0" />
-                                <TextBox x:Name="ConfirmationEmailBox" Grid.Column="3" ToolTip="可留空" />
-                                <TextBlock Grid.Column="4" Text="{DynamicResource ConfirmationContent}" VerticalAlignment="Center" Margin="8,0,0,0" />
-                                <TextBox x:Name="ConfirmationTextBox" Grid.Column="5"
-                                         Text="签到完成：{群聊}，时间 {时间}" ToolTip="支持 {群聊}、{时间}、{内容}" />
+                                          Grid.ColumnSpan="3" local:SearchableComboBoxBehavior.IsEnabled="True" />
+                                <TextBlock Grid.Row="1" Text="{DynamicResource ConfirmationEmail}" VerticalAlignment="Center" Margin="0,4,0,0" />
+                                <TextBox x:Name="ConfirmationEmailBox" Grid.Row="1" Grid.Column="1" ToolTip="可留空" />
+                                <TextBlock Grid.Row="1" Grid.Column="2" Text="{DynamicResource ConfirmationContent}" VerticalAlignment="Center" Margin="8,4,0,0" />
+                                <TextBox x:Name="ConfirmationTextBox" Grid.Row="1" Grid.Column="3"
+                                          Text="签到完成：{群聊}，时间 {时间}" ToolTip="支持 {群聊}、{时间}、{内容}" />
                             </Grid>
                         </StackPanel>
-                        <TextBlock Grid.Row="2" Foreground="#64748B" VerticalAlignment="Center"
+                        <TextBlock Grid.Row="2" Margin="4,4,4,0" Foreground="#64748B" VerticalAlignment="Center"
                                    Text="勾选任务后才能执行、编辑或删除；双击任务可启用/停用。应用保持运行并登录时按本机时区执行。" />
                         <ListView x:Name="ScheduleList" Grid.Row="3" SelectionMode="Extended"
                                   MouseDoubleClick="ScheduleList_MouseDoubleClick">
@@ -374,10 +388,10 @@
                             <TextBlock Text="{DynamicResource RuleName}" VerticalAlignment="Center" />
                             <TextBox x:Name="IntervalNameBox" Width="130" Text="{DynamicResource DefaultDigestName}" />
                             <TextBlock Text="{DynamicResource SourceChat}" VerticalAlignment="Center" Margin="8,0,0,0" />
-                            <ComboBox x:Name="IntervalSourceBox" Width="210" DisplayMemberPath="Name"
+                            <ComboBox x:Name="IntervalSourceBox" Width="210" DisplayMemberPath="DisplayName"
                                       local:SearchableComboBoxBehavior.IsEnabled="True" />
                             <TextBlock Text="{DynamicResource TargetChat}" VerticalAlignment="Center" Margin="8,0,0,0" />
-                            <ComboBox x:Name="IntervalTargetBox" Width="210" DisplayMemberPath="Name"
+                            <ComboBox x:Name="IntervalTargetBox" Width="210" DisplayMemberPath="DisplayName"
                                       local:SearchableComboBoxBehavior.IsEnabled="True" />
                             <TextBlock Text="{DynamicResource IntervalMinutes}" VerticalAlignment="Center" Margin="8,0,0,0" />
                             <TextBox x:Name="IntervalMinutesBox" Width="58" Text="3" />
@@ -474,70 +488,90 @@
                          HeaderTemplate="{StaticResource UnreadTabHeaderTemplate}">
                     <Grid Margin="10">
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="44" />
-                            <RowDefinition Height="44" />
-                            <RowDefinition Height="44" />
+                            <RowDefinition Height="278" />
+                            <RowDefinition Height="48" />
+                            <RowDefinition Height="126" />
                             <RowDefinition Height="30" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
+                        <Border Margin="4,6,4,4" Padding="10" Background="#F8FBFF"
+                                BorderBrush="#D8E3EF" BorderThickness="1" CornerRadius="8">
                         <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="42" />
+                                <RowDefinition Height="42" />
+                                <RowDefinition Height="42" />
+                                <RowDefinition Height="42" />
+                                <RowDefinition Height="42" />
+                                <RowDefinition Height="30" />
+                            </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="165" />
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="280" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="220" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <CheckBox x:Name="ExceptionNotifyEnabledBox" Content="{DynamicResource EnableAutoNotification}"
+                            <CheckBox x:Name="ExceptionNotifyEnabledBox" Content="{DynamicResource EnableExceptionTelegramNotification}"
                                       VerticalAlignment="Center" />
                             <ComboBox x:Name="ExceptionMinimumLevelBox" Grid.Column="1" Margin="8,0">
                                 <ComboBoxItem Content="{DynamicResource ErrorOrHigher}" Tag="Error" />
                                 <ComboBoxItem Content="{DynamicResource CriticalOnly}" Tag="Critical" />
                             </ComboBox>
-                            <TextBlock Grid.Column="2" Text="Telegram" VerticalAlignment="Center" />
-                            <ComboBox x:Name="ExceptionPeerBox" Grid.Column="3" DisplayMemberPath="Name"
-                                      local:SearchableComboBoxBehavior.IsEnabled="True" />
-                            <TextBlock Grid.Column="4" Text="{DynamicResource NotificationEmail}" VerticalAlignment="Center" Margin="10,0,4,0" />
-                            <TextBox x:Name="ExceptionEmailBox" Grid.Column="5" ToolTip="留空表示不发送邮件" />
+                            <TextBlock Grid.Row="1" Text="Telegram" VerticalAlignment="Center" />
+                            <ComboBox x:Name="ExceptionPeerBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" DisplayMemberPath="Name"
+                                       local:SearchableComboBoxBehavior.IsEnabled="True" />
+                            <TextBlock Grid.Row="2" Text="{DynamicResource NotificationEmail}" VerticalAlignment="Center" />
+                            <TextBox x:Name="ExceptionEmailBox" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" ToolTip="留空表示不发送邮件" />
+                            <CheckBox x:Name="ExceptionEmailNotifyEnabledBox" Grid.Row="3" Grid.ColumnSpan="4"
+                                      Content="{DynamicResource EnableExceptionEmailNotification}" VerticalAlignment="Center" />
+                            <CheckBox x:Name="ManualLoginEmailReminderBox" Grid.Row="4" Grid.ColumnSpan="4"
+                                      Content="{DynamicResource ManualLoginEmailReminder}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Row="5" Grid.ColumnSpan="4" Foreground="#64748B" VerticalAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       Text="{DynamicResource ManualLoginEmailReminderHint}" />
                         </Grid>
-                        <StackPanel Grid.Row="1" Orientation="Horizontal">
+                        </Border>
+                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="8,4,8,4">
                             <Button Content="{DynamicResource SaveNotificationSettings}" Click="SaveExceptionSettings_Click" />
                             <Button Content="{DynamicResource TestNotification}" Click="TestExceptionNotification_Click" />
                             <Button Content="{DynamicResource RetryNotification}" Click="RetryExceptionNotifications_Click" />
                             <Button Content="{DynamicResource OpenDatabaseDirectory}" Click="OpenExceptionDatabase_Click" />
                         </StackPanel>
-                        <Grid Grid.Row="2">
+                        <Border Grid.Row="2" Margin="4,6,4,4" Padding="12" Background="#FAFCFE"
+                                BorderBrush="#D8E3EF" BorderThickness="1" CornerRadius="8">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="44" />
+                                <RowDefinition Height="44" />
+                            </Grid.RowDefinitions>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="165" />
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="165" />
                                 <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="130" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="110" />
                                 <ColumnDefinition Width="90" />
                                 <ColumnDefinition Width="90" />
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="{DynamicResource StartDate}" VerticalAlignment="Center" />
-                            <DatePicker x:Name="ExceptionFromDatePicker" Grid.Column="1" Margin="4,0,8,0" />
-                            <TextBlock Grid.Column="2" Text="{DynamicResource EndDate}" VerticalAlignment="Center" />
-                            <DatePicker x:Name="ExceptionToDatePicker" Grid.Column="3" Margin="4,0,8,0" />
-                            <TextBlock Grid.Column="4" Text="{DynamicResource Level}" VerticalAlignment="Center" />
-                            <ComboBox x:Name="ExceptionQueryLevelBox" Grid.Column="5" Margin="4,0,8,0">
+                            <TextBlock Text="{DynamicResource StartDate}" VerticalAlignment="Center" Margin="4,0" />
+                            <DatePicker x:Name="ExceptionFromDatePicker" Grid.Column="1" Margin="8,3,16,3" />
+                            <TextBlock Grid.Column="2" Text="{DynamicResource EndDate}" VerticalAlignment="Center" Margin="4,0" />
+                            <DatePicker x:Name="ExceptionToDatePicker" Grid.Column="3" Margin="8,3,16,3" />
+                            <TextBlock Grid.Column="4" Text="{DynamicResource Level}" VerticalAlignment="Center" Margin="4,0" />
+                            <ComboBox x:Name="ExceptionQueryLevelBox" Grid.Column="5" Margin="8,3,16,3">
                                 <ComboBoxItem Content="{DynamicResource All}" Tag="All" />
                                 <ComboBoxItem Content="Error" Tag="Error" />
                                 <ComboBoxItem Content="Critical" Tag="Critical" />
                             </ComboBox>
-                            <TextBlock Grid.Column="6" Text="{DynamicResource Keyword}" VerticalAlignment="Center" />
-                            <TextBox x:Name="ExceptionKeywordBox" Grid.Column="7" Margin="4,0,8,0"
+                            <TextBlock Grid.Row="1" Text="{DynamicResource Keyword}" VerticalAlignment="Center" Margin="4,0" />
+                            <TextBox x:Name="ExceptionKeywordBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="5" Margin="8,3,16,3"
                                      ToolTip="搜索来源、异常消息和堆栈" />
-                            <Button Grid.Column="8" Content="{DynamicResource Search}" Click="RefreshExceptions_Click" />
-                            <Button Grid.Column="9" Content="{DynamicResource Reset}" Click="ResetExceptionQuery_Click" />
+                            <Button Grid.Row="1" Grid.Column="6" Margin="4,3,4,3" Content="{DynamicResource Search}" Click="RefreshExceptions_Click" />
+                            <Button Grid.Row="1" Grid.Column="7" Margin="4,3,4,3" Content="{DynamicResource Reset}" Click="ResetExceptionQuery_Click" />
                         </Grid>
-                        <TextBlock Grid.Row="3" Foreground="#64748B" VerticalAlignment="Center"
+                        </Border>
+                        <TextBlock Grid.Row="3" Margin="8,2,8,0" Foreground="#64748B" VerticalAlignment="Center"
                                    Text="仅带 Exception/堆栈的 Error、Critical 日志写入 SQLite；双击记录查看详情，列表支持多选重发。" />
                         <ListView x:Name="ExceptionList" Grid.Row="4" SelectionMode="Extended"
                                   MouseDoubleClick="ExceptionList_MouseDoubleClick">

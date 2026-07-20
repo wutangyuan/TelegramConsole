@@ -1,8 +1,46 @@
 namespace TelegramConsole.Core;
 
-public sealed record DialogItem(string Name, long Id, string Kind, bool IsGroup, bool IsForum = false)
+public enum DialogCategory
 {
-    public override string ToString() => $"{(IsGroup ? "#" : "@")} {Name}";
+    Unknown,
+    Private,
+    Bot,
+    Group,
+    Supergroup,
+    Channel
+}
+
+public sealed record DialogItem(
+    string Name,
+    long Id,
+    string Kind,
+    bool IsGroup,
+    bool IsForum = false,
+    DialogCategory Category = DialogCategory.Unknown)
+{
+    public DialogCategory EffectiveCategory => Category != DialogCategory.Unknown
+        ? Category
+        : Kind switch
+        {
+            "Chat" => DialogCategory.Group,
+            "Channel" => DialogCategory.Channel,
+            _ => DialogCategory.Private
+        };
+
+    public bool IsBot => EffectiveCategory == DialogCategory.Bot;
+
+    public string CategoryIcon => EffectiveCategory switch
+    {
+        DialogCategory.Bot => "🤖",
+        DialogCategory.Group => "👥",
+        DialogCategory.Supergroup => "👥",
+        DialogCategory.Channel => "📢",
+        _ => "👤"
+    };
+
+    public string DisplayName => $"{CategoryIcon} {Name}";
+
+    public override string ToString() => DisplayName;
 }
 
 public enum ChatMediaKind

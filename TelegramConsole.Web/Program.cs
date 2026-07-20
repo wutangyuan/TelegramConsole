@@ -312,6 +312,13 @@ api.MapPost("/accounts/{id:guid}/exceptions/retry", async (
     await manager.RetryExceptionNotificationsAsync(id, request.Ids.Distinct());
     return Results.Accepted();
 });
+api.MapGet("/accounts/{id:guid}/exception-alerts", (Guid id, AccountRuntimeManager manager) =>
+    Results.Ok(manager.GetExceptionAlerts(id)));
+api.MapPut("/accounts/{id:guid}/exception-alerts", (Guid id, ExceptionAlertsInput request, AccountRuntimeManager manager) =>
+{
+    manager.SaveExceptionAlerts(id, request.ToModel());
+    return Results.NoContent();
+});
 api.MapGet("/accounts/{id:guid}/mentions", async (
     Guid id, string? keyword, int? limit, AccountRuntimeManager manager) =>
     Results.Ok(await manager.QueryMentionsAsync(id, new MentionQuery(keyword ?? "", limit ?? 300))));
@@ -364,6 +371,34 @@ internal sealed record EmailSettingsInput(
     string Password, string FromAddress, bool ClearPassword);
 internal sealed record EmailTestInput(string Recipient);
 internal sealed record ProxyTestInput(string Host, int Port);
+internal sealed record ExceptionAlertsInput(
+    bool TelegramNotificationsEnabled,
+    bool EmailNotificationsEnabled,
+    bool ManualLoginEmailReminderEnabled,
+    string MinimumLevel,
+    long? TelegramPeerId,
+    string? TelegramPeerKind,
+    string? TelegramPeerTitle,
+    string? EmailRecipient)
+{
+    public ExceptionAlertSettings ToModel()
+    {
+        if (!Enum.TryParse<AppLogLevel>(MinimumLevel, true, out var minimumLevel) ||
+            minimumLevel is not (AppLogLevel.Error or AppLogLevel.Critical))
+            throw new ArgumentException("异常通知级别必须为 Error 或 Critical");
+        return new ExceptionAlertSettings
+        {
+            NotificationsEnabled = TelegramNotificationsEnabled,
+            EmailNotificationsEnabled = EmailNotificationsEnabled,
+            ManualLoginEmailReminderEnabled = ManualLoginEmailReminderEnabled,
+            MinimumLevel = minimumLevel,
+            TelegramPeerId = TelegramPeerId,
+            TelegramPeerKind = TelegramPeerKind?.Trim() ?? "",
+            TelegramPeerTitle = TelegramPeerTitle?.Trim() ?? "",
+            EmailRecipient = EmailRecipient?.Trim() ?? ""
+        };
+    }
+}
 internal sealed record SendReactionInput(
     long DialogId, string DialogKind, string DialogName, string Emoji);
 

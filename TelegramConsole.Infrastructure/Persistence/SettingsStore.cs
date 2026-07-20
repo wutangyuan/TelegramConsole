@@ -17,6 +17,7 @@ public sealed class SettingsStore : ISettingsStore
         Converters = { new JsonStringEnumConverter() }
     };
     private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("TelegramConsoleApp.Settings.v1");
+    private readonly EncryptedSettingsHistoryStore _history;
 
     public string DataDirectory { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -25,7 +26,11 @@ public sealed class SettingsStore : ISettingsStore
     private string SettingsPath => Path.Combine(DataDirectory, "settings.dat");
     private string LegacySettingsPath => Path.Combine(DataDirectory, "settings.json");
 
-    public SettingsStore() => Directory.CreateDirectory(DataDirectory);
+    public SettingsStore()
+    {
+        Directory.CreateDirectory(DataDirectory);
+        _history = new EncryptedSettingsHistoryStore(DataDirectory);
+    }
 
     public string GetSessionPath(string phoneNumber)
     {
@@ -103,17 +108,26 @@ public sealed class SettingsStore : ISettingsStore
         lock (FileSync)
         {
             var latest = LoadCore();
-            latest.Language = settings.Language;
             latest.ApiId = settings.ApiId;
             latest.ApiHash = settings.ApiHash;
             latest.PhoneNumber = settings.PhoneNumber;
             latest.MonitorEnabled = settings.MonitorEnabled;
-            latest.Schedules = settings.Schedules;
-            latest.Email = settings.Email;
-            latest.Proxy = settings.Proxy;
-            latest.ExceptionAlerts = settings.ExceptionAlerts;
+            latest.ChatViewMode = settings.ChatViewMode;
             foreach (var (userId, account) in settings.Accounts)
                 if (!latest.Accounts.ContainsKey(userId)) latest.Accounts[userId] = account;
+            SaveCore(latest);
+        }
+    }
+
+    public void SaveGlobalSettings(AppSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        lock (FileSync)
+        {
+            var latest = LoadCore();
+            latest.Language = settings.Language;
+            latest.Email = settings.Email;
+            latest.Proxy = settings.Proxy;
             SaveCore(latest);
         }
     }
@@ -143,10 +157,19 @@ public sealed class SettingsStore : ISettingsStore
     private void SaveCore(AppSettings settings)
     {
         Directory.CreateDirectory(DataDirectory);
+        try
+        {
+            if (File.Exists(SettingsPath)) _history.Snapshot(File.ReadAllBytes(SettingsPath), "before-save");
+        }
+        catch
+        {
+            // The next primary save remains valid even if an old snapshot cannot be read.
+        }
         var temp = SettingsPath + ".tmp";
         var json = JsonSerializer.SerializeToUtf8Bytes(settings, JsonOptions);
         var encrypted = ProtectedData.Protect(json, Entropy, DataProtectionScope.CurrentUser);
         File.WriteAllBytes(temp, encrypted);
         File.Move(temp, SettingsPath, true);
+        _history.Snapshot(encrypted, "saved");
     }
 }

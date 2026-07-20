@@ -32,7 +32,7 @@
                 <CheckBox x:Name="EnabledBox" Grid.Column="1" Content="{DynamicResource EnableTask}" VerticalAlignment="Center" />
 
                 <TextBlock Grid.Row="1" Text="{DynamicResource TargetChat}" VerticalAlignment="Center" />
-                <ComboBox x:Name="TargetBox" Grid.Row="1" Grid.Column="1" DisplayMemberPath="Name"
+                <ComboBox x:Name="TargetBox" Grid.Row="1" Grid.Column="1" DisplayMemberPath="DisplayName"
                           local:SearchableComboBoxBehavior.IsEnabled="True" />
 
                 <TextBlock Grid.Row="2" Text="{DynamicResource ExecutionPeriod}" VerticalAlignment="Center" />
@@ -59,7 +59,7 @@
                 <TextBox x:Name="MessageBox" Grid.Row="5" Grid.Column="1" />
 
                 <TextBlock Grid.Row="6" Text="{DynamicResource TelegramConfirmation}" VerticalAlignment="Center" />
-                <ComboBox x:Name="ConfirmationPeerBox" Grid.Row="6" Grid.Column="1" DisplayMemberPath="Name"
+                <ComboBox x:Name="ConfirmationPeerBox" Grid.Row="6" Grid.Column="1" DisplayMemberPath="DisplayName"
                           local:SearchableComboBoxBehavior.IsEnabled="True" />
 
                 <TextBlock Grid.Row="7" Text="{DynamicResource ConfirmationEmail}" VerticalAlignment="Center" />

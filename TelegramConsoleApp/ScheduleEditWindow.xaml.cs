@@ -15,14 +15,17 @@ public partial class ScheduleEditWindow : Window
         _emailConfigured = emailConfigured;
 
         var targets = dialogs.Where(x => x.IsGroup)
-            .Select(x => new PeerOption(x.Id, x.Kind, x.Name))
+            .Select(x => new PeerOption(x.Id, x.Kind, x.Name, x.DisplayName))
             .ToList();
         EnsureOption(targets, task.ChatId, task.ChatKind, task.ChatTitle);
         TargetBox.ItemsSource = targets;
         TargetBox.SelectedItem = targets.FirstOrDefault(x => x.Id == task.ChatId && x.Kind == task.ChatKind);
 
-        var confirmations = new List<PeerOption> { new(null, "", LocalizationManager.Text("NoTelegramConfirmation")) };
-        confirmations.AddRange(dialogs.Select(x => new PeerOption(x.Id, x.Kind, x.Name)));
+        var confirmations = new List<PeerOption>
+        {
+            new(null, "", LocalizationManager.Text("NoTelegramConfirmation"), LocalizationManager.Text("NoTelegramConfirmation"))
+        };
+        confirmations.AddRange(dialogs.Select(x => new PeerOption(x.Id, x.Kind, x.Name, x.DisplayName)));
         if (task.ConfirmationPeerId is long confirmationId)
             EnsureOption(confirmations, confirmationId, task.ConfirmationPeerKind, task.ConfirmationPeerTitle);
         ConfirmationPeerBox.ItemsSource = confirmations;
@@ -99,7 +102,7 @@ public partial class ScheduleEditWindow : Window
 
     private static void EnsureOption(List<PeerOption> options, long id, string kind, string name)
     {
-        if (options.All(x => x.Id != id || x.Kind != kind)) options.Add(new(id, kind, name));
+        if (options.All(x => x.Id != id || x.Kind != kind)) options.Add(new(id, kind, name, name));
     }
 
     private void PeriodBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
@@ -122,7 +125,7 @@ public partial class ScheduleEditWindow : Window
         return days;
     }
 
-    private sealed record PeerOption(long? Id, string Kind, string Name)
+    private sealed record PeerOption(long? Id, string Kind, string Name, string DisplayName)
     {
         public override string ToString() => Name;
     }

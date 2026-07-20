@@ -21,7 +21,6 @@ public partial class AccountManagerWindow : Window
     private long _logPosition;
     private string _logRemainder = "";
     private bool _initialLogLoaded;
-    private bool _autoStartHandled;
     private bool _exitRequested;
     private bool _disposed;
     private DateTime _nextAccountRefreshAt = DateTime.MinValue;
@@ -57,8 +56,7 @@ public partial class AccountManagerWindow : Window
         ReadLogUpdates(initialLoad: true);
         await RefreshExceptionsAsync();
         _refreshTimer.Start();
-        StartAutoAccounts();
-        CenterStatusText.Text = "管理中心已启动，公共资源由此窗口统一维护";
+        CenterStatusText.Text = "管理中心已启动；账号不会自动登录，请选择账号后手动点击“登录 / 打开工作区”";
     }
 
     internal void ShowCenter()
@@ -83,17 +81,6 @@ public partial class AccountManagerWindow : Window
         {
             _nextExceptionRefreshAt = now.AddSeconds(10);
             await RefreshExceptionsAsync();
-        }
-    }
-
-    private void StartAutoAccounts()
-    {
-        if (_autoStartHandled) return;
-        _autoStartHandled = true;
-        foreach (var account in _store.Load().Accounts.Values.Where(x => x.AutoStart).OrderBy(x => x.SortOrder))
-        {
-            if (AccountWorkspaceManager.IsRunning(account.UserId) || _store.IsSessionInUse(account.PhoneNumber)) continue;
-            AccountWorkspaceManager.Open(account, activate: false);
         }
     }
 
@@ -123,13 +110,14 @@ public partial class AccountManagerWindow : Window
             {
                 var running = AccountWorkspaceManager.IsRunning(x.UserId);
                 var online = AccountWorkspaceManager.IsOnline(x.UserId);
+                var failed = AccountWorkspaceManager.IsConnectionFailed(x.UserId);
                 var occupied = !running && _store.IsSessionInUse(x.PhoneNumber);
                 return new AccountRow(
                     x.UserId,
                     string.IsNullOrWhiteSpace(x.LocalName) ? x.DisplayName : x.LocalName,
                     x.DisplayName,
                     MaskPhone(x.PhoneNumber),
-                    online ? "在线" : running ? "连接中/需要登录" : occupied ? "其他实例运行中" : "已停止",
+                    online ? "在线" : failed ? "连接失败，请重新登录" : running ? "连接中/需要登录" : occupied ? "其他实例运行中" : "已停止",
                     x.AutoStart,
                     running ? "打开" : occupied ? "已占用" : "登录",
                     !occupied);

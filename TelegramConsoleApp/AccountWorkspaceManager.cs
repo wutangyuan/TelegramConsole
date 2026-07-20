@@ -87,6 +87,11 @@ internal static class AccountWorkspaceManager
         lock (Sync) return Accounts.TryGetValue(userId, out var window) && window.IsWorkspaceOnline;
     }
 
+    public static bool IsConnectionFailed(long userId)
+    {
+        lock (Sync) return Accounts.TryGetValue(userId, out var window) && window.IsWorkspaceConnectionFailed;
+    }
+
     public static IReadOnlyList<RunningWorkspace> RunningWorkspaces()
     {
         lock (Sync)

@@ -297,15 +297,27 @@ public sealed class TelegramService : ITelegramService
                 case User user when user.IsActive:
                     var userName = string.Join(' ', new[] { user.first_name, user.last_name }.Where(x => !string.IsNullOrWhiteSpace(x)));
                     if (string.IsNullOrWhiteSpace(userName)) userName = user.username ?? user.id.ToString();
-                    var userItem = new DialogItem(userName, user.id, "User", false);
+                    var userItem = new DialogItem(
+                        userName,
+                        user.id,
+                        "User",
+                        false,
+                        Category: user.IsBot ? DialogCategory.Bot : DialogCategory.Private);
                     _peers[PeerKey(userItem.Id, userItem.Kind)] = user.ToInputPeer();
                     result.Add(userItem);
                     break;
                 case ChatBase chat when chat.IsActive:
                     var kind = chat is Channel ? "Channel" : "Chat";
+                    var category = chat switch
+                    {
+                        Channel groupChannel when groupChannel.IsGroup => DialogCategory.Supergroup,
+                        Channel => DialogCategory.Channel,
+                        _ => DialogCategory.Group
+                    };
                     var chatItem = new DialogItem(
                         chat.Title ?? chat.ID.ToString(), chat.ID, kind, true,
-                        chat is Channel channel && channel.flags.HasFlag(Channel.Flags.forum));
+                        chat is Channel forumChannel && forumChannel.flags.HasFlag(Channel.Flags.forum),
+                        category);
                     _peers[PeerKey(chatItem.Id, chatItem.Kind)] = chat.ToInputPeer();
                     result.Add(chatItem);
                     break;
@@ -1009,7 +1021,16 @@ public sealed class TelegramService : ITelegramService
             User => "User",
             _ => fallback?.Kind ?? "User"
         };
-        var dialog = new DialogItem(chatName, message.peer_id.ID, chatKind, isGroup);
+        var category = peerInfo switch
+        {
+            User user when user.IsBot => DialogCategory.Bot,
+            User => DialogCategory.Private,
+            Channel channel when channel.IsGroup => DialogCategory.Supergroup,
+            Channel => DialogCategory.Channel,
+            Chat => DialogCategory.Group,
+            _ => fallback?.EffectiveCategory ?? DialogCategory.Unknown
+        };
+        var dialog = new DialogItem(chatName, message.peer_id.ID, chatKind, isGroup, Category: category);
         var replyMessage = await ResolveReplyMessageAsync(message, dialog);
         CacheMessage(chatKind, message.peer_id.ID, message);
         var line = ToChatLine(message, dialog, replyMessage);
