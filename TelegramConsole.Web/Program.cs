@@ -199,6 +199,11 @@ api.MapDelete("/accounts/{id:guid}", async (Guid id, AccountRuntimeManager manag
     await manager.RemoveAsync(id);
     return Results.NoContent();
 });
+api.MapPut("/accounts/{id:guid}/ai-enabled", (Guid id, AccountAiEnabledInput request, AccountRuntimeManager manager) =>
+{
+    manager.SetAccountAiEnabled(id, request.Enabled);
+    return Results.NoContent();
+});
 api.MapGet("/accounts/{id:guid}/dialogs", async (Guid id, AccountRuntimeManager manager) =>
     Results.Ok(await manager.LoadDialogsAsync(id)));
 api.MapGet("/accounts/{id:guid}/history", async (
@@ -206,6 +211,63 @@ api.MapGet("/accounts/{id:guid}/history", async (
     int? limit, AccountRuntimeManager manager) =>
     Results.Ok(await manager.LoadHistoryAsync(
         id, new DialogItem(dialogName, dialogId, dialogKind, isGroup), limit ?? 300)));
+api.MapGet("/settings/ai", (AccountRuntimeManager manager) =>
+{
+    var settings = manager.GetAiAssistantSettings();
+    return Results.Ok(new
+    {
+        settings.Enabled,
+        settings.Provider,
+        settings.UseCodexCliOAuth,
+        settings.Endpoint,
+        settings.Model,
+        settings.ContextMessageLimit,
+        settings.TimeoutSeconds,
+        ApiKeyConfigured = !string.IsNullOrWhiteSpace(settings.ApiKey)
+    });
+});
+api.MapPut("/settings/ai", (AiAssistantSettingsInput request, AccountRuntimeManager manager) =>
+{
+    var previous = manager.GetAiAssistantSettings();
+    var endpoint = request.Endpoint?.Trim() ?? "";
+    var model = request.Model?.Trim() ?? "";
+    var codexCliOAuth = request.UseCodexCliOAuth || string.Equals(request.Provider, "CodexCliOAuth", StringComparison.OrdinalIgnoreCase);
+    if (request.Enabled && !codexCliOAuth && (endpoint.Length == 0 || model.Length == 0))
+        throw new ArgumentException("启用 AI 助手前，请填写接口地址和模型名称");
+    manager.SaveAiAssistantSettings(new AiAssistantSettings
+    {
+        Enabled = request.Enabled,
+        Provider = codexCliOAuth ? "CodexCliOAuth" : "OpenAICompatible",
+        UseCodexCliOAuth = codexCliOAuth,
+        Endpoint = endpoint,
+        Model = model,
+        ApiKey = request.ClearApiKey ? "" : string.IsNullOrWhiteSpace(request.ApiKey) ? previous.ApiKey : request.ApiKey.Trim(),
+        ContextMessageLimit = Math.Clamp(request.ContextMessageLimit, 5, 100),
+        TimeoutSeconds = Math.Clamp(request.TimeoutSeconds, 10, 180)
+    });
+    return Results.NoContent();
+});
+api.MapPost("/settings/ai/test", async (AiAssistantSettingsInput request, AccountRuntimeManager manager, CancellationToken ct) =>
+{
+    var previous = manager.GetAiAssistantSettings();
+    var settings = new AiAssistantSettings
+    {
+        Enabled = true,
+        Provider = request.UseCodexCliOAuth || string.Equals(request.Provider, "CodexCliOAuth", StringComparison.OrdinalIgnoreCase) ? "CodexCliOAuth" : "OpenAICompatible",
+        UseCodexCliOAuth = request.UseCodexCliOAuth || string.Equals(request.Provider, "CodexCliOAuth", StringComparison.OrdinalIgnoreCase),
+        Endpoint = request.Endpoint?.Trim() ?? "",
+        Model = request.Model?.Trim() ?? "",
+        ApiKey = request.ClearApiKey ? "" : string.IsNullOrWhiteSpace(request.ApiKey) ? previous.ApiKey : request.ApiKey.Trim(),
+        ContextMessageLimit = Math.Clamp(request.ContextMessageLimit, 5, 100),
+        TimeoutSeconds = Math.Clamp(request.TimeoutSeconds, 10, 180)
+    };
+    var result = await manager.TestAiAssistantAsync(settings, ct);
+    return Results.Ok(new { message = $"AI 连接成功：{result.Text}" });
+});
+api.MapPost("/accounts/{id:guid}/ai/summary", async (Guid id, AiDialogInput request, AccountRuntimeManager manager, CancellationToken ct) =>
+    Results.Ok(await manager.SummarizeWithAiAsync(id, request.ToDialog(), ct)));
+api.MapPost("/accounts/{id:guid}/ai/reply-draft", async (Guid id, AiReplyDraftInput request, AccountRuntimeManager manager, CancellationToken ct) =>
+    Results.Ok(await manager.DraftAiReplyAsync(id, request.ToDialog(), request.MessageId, request.Instruction ?? "", ct)));
 api.MapGet("/accounts/{id:guid}/messages", (Guid id, int? limit, AccountRuntimeManager manager) =>
     manager.GetRecentMessages(id, limit ?? 300));
 api.MapPost("/accounts/{id:guid}/messages", async (Guid id, SendChatMessageRequest request, AccountRuntimeManager manager) =>
@@ -371,6 +433,26 @@ internal sealed record EmailSettingsInput(
     string Password, string FromAddress, bool ClearPassword);
 internal sealed record EmailTestInput(string Recipient);
 internal sealed record ProxyTestInput(string Host, int Port);
+internal sealed record AccountAiEnabledInput(bool Enabled);
+internal sealed record AiAssistantSettingsInput(
+    bool Enabled,
+    string? Provider,
+    bool UseCodexCliOAuth,
+    string? Endpoint,
+    string? Model,
+    string? ApiKey,
+    bool ClearApiKey,
+    int ContextMessageLimit,
+    int TimeoutSeconds);
+internal sealed record AiDialogInput(long DialogId, string DialogKind, string DialogName, bool IsGroup)
+{
+    public DialogItem ToDialog() => new(DialogName, DialogId, DialogKind, IsGroup);
+}
+internal sealed record AiReplyDraftInput(
+    long DialogId, string DialogKind, string DialogName, bool IsGroup, int MessageId, string? Instruction)
+{
+    public DialogItem ToDialog() => new(DialogName, DialogId, DialogKind, IsGroup);
+}
 internal sealed record ExceptionAlertsInput(
     bool TelegramNotificationsEnabled,
     bool EmailNotificationsEnabled,

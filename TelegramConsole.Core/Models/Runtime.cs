@@ -30,6 +30,7 @@ public sealed record AccountRuntimeSnapshot(
     long TelegramUserId,
     string TelegramDisplayName,
     bool AutoStart,
+    bool AiEnabled,
     AccountRuntimeStatus Status,
     string StatusMessage,
     string LoginPrompt,

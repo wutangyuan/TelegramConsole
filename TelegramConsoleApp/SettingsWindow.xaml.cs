@@ -31,6 +31,7 @@ public partial class SettingsWindow : Window
         SmtpPasswordBox.Password = globalSettings.Email.Password;
         SmtpFromBox.Text = globalSettings.Email.FromAddress;
         SmtpSslBox.IsChecked = globalSettings.Email.EnableSsl;
+        LoadAiSettings(globalSettings.AiAssistant);
         UpdateAvailability();
     }
 
@@ -119,6 +120,7 @@ public partial class SettingsWindow : Window
             _settings.Proxy.Password = PasswordBox.Password;
             _settings.Proxy.MtProxyUrl = MtProxyUrlBox.Text.Trim();
             _settings.Email = email;
+            _settings.AiAssistant = ReadAiSettings(_settings.AiAssistant);
             _settings.Language = (LanguageBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "";
             _store.SaveGlobalSettings(_settings);
             LocalizationManager.ApplyLanguage(_settings.Language);
@@ -178,6 +180,86 @@ public partial class SettingsWindow : Window
         }
     }
 
+    private void AiWizardButton_Click(object sender, RoutedEventArgs e)
+    {
+        var choice = System.Windows.MessageBox.Show(
+            this,
+            "选择“是”预填本地 Ollama（本机/NAS）；选择“否”预填 OpenAI 或其他兼容云服务。",
+            "AI 配置向导", MessageBoxButton.YesNoCancel, MessageBoxImage.Information);
+        if (choice == MessageBoxResult.Cancel) return;
+        AiEnabledBox.IsChecked = true;
+        if (choice == MessageBoxResult.Yes)
+        {
+            AiEndpointBox.Text = "http://127.0.0.1:11434/v1";
+            AiModelBox.Text = "qwen2.5:7b";
+            AiApiKeyBox.Password = "";
+            AiStatusText.Text = "已预填本地 Ollama 示例。Docker/NAS 部署时请改为容器可访问的宿主机地址。";
+        }
+        else
+        {
+            AiEndpointBox.Text = "https://api.openai.com/v1";
+            AiModelBox.Text = "gpt-4.1-mini";
+            AiStatusText.Text = "已预填 OpenAI 示例。请填写 API Key，或换成兼容服务商提供的地址和模型。";
+        }
+        AiEndpointBox.Focus();
+    }
+
+    private void AiProviderBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        UpdateAiProviderUi();
+    }
+
+    private void AiCodexLoginButton_Click(object sender, RoutedEventArgs e)
+    {
+        var cli = CodexCliOAuthAssistantService.FindCodexCli();
+        if (cli is null)
+        {
+            System.Windows.MessageBox.Show(this, "未找到 Codex CLI。请先安装 Codex 桌面端/CLI 后重试。", "未找到 Codex CLI", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        try
+        {
+            var start = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                // A .cmd shim needs CALL. Keep the terminal open so the browser/device login text remains visible.
+                Arguments = $"/k call \"{cli}\" login --device-auth",
+                UseShellExecute = true
+            };
+            System.Diagnostics.Process.Start(start);
+            AiStatusText.Text = "已打开 Codex 登录窗口。请完成浏览器授权，完成后返回本页点击“测试连接”。";
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, UserMessageFormatter.From(ex), "无法启动 Codex 登录", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
+    private async void AiTestButton_Click(object sender, RoutedEventArgs e)
+    {
+        var original = AiTestButton.Content;
+        try
+        {
+            var settings = ReadAiSettings(_settings.AiAssistant);
+            settings.Enabled = true;
+            AiTestButton.IsEnabled = false;
+            AiTestButton.Content = "测试中…";
+            AiStatusText.Text = "正在请求 AI 服务…";
+            var result = await new OpenAiCompatibleAssistantService().TestAsync(settings);
+            AiStatusText.Text = $"连接成功：{result.Text}";
+        }
+        catch (Exception ex)
+        {
+            AiStatusText.Text = UserMessageFormatter.From(ex);
+            System.Windows.MessageBox.Show(this, AiStatusText.Text, "AI 连接测试失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally
+        {
+            AiTestButton.IsEnabled = true;
+            AiTestButton.Content = original;
+        }
+    }
+
     private (string Host, int Port) ValidateSocks5()
     {
         var host = HostBox.Text.Trim();
@@ -213,5 +295,56 @@ public partial class SettingsWindow : Window
             FromAddress = from,
             EnableSsl = SmtpSslBox.IsChecked == true
         };
+    }
+
+    private void LoadAiSettings(AiAssistantSettings settings)
+    {
+        AiEnabledBox.IsChecked = settings.Enabled;
+        AiProviderBox.SelectedIndex = settings.UseCodexCliOAuth || string.Equals(settings.Provider, "CodexCliOAuth", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+        AiEndpointBox.Text = settings.Endpoint;
+        AiModelBox.Text = settings.Model;
+        AiApiKeyBox.Password = "";
+        AiContextLimitBox.Text = Math.Clamp(settings.ContextMessageLimit, 5, 100).ToString();
+        AiStatusText.Text = string.IsNullOrWhiteSpace(settings.ApiKey)
+            ? "未配置 API Key（本地 Ollama 通常可留空）"
+            : "已保存加密 API Key；留空不会覆盖。";
+        UpdateAiProviderUi();
+    }
+
+    private AiAssistantSettings ReadAiSettings(AiAssistantSettings previous)
+    {
+        if (!int.TryParse(AiContextLimitBox.Text, out var contextLimit)) contextLimit = 30;
+        var enabled = AiEnabledBox.IsChecked == true;
+        var useCodexCliOAuth = (AiProviderBox.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString() == "CodexCliOAuth";
+        var endpoint = AiEndpointBox.Text.Trim();
+        var model = AiModelBox.Text.Trim();
+        if (enabled && !useCodexCliOAuth && (endpoint.Length == 0 || model.Length == 0))
+            throw new InvalidOperationException("启用 AI 前，请填写接口地址和模型名称");
+        return new AiAssistantSettings
+        {
+            Enabled = enabled,
+            Provider = useCodexCliOAuth ? "CodexCliOAuth" : "OpenAICompatible",
+            UseCodexCliOAuth = useCodexCliOAuth,
+            Endpoint = endpoint,
+            Model = model,
+            ApiKey = string.IsNullOrWhiteSpace(AiApiKeyBox.Password) ? previous.ApiKey : AiApiKeyBox.Password,
+            ContextMessageLimit = Math.Clamp(contextLimit, 5, 100),
+            // Codex CLI has process startup plus subscription-side routing overhead; keep the
+            // API-compatible timeout for that provider, but give OAuth calls a practical floor.
+            TimeoutSeconds = useCodexCliOAuth ? Math.Max(previous.TimeoutSeconds, 180) : previous.TimeoutSeconds
+        };
+    }
+
+    private void UpdateAiProviderUi()
+    {
+        if (AiProviderBox is null) return;
+        var codex = (AiProviderBox.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString() == "CodexCliOAuth";
+        AiEndpointBox.IsEnabled = !codex;
+        AiApiKeyBox.IsEnabled = !codex;
+        AiCodexLoginButton.Visibility = codex ? Visibility.Visible : Visibility.Collapsed;
+        AiApiKeyLabel.Text = codex ? "本机登录" : "API Key";
+        AiHintText.Text = codex
+            ? "此方式复用本机 Codex CLI 的 ChatGPT/Codex 登录；本应用不会读取或保存 OAuth Token。点击“登录 ChatGPT/Codex”完成设备授权后测试。仅支持运行了 Codex CLI 的桌面主机。"
+            : "向导可预填本地 Ollama 或 OpenAI 兼容服务。保存后，各账户的会话摘要和 AI 回复草稿都会使用此连接；AI 不会自动发送 Telegram 消息。";
     }
 }

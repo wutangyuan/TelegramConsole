@@ -223,6 +223,8 @@
                                 <ContextMenu>
                                     <MenuItem x:Name="ChatQuoteMenuItem" Header="{DynamicResource QuoteReply}"
                                               Click="ChatQuoteMenuItem_Click" />
+                                    <MenuItem x:Name="ChatAiDraftMenuItem" Header="✦ AI 生成回复草稿"
+                                              Click="ChatAiDraftMenuItem_Click" />
                                 </ContextMenu>
                             </local:BufferedTerminal.ContextMenu>
                         </local:BufferedTerminal>
@@ -619,6 +621,44 @@
                                 </GridView>
                             </ListView.View>
                         </ListView>
+                    </Grid>
+                </TabItem>
+                <TabItem x:Name="AiAssistantTab" Tag="Collapsed" Header="✦ AI 助手"
+                         HeaderTemplate="{StaticResource UnreadTabHeaderTemplate}">
+                    <Grid Margin="10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <Border Background="#F8FAFC" BorderBrush="#D9E2EC" BorderThickness="1" CornerRadius="8" Padding="12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="240" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="220" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="180" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                                <CheckBox x:Name="AiEnabledBox" Content="启用全局 AI" VerticalAlignment="Center" Margin="0,0,10,8" />
+                                <TextBox x:Name="AiEndpointBox" Grid.Column="1" Margin="0,0,10,8" ToolTip="OpenAI 兼容接口，例如 http://127.0.0.1:11434/v1" />
+                                <TextBlock Grid.Column="2" Text="模型" VerticalAlignment="Center" Margin="0,0,8,8" />
+                                <TextBox x:Name="AiModelBox" Grid.Column="3" Margin="0,0,10,8" />
+                                <TextBlock Grid.Column="4" Text="上下文" VerticalAlignment="Center" Margin="0,0,8,8" />
+                                <TextBox x:Name="AiContextLimitBox" Grid.Column="5" Margin="0,0,0,8" Text="30" />
+                                <TextBlock Grid.Row="1" Text="API Key" VerticalAlignment="Center" Margin="0,0,8,8" />
+                                <PasswordBox x:Name="AiApiKeyBox" Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="3" Margin="0,0,10,8" ToolTip="留空表示保持已保存的 Key；本地 Ollama 可留空" />
+                                <TextBlock Grid.Row="1" Grid.Column="4" Grid.ColumnSpan="2" x:Name="AiKeyStatusText" Foreground="#64748B" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                <TextBlock Grid.Row="2" Grid.ColumnSpan="4" Foreground="#64748B" Text="统一配置供所有账户使用。AI 只生成摘要或回复草稿，不会自动发送 Telegram 消息。" />
+                                <StackPanel Grid.Row="2" Grid.Column="4" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right"><Button Content="配置向导" Click="AiSetupWizard_Click" /><Button Content="保存 AI 配置" Click="SaveAiSettings_Click" Style="{StaticResource PrimaryButtonStyle}" /></StackPanel>
+                            </Grid>
+                        </Border>
+                        <Grid Grid.Row="1" Margin="0,10,0,0">
+                            <Grid.RowDefinitions><RowDefinition Height="42" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                            <StackPanel Orientation="Horizontal"><Button Content="生成当前会话摘要" Click="GenerateAiSummary_Click" Style="{StaticResource PrimaryButtonStyle}" /><TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Foreground="#64748B" Text="请先在左侧选择会话。" /></StackPanel>
+                            <TextBox x:Name="AiResultBox" Grid.Row="1" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Background="#F8FAFC" />
+                        </Grid>
                     </Grid>
                 </TabItem>
                 <TabItem x:Name="RuntimeLogsTab" Tag="Collapsed" Header="{DynamicResource RuntimeLogs}"

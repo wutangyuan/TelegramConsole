@@ -19,6 +19,7 @@
         <button class="nav-item" data-page="monitor">◉ <span>群消息监控</span></button>
         <button class="nav-item" data-page="schedules">◷ <span>定时任务</span></button>
         <button class="nav-item" data-page="intervals">◴ <span>间隔分析</span></button>
+        <button class="nav-item" data-page="ai">✦ <span>AI 助手</span></button>
         <button class="nav-item" data-page="mentions">＠ <span>@我的消息</span></button>
         <button class="nav-item" data-page="exceptions">△ <span>异常中心</span></button>
         <button class="nav-item" data-page="outbox">▤ <span>发件箱</span></button>
@@ -73,6 +74,36 @@
         <div class="page-title"><div><h1>间隔聊天分析</h1><p>消息不足时保留累计窗口，达到阈值并成功发送后才开始下一轮。</p></div><button id="newIntervalButton" class="primary">＋ 新建规则</button></div>
         <div class="toolbar"><label>账户<select id="intervalAccount"></select></label><button id="refreshIntervalsButton" class="secondary">刷新规则</button></div>
         <div class="panel table-wrap"><table><thead><tr><th>状态</th><th>名称</th><th>来源</th><th>发送目标</th><th>间隔</th><th>累计/最低</th><th>上次发送</th><th>上次结果</th><th>操作</th></tr></thead><tbody id="intervalRows"><tr><td colspan="9" class="muted">请选择账户</td></tr></tbody></table></div>
+      </section>
+
+      <section id="aiPage" class="page">
+        <div class="page-title"><div><h1>AI 助手</h1><p>全局统一配置，所有账户共用同一个模型连接。当前版本只生成摘要与回复草稿，不会自动发送 Telegram 消息。</p></div></div>
+        <div class="settings-grid">
+          <form id="aiSettingsForm" class="panel settings-card">
+            <div class="panel-head"><div><h2>模型连接</h2><p>支持 OpenAI 兼容接口，也可填写本地 Ollama 的 <code>http://localhost:11434/v1</code>。</p></div></div>
+            <div class="settings-form">
+              <label class="check"><input id="aiEnabled" type="checkbox"> 启用全局 AI 助手</label>
+              <label>认证方式<select id="aiProvider"><option value="OpenAICompatible">API Key / OpenAI 兼容接口</option><option value="CodexCliOAuth">ChatGPT / Codex 订阅登录（主机 Codex CLI）</option></select></label>
+              <label>接口地址<input id="aiEndpoint" placeholder="https://api.openai.com/v1"></label>
+              <label>模型名称<input id="aiModel" placeholder="例如 gpt-4.1-mini 或 qwen2.5"></label>
+              <label>API Key<input id="aiApiKey" type="password" autocomplete="new-password" placeholder="留空表示保持现有 Key；本地 Ollama 可留空"></label>
+              <label>上下文消息数<input id="aiContextLimit" type="number" min="5" max="100" value="30"></label>
+              <label>超时（秒）<input id="aiTimeout" type="number" min="10" max="180" value="60"></label>
+              <div id="aiKeyStatus" class="setting-status">请选择账户以加载配置</div>
+              <div id="aiOAuthHint" class="setting-status" hidden>此模式复用 Web 主机的 Codex CLI 已登录会话，不保存 OAuth Token。请先在部署主机执行 <code>codex login --device-auth</code>；Docker 默认未安装 Codex CLI。</div>
+              <div class="settings-actions"><button id="aiWizardButton" type="button" class="secondary">配置向导</button><button id="testAiButton" type="button" class="secondary">测试连接</button><button type="submit" class="primary">保存 AI 配置</button></div>
+            </div>
+          </form>
+          <div class="panel settings-card">
+            <div class="panel-head"><div><h2>会话摘要</h2><p>读取所选会话最近消息，生成摘要；结果仅显示在这里。</p></div></div>
+            <div class="settings-form">
+              <label>会话账户<select id="aiAccount"></select></label>
+              <label>会话<select id="aiDialog"></select></label>
+              <div class="settings-actions"><button id="aiLoadDialogsButton" type="button" class="secondary">加载会话</button><button id="aiSummaryButton" type="button" class="primary">生成摘要</button></div>
+              <textarea id="aiResult" rows="10" readonly placeholder="AI 生成的摘要或草稿会显示在这里"></textarea>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section id="mentionsPage" class="page">
@@ -162,6 +193,16 @@
       <input id="loginAccountId" type="hidden">
       <div class="dialog-actions"><button type="button" class="secondary close-dialog">稍后</button><button type="submit" class="primary">继续登录</button></div>
     </form>
+  </dialog>
+
+  <dialog id="aiWizardDialog">
+    <div class="dialog-head"><h2>AI 配置向导</h2><button type="button" class="icon-button close-dialog">×</button></div>
+    <p class="hint">选择一种部署方式，向导会填入常用地址；模型名称按你实际安装或订阅的模型调整。</p>
+    <div class="wizard-options">
+      <button id="wizardOllamaButton" type="button" class="panel"><strong>本地 Ollama</strong><span>适合本机或 NAS。默认地址：<code>http://127.0.0.1:11434/v1</code>；通常无需 API Key。</span></button>
+      <button id="wizardOpenAiButton" type="button" class="panel"><strong>OpenAI / 兼容云服务</strong><span>填写服务商提供的 <code>/v1</code> 地址、模型名与 API Key。</span></button>
+    </div>
+    <div class="dialog-actions"><button type="button" class="secondary close-dialog">取消</button></div>
   </dialog>
 
   <dialog id="scheduleDialog">

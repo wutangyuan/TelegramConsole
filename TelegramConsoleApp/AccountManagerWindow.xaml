@@ -55,6 +55,14 @@
                             <DataGridTextColumn Header="手机号" Binding="{Binding MaskedPhone}" Width="150" />
                             <DataGridTextColumn Header="运行状态" Binding="{Binding Status}" Width="140" />
                             <DataGridCheckBoxColumn Header="自动启动" Binding="{Binding AutoStart}" Width="90" />
+                            <DataGridTemplateColumn Header="启用 AI" Width="90">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <CheckBox IsChecked="{Binding AiEnabled}" Tag="{Binding UserId}"
+                                                  HorizontalAlignment="Center" Click="AccountAiEnabled_Click" />
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="操作" Width="110">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>

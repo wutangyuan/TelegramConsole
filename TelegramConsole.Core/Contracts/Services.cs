@@ -25,6 +25,25 @@ public interface IApplicationResourceMonitor : IDisposable
     ApplicationResourceSnapshot Capture();
 }
 
+public interface IAiAssistantService
+{
+    Task<AiTextResult> TestAsync(AiAssistantSettings settings, CancellationToken cancellationToken = default);
+
+    Task<AiTextResult> SummarizeAsync(
+        AiAssistantSettings settings,
+        DialogItem dialog,
+        IReadOnlyList<ChatLine> messages,
+        CancellationToken cancellationToken = default);
+
+    Task<AiTextResult> DraftReplyAsync(
+        AiAssistantSettings settings,
+        DialogItem dialog,
+        ChatLine target,
+        IReadOnlyList<ChatLine> messages,
+        string instruction,
+        CancellationToken cancellationToken = default);
+}
+
 public interface ITelegramService : IDisposable
 {
     bool IsLoggedIn { get; }

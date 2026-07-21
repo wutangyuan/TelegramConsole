@@ -119,6 +119,7 @@ public partial class AccountManagerWindow : Window
                     MaskPhone(x.PhoneNumber),
                     online ? "在线" : failed ? "连接失败，请重新登录" : running ? "连接中/需要登录" : occupied ? "其他实例运行中" : "已停止",
                     x.AutoStart,
+                    x.AiEnabled,
                     running ? "打开" : occupied ? "已占用" : "登录",
                     !occupied);
             })
@@ -156,6 +157,17 @@ public partial class AccountManagerWindow : Window
     }
 
     private void Stop_Click(object sender, RoutedEventArgs e) => Run(() => AccountWorkspaceManager.Stop(Selected().UserId));
+
+    private void AccountAiEnabled_Click(object sender, RoutedEventArgs e) => Run(() =>
+    {
+        if (sender is not System.Windows.Controls.CheckBox { Tag: long userId, IsChecked: bool enabled }) return;
+        var settings = _store.Load();
+        if (!settings.Accounts.TryGetValue(userId, out var account)) return;
+        account.AiEnabled = enabled;
+        _store.SaveAccount(account);
+        CenterStatusText.Text = enabled ? $"已为 {account.LocalName} 启用 AI 功能" : $"已为 {account.LocalName} 关闭 AI 功能";
+        RefreshRows();
+    });
 
     private void Remove_Click(object sender, RoutedEventArgs e) => Run(() =>
     {
@@ -411,7 +423,7 @@ public partial class AccountManagerWindow : Window
         : uptime.ToString(@"hh\:mm\:ss");
 
     private sealed record AccountRow(
-        long UserId, string LocalName, string DisplayName, string MaskedPhone, string Status, bool AutoStart,
+        long UserId, string LocalName, string DisplayName, string MaskedPhone, string Status, bool AutoStart, bool AiEnabled,
         string ActionText, bool CanOpen);
 
     private sealed record ExceptionRow(

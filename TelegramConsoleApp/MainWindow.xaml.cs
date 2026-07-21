@@ -22,6 +22,7 @@ public partial class MainWindow : Window
     private readonly IIntervalChatAutomationService _intervalChatAutomation;
     private readonly IExceptionMonitorService _exceptionMonitor;
     private readonly IMentionMonitorService _mentionMonitor;
+    private readonly IAiAssistantService _aiAssistant;
     private AccountProfile? _activeAccount;
     private System.Windows.Forms.NotifyIcon? _trayIcon;
     private System.Windows.Forms.ToolStripMenuItem? _trayAccountItem;
@@ -66,6 +67,34 @@ public partial class MainWindow : Window
     public bool IsWorkspaceConnectionFailed => _workspaceConnectionFailed;
     public string PhoneNumber => PhoneBox.Text.Trim();
 
+    private void EnsureGlobalAiSettings()
+    {
+        if (HasAiConfiguration(_settings.AiAssistant)) return;
+        var legacy = _settings.Accounts.Values.Select(x => x.AiAssistant).FirstOrDefault(HasAiConfiguration);
+        if (legacy is null) return;
+        _settings.AiAssistant = CloneAiSettings(legacy);
+        _store.SaveGlobalSettings(_settings);
+    }
+
+    private static bool HasAiConfiguration(AiAssistantSettings settings) => settings.Enabled ||
+        !string.IsNullOrWhiteSpace(settings.Endpoint) || !string.IsNullOrWhiteSpace(settings.Model) ||
+        !string.IsNullOrWhiteSpace(settings.ApiKey);
+
+    private static AiAssistantSettings CloneAiSettings(AiAssistantSettings settings) => new()
+    {
+        Enabled = settings.Enabled,
+        Provider = settings.Provider,
+        UseCodexCliOAuth = settings.UseCodexCliOAuth,
+        Endpoint = settings.Endpoint,
+        Model = settings.Model,
+        ApiKey = settings.ApiKey,
+        ContextMessageLimit = Math.Clamp(settings.ContextMessageLimit, 5, 100),
+        TimeoutSeconds = Math.Clamp(settings.TimeoutSeconds, 10, 180)
+    };
+
+    private bool IsAccountAiEnabled() => _activeAccount is not null &&
+        _store.Load().Accounts.TryGetValue(_activeAccount.UserId, out var account) && account.AiEnabled;
+
     public MainWindow() : this(null, false)
     {
     }
@@ -77,6 +106,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         if (!_managedWorkspace) InitializeTrayIcon();
         _settings = _store.Load();
+        EnsureGlobalAiSettings();
         var knownAccount = _settings.Accounts.Values.FirstOrDefault(x =>
             SamePhone(x.PhoneNumber, launchRequest?.PhoneNumber ?? _settings.PhoneNumber));
         var loginLocalName = !string.IsNullOrWhiteSpace(launchRequest?.LocalName)
@@ -91,6 +121,7 @@ public partial class MainWindow : Window
         _telegram = new TelegramService(_store, _logger);
         _exceptionMonitor = new ExceptionMonitorService(_store, _logger, _telegram, _settings);
         _mentionMonitor = new MentionMonitorService(_store, _telegram, _logger);
+        _aiAssistant = new OpenAiCompatibleAssistantService(_logger);
         _scheduler = new SchedulerService(_telegram, _store, _settings, _logger);
         _intervalChatAutomation = new IntervalChatAutomationService(_telegram, _store, _logger);
         VisualChat.QuoteRequested += line => SelectQuoteTarget(QuoteTargetItem.From(line));
@@ -603,6 +634,7 @@ public partial class MainWindow : Window
         ManualLoginEmailReminderBox.IsChecked = account.ExceptionAlerts.ManualLoginEmailReminderEnabled;
         ExceptionMinimumLevelBox.SelectedIndex = account.ExceptionAlerts.MinimumLevel == AppLogLevel.Critical ? 1 : 0;
         ExceptionEmailBox.Text = account.ExceptionAlerts.EmailRecipient;
+        LoadAiSettings(_settings.AiAssistant);
         _exceptionMonitor.ActivateAccount(userId, account.ExceptionAlerts);
         MentionNotifyEnabledBox.IsChecked = account.MentionAlerts.NotificationsEnabled;
         _mentionMonitor.ActivateAccount(userId, account.MentionAlerts);
@@ -620,6 +652,84 @@ public partial class MainWindow : Window
         UpdateLoginIdentity(account.LocalName, account.DisplayName);
         AccountWorkspaceManager.Register(this, userId);
     }
+
+    private void LoadAiSettings(AiAssistantSettings settings)
+    {
+        AiEnabledBox.IsChecked = settings.Enabled;
+        AiEndpointBox.Text = settings.Endpoint;
+        AiModelBox.Text = settings.Model;
+        AiApiKeyBox.Password = "";
+        AiContextLimitBox.Text = Math.Clamp(settings.ContextMessageLimit, 5, 100).ToString();
+        AiKeyStatusText.Text = string.IsNullOrWhiteSpace(settings.ApiKey)
+            ? "未配置 API Key（本地 Ollama 通常可留空）"
+            : "已保存加密 API Key；留空不会覆盖";
+    }
+
+    private async void SaveAiSettings_Click(object sender, RoutedEventArgs e) =>
+        await RunUiAsync(() =>
+        {
+            if (_activeAccount is null) throw new InvalidOperationException("请先登录当前 Telegram 账户");
+            if (!int.TryParse(AiContextLimitBox.Text, out var contextLimit)) contextLimit = 30;
+            var existing = _settings.AiAssistant;
+            var enabled = AiEnabledBox.IsChecked == true;
+            var endpoint = AiEndpointBox.Text.Trim();
+            var model = AiModelBox.Text.Trim();
+            if (enabled && (string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(model)))
+                throw new InvalidOperationException("启用 AI 助手前，请填写接口地址和模型名称");
+            _settings.AiAssistant = new AiAssistantSettings
+            {
+                Enabled = enabled,
+                Provider = "OpenAICompatible",
+                Endpoint = endpoint,
+                Model = model,
+                ApiKey = string.IsNullOrWhiteSpace(AiApiKeyBox.Password) ? existing.ApiKey : AiApiKeyBox.Password,
+                ContextMessageLimit = Math.Clamp(contextLimit, 5, 100),
+                TimeoutSeconds = existing.TimeoutSeconds
+            };
+            _store.SaveGlobalSettings(_settings);
+            LoadAiSettings(_settings.AiAssistant);
+            SetStatus("AI 配置已加密保存");
+            return Task.CompletedTask;
+        });
+
+    private void AiSetupWizard_Click(object sender, RoutedEventArgs e)
+    {
+        var choice = System.Windows.MessageBox.Show(
+            "选择“是”会预填本地 Ollama（适用于本机/NAS）；选择“否”会预填 OpenAI 兼容云服务。\n\n" +
+            "本地 Ollama：通常不需要 API Key。\n" +
+            "云服务：请使用服务商提供的 /v1 地址、模型名和 API Key。",
+            "AI 配置向导", MessageBoxButton.YesNoCancel, MessageBoxImage.Information);
+        if (choice == MessageBoxResult.Cancel) return;
+        if (choice == MessageBoxResult.Yes)
+        {
+            AiEndpointBox.Text = "http://127.0.0.1:11434/v1";
+            AiModelBox.Text = "qwen2.5:7b";
+            AiApiKeyBox.Password = "";
+            AiKeyStatusText.Text = "已填入本地 Ollama 示例。NAS Docker 部署时，请改为容器可访问的宿主机地址。";
+        }
+        else
+        {
+            AiEndpointBox.Text = "https://api.openai.com/v1";
+            AiModelBox.Text = "gpt-4.1-mini";
+            AiKeyStatusText.Text = "已填入 OpenAI 示例。请填写 API Key，或替换成兼容服务商提供的地址和模型。";
+        }
+        AiEnabledBox.IsChecked = true;
+        AiEndpointBox.Focus();
+    }
+
+    private async void GenerateAiSummary_Click(object sender, RoutedEventArgs e) =>
+        await RunUiAsync(async () =>
+        {
+            if (_activeAccount is null) throw new InvalidOperationException("请先登录当前 Telegram 账户");
+            if (!IsAccountAiEnabled()) throw new InvalidOperationException("当前账号未启用 AI 功能，请在管理中心的账号列表中开启");
+            if (DialogsList.SelectedItem is not DialogItem dialog) throw new InvalidOperationException("请先在左侧选择需要摘要的会话");
+            var settings = _store.Load().AiAssistant;
+            var history = await _telegram.LoadHistoryAsync(dialog, Math.Clamp(settings.ContextMessageLimit, 5, 100));
+            AiResultBox.Text = "AI 正在生成摘要…";
+            var result = await _aiAssistant.SummarizeAsync(settings, dialog, history);
+            AiResultBox.Text = result.Text;
+            SetStatus("AI 会话摘要已生成；结果未发送到 Telegram");
+        });
 
     private void UpdateLoginIdentity(string localName, string displayName)
     {
@@ -1068,12 +1178,38 @@ public partial class MainWindow : Window
     private void ChatConsole_ContextMenuOpening(object sender, ContextMenuEventArgs e)
     {
         ChatQuoteMenuItem.IsEnabled = _contextQuoteTarget is not null;
+        ChatAiDraftMenuItem.IsEnabled = _contextQuoteTarget is not null;
     }
 
     private void ChatQuoteMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (_contextQuoteTarget is null) return;
         SelectQuoteTarget(_contextQuoteTarget);
+    }
+
+    private async void ChatAiDraftMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        var target = _contextQuoteTarget;
+        if (target is null || DialogsList.SelectedItem is not DialogItem dialog) return;
+        await RunUiAsync(async () =>
+        {
+            if (_activeAccount is null) throw new InvalidOperationException("请先登录当前 Telegram 账户");
+            if (!IsAccountAiEnabled()) throw new InvalidOperationException("当前账号未启用 AI 功能，请在管理中心的账号列表中开启");
+            var settings = _store.Load().AiAssistant;
+            var line = _chatTimeline.LastOrDefault(x => x.MessageId == target.MessageId && x.ChatId == dialog.Id);
+            if (line is null) throw new InvalidOperationException("未找到该消息的完整上下文，请刷新会话后再试");
+            MessageBox.Text = "AI 正在生成回复草稿…";
+            SetChatSendEnabled(false);
+            try
+            {
+                var history = _chatTimeline.TakeLast(Math.Clamp(settings.ContextMessageLimit, 5, 100)).ToArray();
+                var result = await _aiAssistant.DraftReplyAsync(settings, dialog, line, history, "");
+                MessageBox.Text = result.Text;
+                SelectQuoteTarget(target);
+                SetStatus("AI 草稿已写入发送框，请确认后再发送");
+            }
+            finally { SetChatSendEnabled(true); }
+        });
     }
 
     private void SelectQuoteTarget(QuoteTargetItem target)

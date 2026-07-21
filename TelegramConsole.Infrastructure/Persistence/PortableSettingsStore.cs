@@ -86,6 +86,7 @@ public sealed class PortableSettingsStore : ISettingsStore
             latest.Language = settings.Language;
             latest.Email = settings.Email;
             latest.Proxy = settings.Proxy;
+            latest.AiAssistant = settings.AiAssistant;
             SaveCore(latest);
         }
     }

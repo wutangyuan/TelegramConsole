@@ -12,6 +12,8 @@ public sealed class AppSettings
     public EmailSettings Email { get; set; } = new();
     public ProxySettings Proxy { get; set; } = new();
     public ExceptionAlertSettings ExceptionAlerts { get; set; } = new();
+    /// <summary>Shared AI connection used by every Telegram account.</summary>
+    public AiAssistantSettings AiAssistant { get; set; } = new();
     public Dictionary<long, AccountProfile> Accounts { get; set; } = [];
 }
 
@@ -22,13 +24,36 @@ public sealed class AccountProfile
     public string DisplayName { get; set; } = "";
     public string PhoneNumber { get; set; } = "";
     public bool AutoStart { get; set; } = true;
+    /// <summary>Whether this account may use the shared AI connection.</summary>
+    public bool AiEnabled { get; set; }
     public int SortOrder { get; set; }
     public List<ScheduledMessage> Schedules { get; set; } = [];
     public ExceptionAlertSettings ExceptionAlerts { get; set; } = new();
     public MentionAlertSettings MentionAlerts { get; set; } = new();
+    /// <summary>Legacy per-account value retained only for one-time migration to the shared configuration.</summary>
+    public AiAssistantSettings AiAssistant { get; set; } = new();
     public List<AutomationRule> AutomationRules { get; set; } = [];
     public List<IntervalChatRule> IntervalChatRules { get; set; } = [];
 }
+
+public sealed class AiAssistantSettings
+{
+    /// <summary>AI functions are opt-in. Version 1 only creates text; it never sends a Telegram message automatically.</summary>
+    public bool Enabled { get; set; }
+    public string Provider { get; set; } = "OpenAICompatible";
+    /// <summary>
+    /// Uses the locally installed Codex CLI and its ChatGPT/Codex OAuth session.
+    /// No OAuth token is copied into this application's settings store.
+    /// </summary>
+    public bool UseCodexCliOAuth { get; set; }
+    public string Endpoint { get; set; } = "";
+    public string Model { get; set; } = "";
+    public string ApiKey { get; set; } = "";
+    public int ContextMessageLimit { get; set; } = 30;
+    public int TimeoutSeconds { get; set; } = 60;
+}
+
+public sealed record AiTextResult(string Text, string Model, string Provider);
 
 public sealed class IntervalChatRule
 {

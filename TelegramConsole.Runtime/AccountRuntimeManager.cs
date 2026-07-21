@@ -105,6 +105,21 @@ public sealed class AccountRuntimeManager : IAsyncDisposable
         Get(id).RetryExceptionNotificationsAsync(recordIds);
     public ExceptionAlertSettings GetExceptionAlerts(Guid id) => Get(id).GetExceptionAlerts();
     public void SaveExceptionAlerts(Guid id, ExceptionAlertSettings settings) => Get(id).SaveExceptionAlerts(settings);
+    public AiAssistantSettings GetAiAssistantSettings() => GetOrMigrateAiAssistantSettings();
+    public void SaveAiAssistantSettings(AiAssistantSettings settings)
+    {
+        var global = _settingsStore.Load();
+        global.AiAssistant = CloneAiAssistantSettings(settings);
+        _settingsStore.SaveGlobalSettings(global);
+    }
+    public bool GetAccountAiEnabled(Guid id) => Get(id).GetAccountAiEnabled();
+    public void SetAccountAiEnabled(Guid id, bool enabled) => Get(id).SetAccountAiEnabled(enabled);
+    public Task<AiTextResult> SummarizeWithAiAsync(Guid id, DialogItem dialog, CancellationToken cancellationToken = default) =>
+        Get(id).SummarizeWithAiAsync(dialog, cancellationToken);
+    public Task<AiTextResult> DraftAiReplyAsync(Guid id, DialogItem dialog, int messageId, string instruction, CancellationToken cancellationToken = default) =>
+        Get(id).DraftAiReplyAsync(dialog, messageId, instruction, cancellationToken);
+    public Task<AiTextResult> TestAiAssistantAsync(AiAssistantSettings settings, CancellationToken cancellationToken = default) =>
+        new OpenAiCompatibleAssistantService().TestAsync(settings, cancellationToken);
     public Task<IReadOnlyList<MentionRecord>> QueryMentionsAsync(Guid id, MentionQuery query) =>
         Get(id).QueryMentionsAsync(query);
     public Task<IReadOnlyList<OutgoingMessageRecord>> QueryOutboxAsync(Guid id, int limit = 200) =>
@@ -123,6 +138,33 @@ public sealed class AccountRuntimeManager : IAsyncDisposable
         _settingsStore.SaveGlobalSettings(settings);
         foreach (var runtime in _runtimes.Values) runtime.UpdateEmailSettings(email);
     }
+
+    private AiAssistantSettings GetOrMigrateAiAssistantSettings()
+    {
+        var settings = _settingsStore.Load();
+        if (HasAiConfiguration(settings.AiAssistant)) return CloneAiAssistantSettings(settings.AiAssistant);
+        var legacy = settings.Accounts.Values.Select(x => x.AiAssistant).FirstOrDefault(HasAiConfiguration);
+        if (legacy is null) return CloneAiAssistantSettings(settings.AiAssistant);
+        settings.AiAssistant = CloneAiAssistantSettings(legacy);
+        _settingsStore.SaveGlobalSettings(settings);
+        return CloneAiAssistantSettings(settings.AiAssistant);
+    }
+
+    private static bool HasAiConfiguration(AiAssistantSettings settings) =>
+        settings.Enabled || !string.IsNullOrWhiteSpace(settings.Endpoint) ||
+        !string.IsNullOrWhiteSpace(settings.Model) || !string.IsNullOrWhiteSpace(settings.ApiKey);
+
+    private static AiAssistantSettings CloneAiAssistantSettings(AiAssistantSettings settings) => new()
+    {
+        Enabled = settings.Enabled,
+        Provider = settings.Provider,
+        UseCodexCliOAuth = settings.UseCodexCliOAuth,
+        Endpoint = settings.Endpoint,
+        Model = settings.Model,
+        ApiKey = settings.ApiKey,
+        ContextMessageLimit = Math.Clamp(settings.ContextMessageLimit, 5, 100),
+        TimeoutSeconds = Math.Clamp(settings.TimeoutSeconds, 10, 180)
+    };
 
     private static EmailSettings CloneEmail(EmailSettings email) => new()
     {
@@ -164,6 +206,7 @@ internal sealed class AccountRuntime : IAsyncDisposable
     private ExceptionMonitorService? _exceptionMonitor;
     private MentionMonitorService? _mentionMonitor;
     private IntervalChatAutomationService? _intervalChatAutomation;
+    private IAiAssistantService? _aiAssistant;
     private Log4NetAppLogger? _logger;
     private AccountProfile? _profile;
     private AppSettings? _runtimeSettings;
@@ -178,7 +221,7 @@ internal sealed class AccountRuntime : IAsyncDisposable
     public ManagedAccountDefinition Definition { get; }
     public AccountRuntimeSnapshot Snapshot => new(
         Definition.Id, Definition.LocalName, MaskPhone(Definition.PhoneNumber), Definition.TelegramUserId,
-        Definition.TelegramDisplayName, Definition.AutoStart, _status, _statusMessage, _loginPrompt,
+        Definition.TelegramDisplayName, Definition.AutoStart, GetAccountAiEnabled(), _status, _statusMessage, _loginPrompt,
         _startedAt, _lastActivityAt);
 
     public AccountRuntime(
@@ -207,6 +250,23 @@ internal sealed class AccountRuntime : IAsyncDisposable
         _exceptionMonitor?.ActivateAccount(profile.UserId, profile.ExceptionAlerts);
     }
 
+    public bool GetAccountAiEnabled()
+    {
+        if (_profile is not null) return _profile.AiEnabled;
+        return Definition.TelegramUserId != 0 && _store.Load().Accounts.TryGetValue(Definition.TelegramUserId, out var profile) && profile.AiEnabled;
+    }
+
+    public void SetAccountAiEnabled(bool enabled)
+    {
+        var userId = _profile?.UserId ?? Definition.TelegramUserId;
+        if (userId == 0 || !_store.Load().Accounts.TryGetValue(userId, out var profile))
+            throw new InvalidOperationException("请先完成 Telegram 登录后再设置 AI 开关");
+        profile.AiEnabled = enabled;
+        if (_profile is not null) _profile.AiEnabled = enabled;
+        _store.SaveAccount(profile);
+    }
+
+
     public async Task<AccountRuntimeSnapshot> StartAsync(CancellationToken cancellationToken)
     {
         await _lifecycle.WaitAsync(cancellationToken);
@@ -223,6 +283,7 @@ internal sealed class AccountRuntime : IAsyncDisposable
 
             _logger = new Log4NetAppLogger(Path.Combine(_dataDirectory, "logs", Definition.Id.ToString("N")));
             _logger.EntryWritten += OnLogEntry;
+            _aiAssistant = new OpenAiCompatibleAssistantService(_logger);
             var settings = BuildSettings();
             _runtimeSettings = settings;
             _telegram = new TelegramService(_store, _logger);
@@ -290,6 +351,7 @@ internal sealed class AccountRuntime : IAsyncDisposable
         TelegramPeerTitle = settings.TelegramPeerTitle,
         EmailRecipient = settings.EmailRecipient
     };
+
 
     private async Task CompleteLoginAsync()
     {
@@ -462,6 +524,7 @@ internal sealed class AccountRuntime : IAsyncDisposable
     public Task RetryExceptionNotificationsAsync(IEnumerable<long> recordIds)
     {
         EnsureOnline();
+        if (!GetAccountAiEnabled()) throw new InvalidOperationException("当前账号未启用 AI 功能，请在管理中心的账号列表中开启");
         return _exceptionMonitor?.RetryNotificationsAsync(recordIds) ??
                throw new InvalidOperationException("账户异常监控服务尚未启动");
     }
@@ -481,6 +544,7 @@ internal sealed class AccountRuntime : IAsyncDisposable
     public Task RetryOutboxAsync(long recordId)
     {
         EnsureOnline();
+        if (!GetAccountAiEnabled()) throw new InvalidOperationException("当前账号未启用 AI 功能，请在管理中心的账号列表中开启");
         return _telegram!.RetryOutboxAsync(recordId);
     }
 
@@ -510,6 +574,28 @@ internal sealed class AccountRuntime : IAsyncDisposable
         lock (_messagesSync)
             foreach (var line in history) UpsertMessage(line);
         return history;
+    }
+
+    public async Task<AiTextResult> SummarizeWithAiAsync(DialogItem dialog, CancellationToken cancellationToken)
+    {
+        EnsureOnline();
+        var settings = _store.Load().AiAssistant;
+        var service = _aiAssistant ?? throw new InvalidOperationException("AI 助手服务尚未启动");
+        var history = await LoadHistoryAsync(dialog, Math.Clamp(settings.ContextMessageLimit, 5, 100));
+        return await service.SummarizeAsync(settings, dialog, history, cancellationToken);
+    }
+
+    public async Task<AiTextResult> DraftAiReplyAsync(
+        DialogItem dialog, int messageId, string instruction, CancellationToken cancellationToken)
+    {
+        EnsureOnline();
+        if (messageId <= 0) throw new ArgumentException("请选择需要生成草稿的消息");
+        var settings = _store.Load().AiAssistant;
+        var service = _aiAssistant ?? throw new InvalidOperationException("AI 助手服务尚未启动");
+        var history = await LoadHistoryAsync(dialog, Math.Clamp(settings.ContextMessageLimit, 5, 100));
+        var target = history.LastOrDefault(x => x.MessageId == messageId && x.ChatId == dialog.Id);
+        if (target is null) throw new InvalidOperationException("未在当前会话的已加载消息中找到目标消息，请刷新会话后重试");
+        return await service.DraftReplyAsync(settings, dialog, target, history, instruction ?? "", cancellationToken);
     }
 
     public Task SendAsync(SendChatMessageRequest request)
@@ -652,6 +738,7 @@ internal sealed class AccountRuntime : IAsyncDisposable
         _mentionMonitor = null;
         _exceptionMonitor = null;
         _intervalChatAutomation = null;
+        _aiAssistant = null;
         _scheduler = null;
         _telegram = null;
         _logger = null;
