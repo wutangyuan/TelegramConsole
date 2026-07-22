@@ -34,11 +34,13 @@ public sealed class AccountProfile
     public AiAssistantSettings AiAssistant { get; set; } = new();
     public List<AutomationRule> AutomationRules { get; set; } = [];
     public List<IntervalChatRule> IntervalChatRules { get; set; } = [];
+    /// <summary>Per-account group AI reply rules. They only use the shared AI connection.</summary>
+    public List<AiAutoReplyRule> AiAutoReplyRules { get; set; } = [];
 }
 
 public sealed class AiAssistantSettings
 {
-    /// <summary>AI functions are opt-in. Version 1 only creates text; it never sends a Telegram message automatically.</summary>
+    /// <summary>AI functions are opt-in and shared by all Telegram accounts.</summary>
     public bool Enabled { get; set; }
     public string Provider { get; set; } = "OpenAICompatible";
     /// <summary>
@@ -54,6 +56,37 @@ public sealed class AiAssistantSettings
 }
 
 public sealed record AiTextResult(string Text, string Model, string Provider);
+
+/// <summary>
+/// An opt-in rule for replying as the current account to selected members in one group.
+/// A blank target list deliberately matches nobody: automatic replies are never broad by default.
+/// </summary>
+public sealed class AiAutoReplyRule
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public bool Enabled { get; set; } = true;
+    /// <summary>Must be explicitly enabled before the AI may send a Telegram message.</summary>
+    public bool AutoSend { get; set; }
+    public bool FilterBots { get; set; } = true;
+    public long ChatId { get; set; }
+    public string ChatKind { get; set; } = "Channel";
+    public string ChatTitle { get; set; } = "";
+    public List<AiAutoReplyTarget> Targets { get; set; } = [];
+    public string Instruction { get; set; } = "用简洁、友好的语气回答对方的问题；不确定时坦诚说明。";
+    public int CooldownSeconds { get; set; } = 120;
+    public int DailyLimit { get; set; } = 20;
+    public DateOnly? UsageDate { get; set; }
+    public int UsageCount { get; set; }
+    public DateTimeOffset? LastSentAt { get; set; }
+    public string LastStatus { get; set; } = "等待匹配消息";
+}
+
+public sealed class AiAutoReplyTarget
+{
+    public long UserId { get; set; }
+    public string DisplayName { get; set; } = "";
+    public bool IsBot { get; set; }
+}
 
 public sealed class IntervalChatRule
 {

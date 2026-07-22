@@ -1089,6 +1089,9 @@ public sealed class TelegramService : ITelegramService
     private ChatLine ToChatLine(TLMessage message, DialogItem dialog, TLMessage? replyMessage)
     {
         var replyId = ReplyToMessageIdOf(message);
+        var senderInfo = message.from_id is null ? null : _manager?.UserOrChat(message.from_id);
+        var senderId = message.from_id?.ID ?? 0;
+        var senderIsBot = senderInfo is User { IsBot: true };
         var header = message.reply_to as MessageReplyHeader;
         var replyText = !string.IsNullOrWhiteSpace(header?.quote_text)
             ? header.quote_text
@@ -1105,7 +1108,7 @@ public sealed class TelegramService : ITelegramService
             message.flags.HasFlag(TLMessage.Flags.has_edit_date),
             message.flags.HasFlag(TLMessage.Flags.pinned),
             ForwardedFrom(message.fwd_from), message.post_author ?? "", message.views, message.forwards,
-            message.grouped_id, ReactionsOf(message.reactions));
+            message.grouped_id, ReactionsOf(message.reactions), false, senderId, senderIsBot);
     }
 
     private string ForwardedFrom(MessageFwdHeader? header)

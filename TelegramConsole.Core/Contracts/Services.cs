@@ -42,6 +42,14 @@ public interface IAiAssistantService
         IReadOnlyList<ChatLine> messages,
         string instruction,
         CancellationToken cancellationToken = default);
+
+    Task<AiTextResult> GenerateAutoReplyAsync(
+        AiAssistantSettings settings,
+        DialogItem dialog,
+        ChatLine target,
+        IReadOnlyList<ChatLine> messages,
+        string instruction,
+        CancellationToken cancellationToken = default);
 }
 
 public interface ITelegramService : IDisposable

@@ -163,7 +163,7 @@ public sealed class AccountRuntimeManager : IAsyncDisposable
         Model = settings.Model,
         ApiKey = settings.ApiKey,
         ContextMessageLimit = Math.Clamp(settings.ContextMessageLimit, 5, 100),
-        TimeoutSeconds = Math.Clamp(settings.TimeoutSeconds, 10, 180)
+        TimeoutSeconds = Math.Clamp(settings.TimeoutSeconds, 10, 300)
     };
 
     private static EmailSettings CloneEmail(EmailSettings email) => new()
@@ -201,6 +201,8 @@ internal sealed class AccountRuntime : IAsyncDisposable
     private readonly object _messagesSync = new();
     private readonly Queue<AppLogEntry> _logs = new();
     private readonly object _logsSync = new();
+    private readonly SemaphoreSlim _aiAutoReplyGate = new(1, 1);
+    private readonly HashSet<string> _handledAiAutoReplyMessages = [];
     private TelegramService? _telegram;
     private SchedulerService? _scheduler;
     private ExceptionMonitorService? _exceptionMonitor;
@@ -452,6 +454,80 @@ internal sealed class AccountRuntime : IAsyncDisposable
             UpsertMessage(line);
         }
         _lastActivityAt = DateTimeOffset.Now;
+        if (!line.IsOutgoing)
+            _ = ProcessAiAutoReplyAsync(line);
+    }
+
+    private async Task ProcessAiAutoReplyAsync(ChatLine line)
+    {
+        if (!line.IsGroup || line.SenderId == 0 || _profile is null || _telegram is null || _aiAssistant is null) return;
+        if (!GetAccountAiEnabled()) return;
+
+        var settings = _store.Load().AiAssistant;
+        if (!settings.Enabled) return;
+
+        await _aiAutoReplyGate.WaitAsync();
+        try
+        {
+            var rules = _profile.AiAutoReplyRules;
+            var now = DateTimeOffset.Now;
+            var today = DateOnly.FromDateTime(now.LocalDateTime);
+            foreach (var rule in rules.Where(x => x.Enabled && x.ChatId == line.ChatId &&
+                                                  string.Equals(x.ChatKind, line.ChatKind, StringComparison.OrdinalIgnoreCase)))
+            {
+                if (rule.FilterBots && line.SenderIsBot) continue;
+                if (!rule.Targets.Any(x => x.UserId == line.SenderId)) continue;
+
+                var key = $"{rule.Id:N}:{line.ChatKind}:{line.ChatId}:{line.MessageId}";
+                if (!_handledAiAutoReplyMessages.Add(key)) continue;
+
+                if (!rule.AutoSend)
+                {
+                    rule.LastStatus = $"已匹配 {line.Sender}，未开启自动发送";
+                    _store.SaveAccount(_profile);
+                    _logger?.Info("AI.AutoReply", $"命中规则“{rule.ChatTitle}”，但自动发送未开启：{line.Sender}");
+                    continue;
+                }
+
+                if (rule.UsageDate != today)
+                {
+                    rule.UsageDate = today;
+                    rule.UsageCount = 0;
+                }
+                if (rule.DailyLimit > 0 && rule.UsageCount >= rule.DailyLimit)
+                {
+                    rule.LastStatus = $"已达到每日上限（{rule.DailyLimit}）";
+                    _store.SaveAccount(_profile);
+                    continue;
+                }
+                if (rule.LastSentAt is { } last && now - last < TimeSpan.FromSeconds(Math.Clamp(rule.CooldownSeconds, 10, 86400)))
+                {
+                    rule.LastStatus = "处于冷却时间，已跳过";
+                    _store.SaveAccount(_profile);
+                    continue;
+                }
+
+                var dialog = new DialogItem(rule.ChatTitle, rule.ChatId, rule.ChatKind, true);
+                var context = GetRecentMessages(Math.Clamp(settings.ContextMessageLimit, 5, 100))
+                    .Where(x => x.ChatId == line.ChatId && string.Equals(x.ChatKind, line.ChatKind, StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(x => x.Time).ToArray();
+                var result = await _aiAssistant.GenerateAutoReplyAsync(settings, dialog, line, context, rule.Instruction);
+                await _telegram.SendReplyAsync(dialog, line.MessageId, result.Text);
+                rule.LastSentAt = now;
+                rule.UsageCount++;
+                rule.LastStatus = $"已回复 {line.Sender}（{now:HH:mm:ss}）";
+                _store.SaveAccount(_profile);
+                _logger?.Info("AI.AutoReply", $"AI 已在“{rule.ChatTitle}”回复 {line.Sender}，消息 ID {line.MessageId}");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.Warning("AI.AutoReply", "AI 自动回复执行失败", ex);
+        }
+        finally
+        {
+            _aiAutoReplyGate.Release();
+        }
     }
 
     private void OnMessageDeleted(MessageDeletion deletion)
@@ -767,6 +843,7 @@ internal sealed class AccountRuntime : IAsyncDisposable
         if (_disposed) return;
         _disposed = true;
         await StopAsync();
+        _aiAutoReplyGate.Dispose();
         _lifecycle.Dispose();
     }
 }

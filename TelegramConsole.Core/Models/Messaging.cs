@@ -101,7 +101,9 @@ public sealed record ChatLine(
     int ForwardCount = 0,
     long GroupedId = 0,
     IReadOnlyList<ChatReaction>? Reactions = null,
-    bool IsDeleted = false)
+    bool IsDeleted = false,
+    long SenderId = 0,
+    bool SenderIsBot = false)
 {
     public string DisplayText => string.IsNullOrWhiteSpace(MediaLabel) || Text == MediaLabel
         ? Text

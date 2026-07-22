@@ -23,6 +23,8 @@ public partial class MainWindow : Window
     private readonly IExceptionMonitorService _exceptionMonitor;
     private readonly IMentionMonitorService _mentionMonitor;
     private readonly IAiAssistantService _aiAssistant;
+    private readonly SemaphoreSlim _aiAutoReplyGate = new(1, 1);
+    private readonly HashSet<string> _handledAiAutoReplyMessages = [];
     private AccountProfile? _activeAccount;
     private System.Windows.Forms.NotifyIcon? _trayIcon;
     private System.Windows.Forms.ToolStripMenuItem? _trayAccountItem;
@@ -89,7 +91,7 @@ public partial class MainWindow : Window
         Model = settings.Model,
         ApiKey = settings.ApiKey,
         ContextMessageLimit = Math.Clamp(settings.ContextMessageLimit, 5, 100),
-        TimeoutSeconds = Math.Clamp(settings.TimeoutSeconds, 10, 180)
+        TimeoutSeconds = Math.Clamp(settings.TimeoutSeconds, 10, 300)
     };
 
     private bool IsAccountAiEnabled() => _activeAccount is not null &&
@@ -635,6 +637,7 @@ public partial class MainWindow : Window
         ExceptionMinimumLevelBox.SelectedIndex = account.ExceptionAlerts.MinimumLevel == AppLogLevel.Critical ? 1 : 0;
         ExceptionEmailBox.Text = account.ExceptionAlerts.EmailRecipient;
         LoadAiSettings(_settings.AiAssistant);
+        RenderAiAutoReplyRules();
         _exceptionMonitor.ActivateAccount(userId, account.ExceptionAlerts);
         MentionNotifyEnabledBox.IsChecked = account.MentionAlerts.NotificationsEnabled;
         _mentionMonitor.ActivateAccount(userId, account.MentionAlerts);
@@ -655,67 +658,19 @@ public partial class MainWindow : Window
 
     private void LoadAiSettings(AiAssistantSettings settings)
     {
-        AiEnabledBox.IsChecked = settings.Enabled;
-        AiEndpointBox.Text = settings.Endpoint;
-        AiModelBox.Text = settings.Model;
-        AiApiKeyBox.Password = "";
-        AiContextLimitBox.Text = Math.Clamp(settings.ContextMessageLimit, 5, 100).ToString();
-        AiKeyStatusText.Text = string.IsNullOrWhiteSpace(settings.ApiKey)
-            ? "未配置 API Key（本地 Ollama 通常可留空）"
-            : "已保存加密 API Key；留空不会覆盖";
-    }
-
-    private async void SaveAiSettings_Click(object sender, RoutedEventArgs e) =>
-        await RunUiAsync(() =>
-        {
-            if (_activeAccount is null) throw new InvalidOperationException("请先登录当前 Telegram 账户");
-            if (!int.TryParse(AiContextLimitBox.Text, out var contextLimit)) contextLimit = 30;
-            var existing = _settings.AiAssistant;
-            var enabled = AiEnabledBox.IsChecked == true;
-            var endpoint = AiEndpointBox.Text.Trim();
-            var model = AiModelBox.Text.Trim();
-            if (enabled && (string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(model)))
-                throw new InvalidOperationException("启用 AI 助手前，请填写接口地址和模型名称");
-            _settings.AiAssistant = new AiAssistantSettings
-            {
-                Enabled = enabled,
-                Provider = "OpenAICompatible",
-                Endpoint = endpoint,
-                Model = model,
-                ApiKey = string.IsNullOrWhiteSpace(AiApiKeyBox.Password) ? existing.ApiKey : AiApiKeyBox.Password,
-                ContextMessageLimit = Math.Clamp(contextLimit, 5, 100),
-                TimeoutSeconds = existing.TimeoutSeconds
-            };
-            _store.SaveGlobalSettings(_settings);
-            LoadAiSettings(_settings.AiAssistant);
-            SetStatus("AI 配置已加密保存");
-            return Task.CompletedTask;
-        });
-
-    private void AiSetupWizard_Click(object sender, RoutedEventArgs e)
-    {
-        var choice = System.Windows.MessageBox.Show(
-            "选择“是”会预填本地 Ollama（适用于本机/NAS）；选择“否”会预填 OpenAI 兼容云服务。\n\n" +
-            "本地 Ollama：通常不需要 API Key。\n" +
-            "云服务：请使用服务商提供的 /v1 地址、模型名和 API Key。",
-            "AI 配置向导", MessageBoxButton.YesNoCancel, MessageBoxImage.Information);
-        if (choice == MessageBoxResult.Cancel) return;
-        if (choice == MessageBoxResult.Yes)
-        {
-            AiEndpointBox.Text = "http://127.0.0.1:11434/v1";
-            AiModelBox.Text = "qwen2.5:7b";
-            AiApiKeyBox.Password = "";
-            AiKeyStatusText.Text = "已填入本地 Ollama 示例。NAS Docker 部署时，请改为容器可访问的宿主机地址。";
-        }
+        if (!settings.Enabled)
+            AiGlobalStatusText.Text = "全局 AI 尚未启用。请前往“管理中心 → 设置 → AI 助手”完成配置。";
+        else if (settings.UseCodexCliOAuth || string.Equals(settings.Provider, "CodexCliOAuth", StringComparison.OrdinalIgnoreCase))
+            AiGlobalStatusText.Text = $"已启用 ChatGPT / Codex 订阅登录；模型：{(string.IsNullOrWhiteSpace(settings.Model) ? "Codex 默认模型" : settings.Model)}。";
         else
-        {
-            AiEndpointBox.Text = "https://api.openai.com/v1";
-            AiModelBox.Text = "gpt-4.1-mini";
-            AiKeyStatusText.Text = "已填入 OpenAI 示例。请填写 API Key，或替换成兼容服务商提供的地址和模型。";
-        }
-        AiEnabledBox.IsChecked = true;
-        AiEndpointBox.Focus();
+            AiGlobalStatusText.Text = $"已启用统一 AI 连接；模型：{settings.Model}；接口：{settings.Endpoint}";
+        AiAccountStatusText.Text = IsAccountAiEnabled()
+            ? "当前 Telegram 账户已启用 AI 功能。"
+            : "当前 Telegram 账户尚未启用 AI 功能。请在“管理中心 → 账户管理”勾选“启用 AI”。";
     }
+
+    private void AiOpenSettings_Click(object sender, RoutedEventArgs e) =>
+        ((App)System.Windows.Application.Current).ShowManagementCenter();
 
     private async void GenerateAiSummary_Click(object sender, RoutedEventArgs e) =>
         await RunUiAsync(async () =>
@@ -730,6 +685,70 @@ public partial class MainWindow : Window
             AiResultBox.Text = result.Text;
             SetStatus("AI 会话摘要已生成；结果未发送到 Telegram");
         });
+
+    private async void SaveAiAutoReplyRule_Click(object sender, RoutedEventArgs e) => await RunUiAsync(() =>
+    {
+        if (_activeAccount is null) throw new InvalidOperationException("请先登录当前 Telegram 账户");
+        if (!IsAccountAiEnabled()) throw new InvalidOperationException("当前账号未启用 AI 功能，请在管理中心的账号列表中开启");
+        if (AiAutoReplyChatBox.SelectedItem is not DialogItem chat || !chat.IsGroup)
+            throw new InvalidOperationException("请选择一个群聊或超级群作为 AI 自动回复范围");
+        if (AiAutoReplyMemberBox.SelectedItem is not AiAutoReplyTarget member || member.UserId == 0)
+            throw new InvalidOperationException("请先在左侧打开该群聊，加载消息后选择需要回复的成员");
+        if (!int.TryParse(AiAutoReplyCooldownBox.Text, out var cooldown)) cooldown = 120;
+        if (!int.TryParse(AiAutoReplyDailyLimitBox.Text, out var dailyLimit)) dailyLimit = 20;
+        var rule = _activeAccount.AiAutoReplyRules.FirstOrDefault(x => x.ChatId == chat.Id &&
+            string.Equals(x.ChatKind, chat.Kind, StringComparison.OrdinalIgnoreCase));
+        if (rule is null)
+        {
+            rule = new AiAutoReplyRule { ChatId = chat.Id, ChatKind = chat.Kind, ChatTitle = chat.Name };
+            _activeAccount.AiAutoReplyRules.Add(rule);
+        }
+        rule.ChatTitle = chat.Name;
+        rule.FilterBots = AiAutoReplyFilterBotsBox.IsChecked == true;
+        rule.AutoSend = AiAutoReplyAutoSendBox.IsChecked == true;
+        rule.Instruction = string.IsNullOrWhiteSpace(AiAutoReplyInstructionBox.Text)
+            ? "用简洁、友好的语气回答对方的问题；不确定时坦诚说明。"
+            : AiAutoReplyInstructionBox.Text.Trim();
+        rule.CooldownSeconds = Math.Clamp(cooldown, 10, 86400);
+        rule.DailyLimit = Math.Clamp(dailyLimit, 1, 1000);
+        if (!rule.Targets.Any(x => x.UserId == member.UserId)) rule.Targets.Add(member);
+        rule.LastStatus = rule.AutoSend ? "规则已保存，等待指定成员消息" : "规则已保存，自动发送未开启";
+        _store.SaveAccount(_activeAccount);
+        RenderAiAutoReplyRules();
+        SetStatus($"AI 自动回复规则已保存：{chat.Name} → {member.DisplayName}");
+        return Task.CompletedTask;
+    });
+
+    private async void RemoveAiAutoReplyTarget_Click(object sender, RoutedEventArgs e) => await RunUiAsync(() =>
+    {
+        if (_activeAccount is null || AiAutoReplyChatBox.SelectedItem is not DialogItem chat ||
+            AiAutoReplyMemberBox.SelectedItem is not AiAutoReplyTarget member)
+            throw new InvalidOperationException("请选择群聊和需要移除的成员");
+        var rule = _activeAccount.AiAutoReplyRules.FirstOrDefault(x => x.ChatId == chat.Id &&
+            string.Equals(x.ChatKind, chat.Kind, StringComparison.OrdinalIgnoreCase));
+        if (rule is null) throw new InvalidOperationException("当前群聊没有 AI 自动回复规则");
+        rule.Targets.RemoveAll(x => x.UserId == member.UserId);
+        if (rule.Targets.Count == 0) _activeAccount.AiAutoReplyRules.Remove(rule);
+        _store.SaveAccount(_activeAccount);
+        RenderAiAutoReplyRules();
+        SetStatus($"已移除 AI 自动回复成员：{member.DisplayName}");
+        return Task.CompletedTask;
+    });
+
+    private void RenderAiAutoReplyRules()
+    {
+        if (AiAutoReplyRuleList is null) return;
+        AiAutoReplyRuleList.ItemsSource = (_activeAccount?.AiAutoReplyRules ?? [])
+            .OrderBy(x => x.ChatTitle)
+            .Select(x => new AiAutoReplyRuleRow(
+                x.Enabled ? "启用" : "停用", x.ChatTitle,
+                string.Join("、", x.Targets.Select(y => y.DisplayName)),
+                x.FilterBots ? "过滤机器人" : "包含机器人",
+                x.AutoSend ? "自动发送" : "仅记录",
+                $"{x.CooldownSeconds} 秒 / {x.DailyLimit} 条",
+                x.LastStatus))
+            .ToList();
+    }
 
     private void UpdateLoginIdentity(string localName, string displayName)
     {
@@ -779,6 +798,7 @@ public partial class MainWindow : Window
         var groups = _allDialogs.Where(x => x.IsGroup).ToList();
         ScheduleChatBox.ItemsSource = groups;
         if (groups.Count > 0) ScheduleChatBox.SelectedIndex = 0;
+        AiAutoReplyChatBox.ItemsSource = groups;
         IntervalSourceBox.ItemsSource = _allDialogs;
         IntervalTargetBox.ItemsSource = _allDialogs;
         if (_allDialogs.Count > 0)
@@ -900,6 +920,11 @@ public partial class MainWindow : Window
                 var availableReactions = await _telegram.LoadAvailableReactionsAsync(dialog);
                 _chatTimeline.Clear();
                 _chatTimeline.AddRange(history.OrderBy(x => x.Time).ThenBy(x => x.MessageId));
+                if (dialog.IsGroup)
+                {
+                    AiAutoReplyChatBox.SelectedItem = _allDialogs.FirstOrDefault(x => x.Id == dialog.Id && x.Kind == dialog.Kind);
+                    LoadAiAutoReplyMembers(history);
+                }
                 RenderChatTimeline(dialog, forceScrollToEnd: true);
                 VisualChat.ReplaceMessages(history);
                 VisualChat.SetAvailableReactions(availableReactions);
@@ -1252,6 +1277,84 @@ public partial class MainWindow : Window
         {
             if (ApplyChatLineToCurrentView(line)) MarkTabUnread(ChatTab);
         }
+        if (!line.IsOutgoing) _ = ProcessAiAutoReplyAsync(line);
+    }
+
+    private void LoadAiAutoReplyMembers(IEnumerable<ChatLine> messages)
+    {
+        var members = messages.Where(x => !x.IsOutgoing && x.SenderId != 0)
+            .GroupBy(x => x.SenderId)
+            .Select(x => new AiAutoReplyTarget
+            {
+                UserId = x.Key,
+                DisplayName = x.Last().Sender,
+                IsBot = x.Any(y => y.SenderIsBot)
+            })
+            .OrderBy(x => x.DisplayName)
+            .ToList();
+        AiAutoReplyMemberBox.ItemsSource = members;
+        if (members.Count > 0) AiAutoReplyMemberBox.SelectedIndex = 0;
+    }
+
+    private async Task ProcessAiAutoReplyAsync(ChatLine line)
+    {
+        if (!line.IsGroup || line.SenderId == 0 || _activeAccount is null || !IsAccountAiEnabled()) return;
+        var settings = _store.Load().AiAssistant;
+        if (!settings.Enabled) return;
+
+        await _aiAutoReplyGate.WaitAsync();
+        try
+        {
+            var now = DateTimeOffset.Now;
+            var today = DateOnly.FromDateTime(now.LocalDateTime);
+            foreach (var rule in _activeAccount.AiAutoReplyRules.Where(x => x.Enabled && x.ChatId == line.ChatId &&
+                         string.Equals(x.ChatKind, line.ChatKind, StringComparison.OrdinalIgnoreCase)))
+            {
+                if (rule.FilterBots && line.SenderIsBot) continue;
+                if (!rule.Targets.Any(x => x.UserId == line.SenderId)) continue;
+                var key = $"{rule.Id:N}:{line.ChatKind}:{line.ChatId}:{line.MessageId}";
+                if (!_handledAiAutoReplyMessages.Add(key)) continue;
+                if (!rule.AutoSend)
+                {
+                    rule.LastStatus = $"已匹配 {line.Sender}，未开启自动发送";
+                    _store.SaveAccount(_activeAccount);
+                    _ = Dispatcher.BeginInvoke(RenderAiAutoReplyRules);
+                    continue;
+                }
+                if (rule.UsageDate != today) { rule.UsageDate = today; rule.UsageCount = 0; }
+                if (rule.DailyLimit > 0 && rule.UsageCount >= rule.DailyLimit)
+                {
+                    rule.LastStatus = $"已达到每日上限（{rule.DailyLimit}）";
+                    _store.SaveAccount(_activeAccount);
+                    continue;
+                }
+                if (rule.LastSentAt is { } last && now - last < TimeSpan.FromSeconds(Math.Clamp(rule.CooldownSeconds, 10, 86400)))
+                {
+                    rule.LastStatus = "处于冷却时间，已跳过";
+                    _store.SaveAccount(_activeAccount);
+                    continue;
+                }
+
+                var context = _chatTimeline.Where(x => x.ChatId == line.ChatId &&
+                        string.Equals(x.ChatKind, line.ChatKind, StringComparison.OrdinalIgnoreCase))
+                    .TakeLast(Math.Clamp(settings.ContextMessageLimit, 5, 100)).ToArray();
+                if (context.All(x => x.MessageId != line.MessageId)) context = context.Append(line).ToArray();
+                var dialog = new DialogItem(rule.ChatTitle, rule.ChatId, rule.ChatKind, true);
+                var result = await _aiAssistant.GenerateAutoReplyAsync(settings, dialog, line, context, rule.Instruction);
+                await _telegram.SendReplyAsync(dialog, line.MessageId, result.Text);
+                rule.LastSentAt = now;
+                rule.UsageCount++;
+                rule.LastStatus = $"已回复 {line.Sender}（{now:HH:mm:ss}）";
+                _store.SaveAccount(_activeAccount);
+                _logger.Info("AI.AutoReply", $"AI 已在“{rule.ChatTitle}”回复 {line.Sender}，消息 ID {line.MessageId}");
+                _ = Dispatcher.BeginInvoke(RenderAiAutoReplyRules);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.Warning("AI.AutoReply", "AI 自动回复执行失败", ex);
+        }
+        finally { _aiAutoReplyGate.Release(); }
     }
 
     private bool ApplyChatLineToCurrentView(ChatLine line)
@@ -2271,6 +2374,24 @@ public partial class MainWindow : Window
         public string IntervalText { get; } = intervalText;
         public string MessageCountText { get; } = messageCountText;
         public string LastSentText { get; } = lastSentText;
+        public string LastStatus { get; } = lastStatus;
+    }
+
+    private sealed class AiAutoReplyRuleRow(
+        string enabledText,
+        string chatTitle,
+        string members,
+        string botFilter,
+        string sendMode,
+        string limits,
+        string lastStatus)
+    {
+        public string EnabledText { get; } = enabledText;
+        public string ChatTitle { get; } = chatTitle;
+        public string Members { get; } = members;
+        public string BotFilter { get; } = botFilter;
+        public string SendMode { get; } = sendMode;
+        public string Limits { get; } = limits;
         public string LastStatus { get; } = lastStatus;
     }
 

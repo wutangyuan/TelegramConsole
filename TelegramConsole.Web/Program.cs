@@ -243,7 +243,7 @@ api.MapPut("/settings/ai", (AiAssistantSettingsInput request, AccountRuntimeMana
         Model = model,
         ApiKey = request.ClearApiKey ? "" : string.IsNullOrWhiteSpace(request.ApiKey) ? previous.ApiKey : request.ApiKey.Trim(),
         ContextMessageLimit = Math.Clamp(request.ContextMessageLimit, 5, 100),
-        TimeoutSeconds = Math.Clamp(request.TimeoutSeconds, 10, 180)
+        TimeoutSeconds = Math.Clamp(request.TimeoutSeconds, 10, 300)
     });
     return Results.NoContent();
 });
@@ -259,7 +259,7 @@ api.MapPost("/settings/ai/test", async (AiAssistantSettingsInput request, Accoun
         Model = request.Model?.Trim() ?? "",
         ApiKey = request.ClearApiKey ? "" : string.IsNullOrWhiteSpace(request.ApiKey) ? previous.ApiKey : request.ApiKey.Trim(),
         ContextMessageLimit = Math.Clamp(request.ContextMessageLimit, 5, 100),
-        TimeoutSeconds = Math.Clamp(request.TimeoutSeconds, 10, 180)
+        TimeoutSeconds = Math.Clamp(request.TimeoutSeconds, 10, 300)
     };
     var result = await manager.TestAiAssistantAsync(settings, ct);
     return Results.Ok(new { message = $"AI 连接成功：{result.Text}" });
