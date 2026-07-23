@@ -1,5 +1,7 @@
 # TelegramConsole
 
+[中文](README.md) | [English](README.en.md)
+
 基于 WTelegramClient、WPF、Quartz.NET 和 log4net 的 Telegram 桌面控制台助手。
 
 ## 解决方案结构
@@ -7,6 +9,7 @@
 - `TelegramConsole.Core`：业务模型与服务接口。
 - `TelegramConsole.Infrastructure`：Telegram、Quartz、SQLite、日志、加密存储、代理和邮件实现。
 - `TelegramConsole.Runtime`：跨界面复用的多账户长期运行管理器。
+- `TelegramConsole.AI`：独立 AI 能力库；统一封装 Microsoft Agent Framework (MAF)、OpenAI 兼容模型与本机 Codex CLI 登录适配。
 - `TelegramConsole.Web`：面向 NAS/Docker 的 Web 管理站和 API。
 - `TelegramConsoleApp`：WPF 桌面界面。
 
@@ -34,6 +37,7 @@
 - log4net 运行日志和 SQLite 异常中心；只有真实异常日志入库，界面业务校验仅弹窗提示。
 - 支持代理配置，SOCKS5 默认 `127.0.0.1:7890`，并对代理长连接启用 TCP keep-alive。
 - 支持中文/英文界面；未设置语言偏好时跟随系统语言。
+- 全局 AI 配置和按账号启用控制：支持 OpenAI、DeepSeek、本地 Ollama 等 OpenAI 兼容服务；模型调用统一经由 Microsoft Agent Framework (MAF) 的 Agent 管道执行，可用于会话摘要、回复草稿、间隔分析和指定群成员的自动回复。
 - Telegram session 按手机号隔离，任务和异常数据按 Telegram 用户 ID 隔离。
 - 本地配置使用 Windows DPAPI 加密保存。
 - 主窗口关闭时默认隐藏到系统托盘，定时任务和监控继续运行；托盘右键显示当前账号，并可恢复窗口或彻底退出。
