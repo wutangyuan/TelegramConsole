@@ -6,6 +6,7 @@
     <RootNamespace>TelegramConsole.Infrastructure</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Remove="AI\**\*.cs" />
     <ProjectReference Include="..\TelegramConsole.Core\TelegramConsole.Core.csproj" />
     <PackageReference Include="log4net" Version="3.3.2" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.29" />

@@ -1,4 +1,5 @@
 global using TelegramConsole.Core;
+global using TelegramConsole.AI;
 global using TelegramConsole.Infrastructure;
 global using Application = System.Windows.Application;
 global using Brush = System.Windows.Media.Brush;

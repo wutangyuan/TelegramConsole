@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using TelegramConsole.Core;
 
-namespace TelegramConsole.Infrastructure;
+namespace TelegramConsole.AI;
 
 /// <summary>
 /// Adapts the user's local Codex CLI login for text-only assistant features.

@@ -7,7 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\TelegramConsole.Core\TelegramConsole.Core.csproj" />
+    <ProjectReference Include="..\TelegramConsole.AI\TelegramConsole.AI.csproj" />
     <ProjectReference Include="..\TelegramConsole.Infrastructure\TelegramConsole.Infrastructure.csproj" />
   </ItemGroup>
 </Project>
-

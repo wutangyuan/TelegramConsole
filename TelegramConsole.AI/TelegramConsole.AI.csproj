@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>TelegramConsole.AI</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TelegramConsole.Core\TelegramConsole.Core.csproj" />
+    <Compile Include="..\TelegramConsole.Infrastructure\AI\CodexCliOAuthAssistantService.cs" Link="Services\CodexCliOAuthAssistantService.cs" />
+    <Compile Include="..\TelegramConsole.Infrastructure\AI\OpenAiCompatibleAssistantService.cs" Link="Services\OpenAiCompatibleAssistantService.cs" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.15.0" />
+    <PackageReference Include="Microsoft.Agents.AI.OpenAI" Version="1.15.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.8.1" />
+    <PackageReference Include="OpenAI" Version="2.12.0" />
+  </ItemGroup>
+</Project>

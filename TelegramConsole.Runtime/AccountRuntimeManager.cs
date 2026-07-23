@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using TelegramConsole.Core;
+using TelegramConsole.AI;
 using TelegramConsole.Infrastructure;
 
 namespace TelegramConsole.Runtime;
