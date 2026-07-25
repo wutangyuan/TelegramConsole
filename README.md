@@ -45,6 +45,30 @@
 - 主窗口关闭时默认隐藏到系统托盘，定时任务和监控继续运行；托盘右键显示当前账号，并可恢复窗口或彻底退出。
 - NAS Web 控制台提供同一套进程资源统计，并支持最近 300 条消息的稳定增量刷新、引用回复、编辑、撤回和可用表情回应。
 
+## 重点界面
+
+以下为脱敏演示图，不包含真实账号、会话、消息、密钥或网络信息。完整的 20 个页签图与操作说明见 [界面图集](docs/SCREENSHOTS.md)。
+
+### 聊天终端：控制台、可视化与分屏
+
+![聊天终端](docs/screenshots/01-chat-terminal.svg)
+
+### 定时任务：每日、每周、立即执行与完成通知
+
+![定时签到](docs/screenshots/03-schedules.svg)
+
+### AI 助手：全局服务配置、按账号启用和自动化规则
+
+![AI 助手](docs/screenshots/08-ai-assistant.svg)
+
+### 多账户管理：独立账号工作区与统一运行状态
+
+![账户管理](docs/screenshots/17-management-accounts.svg)
+
+### 设备资源：集中查看内存、磁盘 I/O 与 Telegram 流量
+
+![设备资源](docs/screenshots/18-management-resources.svg)
+
 ## 构建
 
 详细使用方法见 [效率工具使用说明](docs/EFFICIENCY_TOOLS.md)。

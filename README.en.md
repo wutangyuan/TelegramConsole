@@ -34,6 +34,30 @@ See the [UI Gallery](docs/SCREENSHOTS.md) for a description of every tab. All pu
 - AI is configured globally and enabled per account. OpenAI, DeepSeek, Ollama, and other OpenAI-compatible services are executed through the Microsoft Agent Framework (MAF) agent pipeline for summaries, reply drafts, interval analysis, and configurable group-member auto replies.
 - The NAS web console provides the same resource metrics and supports stable incremental refresh of the latest 300 messages, quote replies, edits, recalls, and reactions.
 
+## Key screens
+
+The following are sanitized demo images. They contain no real account, chat, message, key, or network data. See the [UI Gallery](docs/SCREENSHOTS.md) for all 20 tabs and their descriptions.
+
+### Chat terminal: terminal, visual, and split views
+
+![Chat terminal](docs/screenshots/01-chat-terminal.svg)
+
+### Scheduled tasks: daily, weekly, manual execution, and completion notification
+
+![Scheduled tasks](docs/screenshots/03-schedules.svg)
+
+### AI assistant: global provider setup, per-account enablement, and automation rules
+
+![AI assistant](docs/screenshots/08-ai-assistant.svg)
+
+### Multi-account management: isolated account workspaces and unified runtime status
+
+![Account management](docs/screenshots/17-management-accounts.svg)
+
+### Device resources: centralized memory, disk I/O, and Telegram traffic
+
+![Device resources](docs/screenshots/18-management-resources.svg)
+
 ## Build
 
 For the Chinese efficiency-tools guide, see [docs/EFFICIENCY_TOOLS.md](docs/EFFICIENCY_TOOLS.md).
