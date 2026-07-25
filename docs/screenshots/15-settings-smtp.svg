@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+<style>
+  .title { font: 700 27px 'Segoe UI', Arial; fill: #10243e; }
+  .subtitle { font: 16px 'Segoe UI', Arial; fill: #58708b; }
+  .label { font: 600 16px 'Segoe UI', Arial; fill: #1769aa; }
+  .value { font: 16px 'Segoe UI', Arial; fill: #15314e; }
+  .button { font: 600 15px 'Segoe UI', Arial; fill: #fff; }
+  .muted, .hint { font: 14px 'Segoe UI', Arial; fill: #6d8197; }
+  .metric { font: 700 26px 'Segoe UI', Arial; fill: #10243e; }
+  .console { font: 600 18px Consolas, monospace; } .green { fill: #35d26b; } .white { fill: #f2f6fb; } .blue { fill: #39a4ff; }
+  .line { stroke: #dce7f0; stroke-width: 1; }
+</style>
+<rect width="1200" height="720" fill="#f2f7fb"/>
+<rect x="0" y="0" width="1200" height="82" fill="#ffffff"/>
+<circle cx="46" cy="41" r="20" fill="#2387d1"/><text x="39" y="48" class="button">T</text>
+<text x="82" y="39" class="title">TelegramConsole</text><text x="82" y="62" class="subtitle">Sanitized documentation demo · no real account or message data</text>
+<rect x="0" y="82" width="1200" height="52" fill="#e7f0f8"/>
+<text x="42" y="115" class="label">设置：邮件 SMTP</text><text x="240" y="115" class="subtitle">全局邮件通知配置</text>
+  <rect x="42" y="158" width="1116" height="528" rx="10" fill="#ffffff" stroke="#c9d8e7"/>
+  <text x="76" y="214" class="label">启用</text><rect x="238" y="184" width="700" height="44" rx="6" fill="#f8fbff" stroke="#c9d8e7"/>
+  <text x="76" y="280" class="label">服务地址</text><rect x="238" y="250" width="820" height="44" rx="6" fill="#f8fbff" stroke="#c9d8e7"/>
+  <text x="76" y="346" class="label">模型 / 配置</text><rect x="238" y="316" width="620" height="44" rx="6" fill="#f8fbff" stroke="#c9d8e7"/>
+  <text x="76" y="412" class="label">安全凭据</text><rect x="238" y="382" width="820" height="44" rx="6" fill="#f8fbff" stroke="#c9d8e7"/>
+  <rect x="238" y="474" width="160" height="48" rx="8" fill="#2387d1"/><text x="276" y="505" class="button">保存配置</text>
+  <text x="76" y="580" class="hint">所有内容均为脱敏演示数据；真实密钥不会出现在文档截图中。</text>
+<text x="42" y="708" class="muted">脱敏演示图：所有账号、会话、消息、地址和凭据均为虚构示例。</text>
+</svg>

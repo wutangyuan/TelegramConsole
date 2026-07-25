@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+<style>
+  .title { font: 700 27px 'Segoe UI', Arial; fill: #10243e; }
+  .subtitle { font: 16px 'Segoe UI', Arial; fill: #58708b; }
+  .label { font: 600 16px 'Segoe UI', Arial; fill: #1769aa; }
+  .value { font: 16px 'Segoe UI', Arial; fill: #15314e; }
+  .button { font: 600 15px 'Segoe UI', Arial; fill: #fff; }
+  .muted, .hint { font: 14px 'Segoe UI', Arial; fill: #6d8197; }
+  .metric { font: 700 26px 'Segoe UI', Arial; fill: #10243e; }
+  .console { font: 600 18px Consolas, monospace; } .green { fill: #35d26b; } .white { fill: #f2f6fb; } .blue { fill: #39a4ff; }
+  .line { stroke: #dce7f0; stroke-width: 1; }
+</style>
+<rect width="1200" height="720" fill="#f2f7fb"/>
+<rect x="0" y="0" width="1200" height="82" fill="#ffffff"/>
+<circle cx="46" cy="41" r="20" fill="#2387d1"/><text x="39" y="48" class="button">T</text>
+<text x="82" y="39" class="title">TelegramConsole</text><text x="82" y="62" class="subtitle">Sanitized documentation demo · no real account or message data</text>
+<rect x="0" y="82" width="1200" height="52" fill="#e7f0f8"/>
+<text x="42" y="115" class="label">AI 助手</text><text x="240" y="115" class="subtitle">摘要、草稿与自动回复规则</text>
+  <rect x="42" y="158" width="1116" height="78" rx="10" fill="#ffffff" stroke="#c9d8e7"/>
+  <rect x="68" y="178" width="208" height="38" rx="6" fill="#f8fbff" stroke="#c9d8e7"/><rect x="294" y="178" width="160" height="38" rx="6" fill="#2387d1"/>
+  <text x="320" y="203" class="button">新增 / 查询</text>
+  <rect x="42" y="256" width="1116" height="430" rx="10" fill="#ffffff" stroke="#c9d8e7"/>
+  <rect x="42" y="256" width="1116" height="48" rx="10" fill="#edf4fa"/>
+  <text x="72" y="286" class="label">状态</text><text x="240" y="286" class="label">会话 / 规则</text><text x="520" y="286" class="label">配置 / 内容</text><text x="894" y="286" class="label">最近状态</text>
+  <line x1="42" y1="358" x2="1158" y2="358" class="line"/><line x1="42" y1="426" x2="1158" y2="426" class="line"/><line x1="42" y1="494" x2="1158" y2="494" class="line"/><line x1="42" y1="562" x2="1158" y2="562" class="line"/>
+  <text x="72" y="338" class="value">启用</text><text x="240" y="338" class="value">示例工作群</text><text x="520" y="338" class="value">脱敏演示内容</text><text x="894" y="338" class="value">已完成</text>
+  <text x="72" y="406" class="value">启用</text><text x="240" y="406" class="value">Demo Assistant</text><text x="520" y="406" class="value">示例规则 / 消息</text><text x="894" y="406" class="value">等待执行</text>
+<text x="42" y="708" class="muted">脱敏演示图：所有账号、会话、消息、地址和凭据均为虚构示例。</text>
+</svg>

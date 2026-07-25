@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720">
+<style>
+  .title { font: 700 27px 'Segoe UI', Arial; fill: #10243e; }
+  .subtitle { font: 16px 'Segoe UI', Arial; fill: #58708b; }
+  .label { font: 600 16px 'Segoe UI', Arial; fill: #1769aa; }
+  .value { font: 16px 'Segoe UI', Arial; fill: #15314e; }
+  .button { font: 600 15px 'Segoe UI', Arial; fill: #fff; }
+  .muted, .hint { font: 14px 'Segoe UI', Arial; fill: #6d8197; }
+  .metric { font: 700 26px 'Segoe UI', Arial; fill: #10243e; }
+  .console { font: 600 18px Consolas, monospace; } .green { fill: #35d26b; } .white { fill: #f2f6fb; } .blue { fill: #39a4ff; }
+  .line { stroke: #dce7f0; stroke-width: 1; }
+</style>
+<rect width="1200" height="720" fill="#f2f7fb"/>
+<rect x="0" y="0" width="1200" height="82" fill="#ffffff"/>
+<circle cx="46" cy="41" r="20" fill="#2387d1"/><text x="39" y="48" class="button">T</text>
+<text x="82" y="39" class="title">TelegramConsole</text><text x="82" y="62" class="subtitle">Sanitized documentation demo · no real account or message data</text>
+<rect x="0" y="82" width="1200" height="52" fill="#e7f0f8"/>
+<text x="42" y="115" class="label">群消息监控</text><text x="240" y="115" class="subtitle">实时群消息流</text>
+  <rect x="42" y="158" width="1116" height="456" rx="10" fill="#07131e"/>
+  <text x="68" y="204" class="console green">[10:25:16] [示例工作群] demo_user：今天的任务已完成</text>
+  <text x="68" y="242" class="console white">[10:25:32] [示例工作群] assistant：收到，已记录。</text>
+  <text x="68" y="280" class="console blue">[10:26:08] [示例工作群] @example_account 请确认</text>
+  <text x="68" y="318" class="console green">[10:26:15] 我：示例回复内容</text>
+  <rect x="42" y="632" width="1116" height="54" rx="8" fill="#ffffff" stroke="#c9d8e7"/>
+  <text x="68" y="666" class="muted">输入消息；Enter 发送，Alt+Enter 换行</text>
+<text x="42" y="708" class="muted">脱敏演示图：所有账号、会话、消息、地址和凭据均为虚构示例。</text>
+</svg>

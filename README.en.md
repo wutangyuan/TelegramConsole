@@ -4,6 +4,8 @@
 
 A Telegram desktop and NAS console assistant built with WTelegramClient, WPF, Quartz.NET, log4net, and Microsoft Agent Framework (MAF).
 
+See the [UI Gallery](docs/SCREENSHOTS.md) for a description of every tab. All published images contain sanitized demo data only.
+
 ## Solution layout
 
 - `TelegramConsole.Core`: business models and service contracts.

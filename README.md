@@ -4,6 +4,8 @@
 
 基于 WTelegramClient、WPF、Quartz.NET 和 log4net 的 Telegram 桌面控制台助手。
 
+界面图与各页签说明见 [界面图集](docs/SCREENSHOTS.md)。所有公开图片均为脱敏演示数据。
+
 ## 解决方案结构
 
 - `TelegramConsole.Core`：业务模型与服务接口。
