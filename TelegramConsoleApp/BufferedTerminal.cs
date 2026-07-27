@@ -45,6 +45,11 @@ public sealed class BufferedTerminal : TextEditor
     public BufferedTerminal()
     {
         IsReadOnly = true;
+        // 终端只读且不提供撤销功能。若保留 AvalonEdit 的 UndoStack，长期的
+        // Insert/Remove 会把已裁剪的聊天和日志文本一直保留在托管堆中。
+        // AvalonEdit 使用 TextDocument.UndoStack，而不是 WPF TextBox 的
+        // IsUndoEnabled 属性；0 表示不保留任何撤销单元。
+        Document.UndoStack.SizeLimit = 0;
         ShowLineNumbers = false;
         WordWrap = true;
         HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Disabled;
@@ -302,7 +307,7 @@ public sealed class BufferedTerminal : TextEditor
         if (excessLines > 0)
         {
             var firstRetainedLine = Document.GetLineByNumber(excessLines + 1);
-            if (firstRetainedLine.Offset > 0) Document.Remove(0, firstRetainedLine.Offset);
+            RemoveLeadingText(firstRetainedLine.Offset);
         }
 
         var maximumCharacters = Math.Max(10_000, MaximumCharacters);
@@ -310,7 +315,48 @@ public sealed class BufferedTerminal : TextEditor
         var targetOffset = Document.TextLength - maximumCharacters;
         var line = Document.GetLineByOffset(Math.Min(targetOffset, Document.TextLength - 1));
         var removeLength = line.EndOffset + line.DelimiterLength;
-        if (removeLength > 0) Document.Remove(0, removeLength);
+        RemoveLeadingText(removeLength);
+    }
+
+    /// <summary>
+    /// Removes old terminal content together with its presentation metadata.
+    /// TextSegmentCollection does not own the tags stored in each segment, so simply
+    /// removing document text can keep QuoteTargetItem/MediaLinkItem objects alive.
+    /// Rebuilding the small, bounded segment collection retains formatting for visible
+    /// content while releasing metadata for discarded lines.
+    /// </summary>
+    private void RemoveLeadingText(int removeLength)
+    {
+        removeLength = Math.Clamp(removeLength, 0, Document.TextLength);
+        if (removeLength == 0) return;
+
+        var retainedSegments = _segments
+            .Select(segment => new SegmentSnapshot(
+                segment.StartOffset,
+                segment.Length,
+                segment.Foreground,
+                segment.Tag,
+                segment.IsLink))
+            .Where(segment => segment.EndOffset > removeLength)
+            .ToArray();
+
+        _segments.Clear();
+        Document.Remove(0, removeLength);
+
+        foreach (var segment in retainedSegments)
+        {
+            var start = Math.Max(0, segment.StartOffset - removeLength);
+            var end = Math.Min(Document.TextLength, segment.EndOffset - removeLength);
+            if (end <= start) continue;
+            _segments.Add(new ColoredSegment
+            {
+                StartOffset = start,
+                Length = end - start,
+                Foreground = segment.Foreground,
+                Tag = segment.Tag,
+                IsLink = segment.IsLink
+            });
+        }
     }
 
     private bool ShouldAutoScroll()
@@ -382,6 +428,16 @@ public sealed class BufferedTerminal : TextEditor
     }
 
     private sealed record PendingLink(int StartOffset, int Length, object Tag);
+
+    private sealed record SegmentSnapshot(
+        int StartOffset,
+        int Length,
+        Brush Foreground,
+        object? Tag,
+        bool IsLink)
+    {
+        public int EndOffset => StartOffset + Length;
+    }
 
     private sealed class ColoredSegment : TextSegment
     {
