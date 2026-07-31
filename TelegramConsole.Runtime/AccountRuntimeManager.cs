@@ -76,6 +76,7 @@ public sealed class AccountRuntimeManager : IAsyncDisposable
     }
 
     public Task<IReadOnlyList<DialogItem>> LoadDialogsAsync(Guid id) => Get(id).LoadDialogsAsync();
+    public Task<IReadOnlyList<DialogItem>> RefreshDialogsAsync(Guid id) => Get(id).RefreshDialogsAsync();
     public Task<IReadOnlyList<ChatLine>> LoadHistoryAsync(Guid id, DialogItem dialog, int limit = 300) =>
         Get(id).LoadHistoryAsync(dialog, limit);
     public IReadOnlyList<ChatLine> GetRecentMessages(Guid id, int limit = 300) => Get(id).GetRecentMessages(limit);
@@ -642,7 +643,14 @@ internal sealed class AccountRuntime : IAsyncDisposable
         return LoadDialogsCoreAsync();
     }
 
+    public Task<IReadOnlyList<DialogItem>> RefreshDialogsAsync()
+    {
+        EnsureOnline();
+        return RefreshDialogsCoreAsync();
+    }
+
     private async Task<IReadOnlyList<DialogItem>> LoadDialogsCoreAsync() => await _telegram!.LoadDialogsAsync();
+    private async Task<IReadOnlyList<DialogItem>> RefreshDialogsCoreAsync() => await _telegram!.RefreshDialogsAsync();
 
     public async Task<IReadOnlyList<ChatLine>> LoadHistoryAsync(DialogItem dialog, int limit)
     {

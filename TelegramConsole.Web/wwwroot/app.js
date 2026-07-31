@@ -18,6 +18,27 @@ async function removeAccount(id,name){if(!confirm(`确认从 NAS 管理列表移
 function dialogMatchesType(dialog,type){if(type==='All')return true;if(type==='Group')return dialog.isGroup;if(type==='Bot')return dialog.kind==='User'&&/bot$/i.test(dialog.name||'');return dialog.kind==='User'&&!/bot$/i.test(dialog.name||'')}
 function fillDialogSelect(accountId,selectId,type='All'){const dialogs=state.dialogs.get(accountId)||[],select=$(selectId),previous=select.value;select.innerHTML='<option value="">请选择群聊或私聊</option>'+dialogs.map((d,i)=>({d,i})).filter(x=>dialogMatchesType(x.d,type)).map(x=>`<option value="${x.i}">${x.d.isGroup?'#':'@'} ${esc(x.d.name)}</option>`).join('');if([...select.options].some(x=>x.value===previous))select.value=previous}
 async function loadDialogs(accountId,selectId='chatDialog'){if(!accountId)return[];try{const dialogs=await api(`/api/accounts/${accountId}/dialogs`);state.dialogs.set(accountId,dialogs);fillDialogSelect(accountId,selectId);return dialogs}catch(e){toast(e.message,true);return[]}}
+function refreshDialogSelectSources(accountId){
+  if($('chatAccount').value===accountId)fillDialogSelect(accountId,'chatDialog',$('chatDialogType').value);
+  if($('monitorAccount').value===accountId)fillMonitorDialogs();
+  if($('aiAccount').value===accountId)fillDialogSelect(accountId,'aiDialog');
+  if($('taskAccount').value===accountId)fillDialogSelect(accountId,'taskDialog');
+  if($('intervalTaskAccount').value===accountId){fillDialogSelect(accountId,'intervalSourceDialog');fillDialogSelect(accountId,'intervalTargetDialog')}
+  if($('exceptionAlertAccount').value===accountId)fillExceptionAlertTargets(accountId);
+}
+async function refreshDialogsFromTelegram(accountId){
+  if(!accountId)return toast('请选择在线账户',true);
+  const previous=currentDialog().dialog;
+  try{
+    const dialogs=await api(`/api/accounts/${accountId}/dialogs/refresh`,{method:'POST'});
+    state.dialogs.set(accountId,dialogs);
+    refreshDialogSelectSources(accountId);
+    if(previous&&!dialogs.some(x=>x.id===previous.id&&x.kind===previous.kind)){
+      state.history=[];cancelCompose();renderMessages([]);
+      toast('会话已刷新；当前会话已不在 Telegram 列表中，已清空显示');
+    }else toast(`已从 Telegram 刷新 ${dialogs.length} 个会话`);
+  }catch(e){toast(e.message,true)}
+}
 function messageKey(m){return m.messageId?`${m.chatKind||''}:${m.chatId}:${m.messageId}`:`${m.time}:${m.sender}:${m.text}`}
 function mergeMessages(current,incoming){const merged=new Map();for(const item of [...current,...incoming])merged.set(messageKey(item),item);return [...merged.values()].sort((a,b)=>new Date(a.time)-new Date(b.time)||(a.messageId||0)-(b.messageId||0)).slice(-300)}
 function messageSignature(messages){return messages.map(m=>`${messageKey(m)}:${m.text}:${m.isEdited}:${m.isDeleted}:${JSON.stringify(m.reactions||[])}`).join('|')}
@@ -80,6 +101,7 @@ $('testProxyButton').onclick=testProxy;
 $('accountForm').onsubmit=async event=>{event.preventDefault();const form=new FormData(event.target);const body={localName:form.get('localName'),apiId:Number(form.get('apiId')),apiHash:form.get('apiHash'),phoneNumber:form.get('phoneNumber'),autoStart:form.get('autoStart')==='on',proxy:{enabled:form.get('proxyEnabled')==='on',type:'Socks5',host:form.get('proxyHost'),port:Number(form.get('proxyPort')),userName:'',password:'',mtProxyUrl:''}};try{const account=await api('/api/accounts',{method:'POST',body:JSON.stringify(body)});$('accountDialog').close();event.target.reset();toast('账户已添加');await refreshAll();if(account.status==='AwaitingLoginInput')showLogin(account.id)}catch(e){toast(e.message,true)}};
 $('loginForm').onsubmit=async event=>{event.preventDefault();const id=$('loginAccountId').value;try{const account=await api(`/api/accounts/${id}/login`,{method:'POST',body:JSON.stringify({value:$('loginValue').value})});$('loginDialog').close();await refreshAll();if(account.status==='AwaitingLoginInput')showLogin(id);else toast('Telegram 登录成功')}catch(e){toast(e.message,true)}};
 $('loadDialogsButton').onclick=async()=>{await loadDialogs($('chatAccount').value);fillDialogSelect($('chatAccount').value,'chatDialog',$('chatDialogType').value)};
+$('refreshDialogsButton').onclick=()=>refreshDialogsFromTelegram($('chatAccount').value);
 $('chatAccount').onchange=async()=>{state.history=[];await loadDialogs($('chatAccount').value);fillDialogSelect($('chatAccount').value,'chatDialog',$('chatDialogType').value);updateSendState()};
 $('chatDialogType').onchange=async()=>{fillDialogSelect($('chatAccount').value,'chatDialog',$('chatDialogType').value);await loadHistory()};
 $('chatDialog').onchange=async()=>{updateSendState();await loadHistory()};$('messageInput').oninput=updateSendState;$('messageInput').onkeydown=e=>{if(e.key==='Enter'&&!e.altKey&&!e.shiftKey&&!$('sendButton').disabled){e.preventDefault();sendMessage()}};$('sendButton').onclick=sendMessage;

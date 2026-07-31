@@ -206,6 +206,8 @@ api.MapPut("/accounts/{id:guid}/ai-enabled", (Guid id, AccountAiEnabledInput req
 });
 api.MapGet("/accounts/{id:guid}/dialogs", async (Guid id, AccountRuntimeManager manager) =>
     Results.Ok(await manager.LoadDialogsAsync(id)));
+api.MapPost("/accounts/{id:guid}/dialogs/refresh", async (Guid id, AccountRuntimeManager manager) =>
+    Results.Ok(await manager.RefreshDialogsAsync(id)));
 api.MapGet("/accounts/{id:guid}/history", async (
     Guid id, long dialogId, string dialogKind, string dialogName, bool isGroup,
     int? limit, AccountRuntimeManager manager) =>

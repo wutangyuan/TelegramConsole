@@ -9,7 +9,7 @@ namespace TelegramConsoleApp;
 public partial class ProductivityWindow : Window
 {
     private readonly ITelegramService _telegram;
-    private readonly IReadOnlyList<DialogItem> _dialogs;
+    private IReadOnlyList<DialogItem> _dialogs;
     private readonly AccountProfile _account;
     private readonly ISettingsStore _store;
     private readonly AppSettings _settings;
@@ -32,17 +32,7 @@ public partial class ProductivityWindow : Window
         _settings = settings;
         _logger = logger;
 
-        var scopes = new[] { new SearchScope(LocalizationManager.Get("AllDialogs"), null) }
-            .Concat(dialogs.Select(x => new SearchScope(x.DisplayName, x))).ToArray();
-        SearchScopeBox.ItemsSource = scopes;
-        SearchScopeBox.SelectedIndex = 0;
-        ServerScheduleDialogBox.ItemsSource = dialogs;
-        DraftDialogBox.ItemsSource = dialogs;
-        FolderDialogsList.ItemsSource = dialogs;
-        ForwardTargetBox.ItemsSource = dialogs;
-        RuleTargetBox.ItemsSource = dialogs;
-        RuleChatBox.ItemsSource = scopes;
-        RuleChatBox.SelectedIndex = 0;
+        BindDialogs(dialogs, selectFirstWhenEmpty: true);
         RuleTriggerBox.ItemsSource = Enum.GetValues<AutomationTrigger>()
             .Select(x => new EnumOption<AutomationTrigger>(x, LocalizationManager.Get("AutomationTrigger" + x))).ToArray();
         RuleTriggerBox.SelectedIndex = 0;
@@ -50,15 +40,53 @@ public partial class ProductivityWindow : Window
             .Select(x => new EnumOption<AutomationAction>(x, LocalizationManager.Get("AutomationAction" + x))).ToArray();
         RuleActionBox.SelectedIndex = 2;
         ServerScheduleDatePicker.SelectedDate = DateTime.Today.AddDays(1);
-        if (dialogs.Count > 0)
-        {
-            ServerScheduleDialogBox.SelectedIndex = 0;
-            DraftDialogBox.SelectedIndex = 0;
-            ForwardTargetBox.SelectedIndex = 0;
-            RuleTargetBox.SelectedIndex = 0;
-        }
         RenderRules();
     }
+
+    private void BindDialogs(IReadOnlyList<DialogItem> dialogs, bool selectFirstWhenEmpty)
+    {
+        var selectedSearch = (SearchScopeBox.SelectedItem as SearchScope)?.Dialog;
+        var selectedSchedule = ServerScheduleDialogBox.SelectedItem as DialogItem;
+        var selectedDraft = DraftDialogBox.SelectedItem as DialogItem;
+        var selectedForward = ForwardTargetBox.SelectedItem as DialogItem;
+        var selectedRuleTarget = RuleTargetBox.SelectedItem as DialogItem;
+        var selectedRuleChat = (RuleChatBox.SelectedItem as SearchScope)?.Dialog;
+        _dialogs = dialogs;
+        var scopes = new[] { new SearchScope(LocalizationManager.Get("AllDialogs"), null) }
+            .Concat(dialogs.Select(x => new SearchScope(x.DisplayName, x))).ToArray();
+        SearchScopeBox.ItemsSource = scopes;
+        ServerScheduleDialogBox.ItemsSource = dialogs;
+        DraftDialogBox.ItemsSource = dialogs;
+        FolderDialogsList.ItemsSource = dialogs;
+        ForwardTargetBox.ItemsSource = dialogs;
+        RuleTargetBox.ItemsSource = dialogs;
+        RuleChatBox.ItemsSource = scopes;
+        RestoreSelection(SearchScopeBox, scopes, selectedSearch, selectFirstWhenEmpty);
+        RestoreSelection(ServerScheduleDialogBox, dialogs, selectedSchedule, selectFirstWhenEmpty);
+        RestoreSelection(DraftDialogBox, dialogs, selectedDraft, selectFirstWhenEmpty);
+        RestoreSelection(ForwardTargetBox, dialogs, selectedForward, selectFirstWhenEmpty);
+        RestoreSelection(RuleTargetBox, dialogs, selectedRuleTarget, selectFirstWhenEmpty);
+        RestoreSelection(RuleChatBox, scopes, selectedRuleChat, selectFirstWhenEmpty);
+    }
+
+    private static void RestoreSelection(System.Windows.Controls.Primitives.Selector selector, IEnumerable<DialogItem> items, DialogItem? selected, bool selectFirstWhenEmpty)
+    {
+        selector.SelectedItem = selected is null ? null : items.FirstOrDefault(x => x.Id == selected.Id && x.Kind == selected.Kind);
+        if (selector.SelectedItem is null && selectFirstWhenEmpty && selector.Items.Count > 0) selector.SelectedIndex = 0;
+    }
+
+    private static void RestoreSelection(System.Windows.Controls.Primitives.Selector selector, IEnumerable<SearchScope> scopes, DialogItem? selected, bool selectFirstWhenEmpty)
+    {
+        selector.SelectedItem = scopes.FirstOrDefault(x => selected is null ? x.Dialog is null : x.Dialog?.Id == selected.Id && x.Dialog.Kind == selected.Kind);
+        if (selector.SelectedItem is null && selectFirstWhenEmpty && selector.Items.Count > 0) selector.SelectedIndex = 0;
+    }
+
+    private async void RefreshDialogs_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
+    {
+        var dialogs = await _telegram.RefreshDialogsAsync();
+        BindDialogs(dialogs, selectFirstWhenEmpty: false);
+        ProductivityStatusText.Text = $"已从 Telegram 刷新 {dialogs.Count} 个会话";
+    });
 
     private async void Search_Click(object sender, RoutedEventArgs e) => await RunAsync(async () =>
     {

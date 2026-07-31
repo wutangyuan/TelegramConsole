@@ -67,6 +67,8 @@ public interface ITelegramService : IDisposable
     Task<string?> BeginLoginAsync(AppSettings settings);
     Task<string?> ContinueLoginAsync(string value);
     Task<List<DialogItem>> LoadDialogsAsync();
+    /// <summary>从 Telegram 服务端重新同步会话，并丢弃已离开会话的本地瞬时缓存。</summary>
+    Task<List<DialogItem>> RefreshDialogsAsync();
     Task<List<ChatLine>> LoadHistoryAsync(DialogItem dialog, int limit = 300);
     Task<string> DownloadMediaAsync(DialogItem dialog, int messageId);
     Task<string?> DownloadMediaThumbnailAsync(DialogItem dialog, int messageId);

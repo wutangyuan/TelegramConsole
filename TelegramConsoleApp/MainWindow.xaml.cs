@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Diagnostics;
@@ -780,11 +781,34 @@ public partial class MainWindow : Window
     }
 
     private async void RefreshDialogs_Click(object sender, RoutedEventArgs e) =>
-        await RunUiAsync(LoadDialogsAsync);
+        await RunUiAsync(RefreshDialogsAsync);
 
-    private async Task LoadDialogsAsync()
+    private async Task RefreshDialogsAsync()
     {
-        _allDialogs = await _telegram.LoadDialogsAsync();
+        var selected = DialogsList.SelectedItem as DialogItem;
+        await LoadDialogsAsync(refreshFromTelegram: true);
+        if (selected is not null && !_allDialogs.Any(x => x.Id == selected.Id && x.Kind == selected.Kind))
+        {
+            // The active dialog was left/deleted on another Telegram client. Do not
+            // keep presenting it as a valid selectable conversation in this workspace.
+            BlankConsole_Click(this, new RoutedEventArgs());
+            SetStatus("会话列表已刷新；当前会话已不在 Telegram 会话列表中，已清空显示。");
+        }
+    }
+
+    private async Task LoadDialogsAsync(bool refreshFromTelegram = false)
+    {
+        var selectedListDialog = DialogsList.SelectedItem as DialogItem;
+        var selectedScheduleDialog = ScheduleChatBox.SelectedItem as DialogItem;
+        var selectedAiAutoReplyDialog = AiAutoReplyChatBox.SelectedItem as DialogItem;
+        var selectedIntervalSource = IntervalSourceBox.SelectedItem as DialogItem;
+        var selectedIntervalTarget = IntervalTargetBox.SelectedItem as DialogItem;
+        var selectedConfirmation = ConfirmationPeerBox.SelectedItem as ConfirmationTarget;
+        var selectedMention = MentionTargetBox.SelectedItem as ConfirmationTarget;
+
+        _allDialogs = refreshFromTelegram
+            ? await _telegram.RefreshDialogsAsync()
+            : await _telegram.LoadDialogsAsync();
         DialogTypeFilterBox.ItemsSource = new List<DialogTypeFilter>
         {
             new DialogTypeFilter(null, L("DialogTypeAll")),
@@ -793,26 +817,26 @@ public partial class MainWindow : Window
             new DialogTypeFilter(DialogCategory.Group, L("DialogTypeGroup")),
             new DialogTypeFilter(DialogCategory.Channel, L("DialogTypeChannel"))
         };
-        DialogTypeFilterBox.SelectedIndex = 0;
+        if (DialogTypeFilterBox.SelectedItem is null) DialogTypeFilterBox.SelectedIndex = 0;
         FilterDialogs();
+        RestoreDialogSelection(DialogsList, selectedListDialog);
         var groups = _allDialogs.Where(x => x.IsGroup).ToList();
         ScheduleChatBox.ItemsSource = groups;
-        if (groups.Count > 0) ScheduleChatBox.SelectedIndex = 0;
         AiAutoReplyChatBox.ItemsSource = groups;
+        RestoreDialogSelection(ScheduleChatBox, selectedScheduleDialog, selectFirstWhenEmpty: !refreshFromTelegram);
+        RestoreDialogSelection(AiAutoReplyChatBox, selectedAiAutoReplyDialog);
         IntervalSourceBox.ItemsSource = _allDialogs;
         IntervalTargetBox.ItemsSource = _allDialogs;
-        if (_allDialogs.Count > 0)
-        {
-            IntervalSourceBox.SelectedIndex = 0;
-            IntervalTargetBox.SelectedIndex = 0;
-        }
+        RestoreDialogSelection(IntervalSourceBox, selectedIntervalSource, selectFirstWhenEmpty: !refreshFromTelegram);
+        RestoreDialogSelection(IntervalTargetBox, selectedIntervalTarget, selectFirstWhenEmpty: !refreshFromTelegram);
         var confirmationTargets = new List<ConfirmationTarget>
         {
             new(null, "", "（不发送 Telegram 确认）")
         };
         confirmationTargets.AddRange(_allDialogs.Select(x => new ConfirmationTarget(x, x.Kind, x.DisplayName)));
         ConfirmationPeerBox.ItemsSource = confirmationTargets;
-        ConfirmationPeerBox.SelectedIndex = 0;
+        ConfirmationPeerBox.SelectedItem = RestoreConfirmationTarget(confirmationTargets, selectedConfirmation)
+            ?? confirmationTargets[0];
         ExceptionPeerBox.ItemsSource = confirmationTargets;
         ExceptionPeerBox.SelectedItem = _activeAccount?.ExceptionAlerts.TelegramPeerId is long exceptionPeerId
             ? confirmationTargets.FirstOrDefault(x => x.Dialog?.Id == exceptionPeerId &&
@@ -826,13 +850,31 @@ public partial class MainWindow : Window
         mentionTargets.AddRange(_allDialogs.Where(x => !x.IsGroup)
             .Select(x => new ConfirmationTarget(x, x.Kind, x.DisplayName)));
         MentionTargetBox.ItemsSource = mentionTargets;
-        MentionTargetBox.SelectedItem = _activeAccount?.MentionAlerts.TargetPeerId is long mentionPeerId
+        MentionTargetBox.SelectedItem = RestoreConfirmationTarget(mentionTargets, selectedMention)
+            ?? (_activeAccount?.MentionAlerts.TargetPeerId is long mentionPeerId
             ? mentionTargets.FirstOrDefault(x => x.Dialog?.Id == mentionPeerId &&
                 x.Kind == _activeAccount.MentionAlerts.TargetPeerKind)
-            : mentionTargets[0];
+            : mentionTargets[0]);
         MentionTargetBox.SelectedItem ??= mentionTargets[0];
-        SetStatus($"已加载 {_allDialogs.Count} 个会话，其中 {groups.Count} 个群聊/频道");
+        SetStatus($"{(refreshFromTelegram ? "已从 Telegram 刷新" : "已加载")} {_allDialogs.Count} 个会话，其中 {groups.Count} 个群聊/频道");
     }
+
+    private static void RestoreDialogSelection(Selector selector, DialogItem? previous, bool selectFirstWhenEmpty = false)
+    {
+        if (previous is not null && selector.Items.OfType<DialogItem>()
+                .FirstOrDefault(x => x.Id == previous.Id && x.Kind == previous.Kind) is { } current)
+            selector.SelectedItem = current;
+        else if (selectFirstWhenEmpty && selector.Items.Count > 0)
+            selector.SelectedIndex = 0;
+        else
+            selector.SelectedItem = null;
+    }
+
+    private static ConfirmationTarget? RestoreConfirmationTarget(
+        IEnumerable<ConfirmationTarget> targets, ConfirmationTarget? previous) =>
+        previous?.Dialog is null
+            ? targets.FirstOrDefault(x => x.Dialog is null)
+            : targets.FirstOrDefault(x => x.Dialog?.Id == previous.Dialog.Id && x.Kind == previous.Kind);
 
     private void OpenConsole_Click(object sender, RoutedEventArgs e) => OpenSelectedConsole();
 

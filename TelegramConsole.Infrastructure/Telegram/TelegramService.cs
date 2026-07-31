@@ -282,9 +282,24 @@ public sealed class TelegramService : ITelegramService
         ConnectionStateChanged?.Invoke(new(status, message));
     }
 
-    public async Task<List<DialogItem>> LoadDialogsAsync()
+    public Task<List<DialogItem>> LoadDialogsAsync() => LoadDialogsCoreAsync(clearMessageCache: false);
+
+    public Task<List<DialogItem>> RefreshDialogsAsync() => LoadDialogsCoreAsync(clearMessageCache: true);
+
+    private async Task<List<DialogItem>> LoadDialogsCoreAsync(bool clearMessageCache)
     {
         EnsureLogin();
+        // Messages_GetAllDialogs always requests the current dialog list from Telegram.
+        // On an explicit refresh, old message objects are no longer useful (for example,
+        // after the user left a group on another client) and can be safely released.
+        if (clearMessageCache)
+        {
+            lock (_messageCacheSync)
+            {
+                _messageCache.Clear();
+                _messageCacheOrder.Clear();
+            }
+        }
         var dialogs = await _client!.Messages_GetAllDialogs();
         dialogs.CollectUsersChats(_manager!.Users, _manager.Chats);
         _peers.Clear();
@@ -324,7 +339,7 @@ public sealed class TelegramService : ITelegramService
             }
         }
         var sorted = result.OrderByDescending(x => x.IsGroup).ThenBy(x => x.Name).ToList();
-        _logger.Info("Telegram", $"已加载 {sorted.Count} 个会话，其中 {sorted.Count(x => x.IsGroup)} 个群聊或频道");
+        _logger.Info("Telegram", $"{(clearMessageCache ? "已从 Telegram 刷新" : "已加载")} {sorted.Count} 个会话，其中 {sorted.Count(x => x.IsGroup)} 个群聊或频道");
         return sorted;
     }
 

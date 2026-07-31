@@ -15,7 +15,10 @@
                 <TextBlock Text="　·　" Foreground="#94A3B8"/>
                 <TextBlock x:Name="ProductivityStatusText" Foreground="#166534" FontWeight="SemiBold"/>
             </StackPanel>
-            <Button Grid.Column="1" Content="{DynamicResource OpenGuide}" Click="OpenGuide_Click"/>
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button Content="刷新会话" ToolTip="从 Telegram 重新同步会话和所有下拉框" Click="RefreshDialogs_Click" Margin="0,0,8,0"/>
+                <Button Content="{DynamicResource OpenGuide}" Click="OpenGuide_Click"/>
+            </StackPanel>
         </Grid>
         <TabControl x:Name="ProductivityTabs" Grid.Row="1">
             <TabItem Header="{DynamicResource MessageSearch}">
