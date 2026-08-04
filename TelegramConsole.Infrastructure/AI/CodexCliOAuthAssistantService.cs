@@ -22,9 +22,19 @@ public sealed class CodexCliOAuthAssistantService
             throw new InvalidOperationException("未找到 Codex CLI。请先安装 Codex 并使用 ChatGPT/Codex 账户登录，然后在本页重新测试。");
 
         var temp = Path.Combine(Path.GetTempPath(), $"telegram-console-codex-{Guid.NewGuid():N}.txt");
+        Process? process = null;
         try
         {
-            var prompt = $"{systemPrompt}\n\n{userPrompt}\n\n仅输出最终文本答案；不要使用工具、不要读取或修改文件。";
+            // Codex exec has one prompt rather than separate system/user message roles.
+            // Put the actual Telegram task first: some Codex models treat later labelled sections
+            // as meta-instructions and can otherwise claim the task content is missing.
+            var prompt = $"""
+                {userPrompt}
+
+                请直接完成上面的 Telegram 任务并只输出最终结果。
+                规则：{systemPrompt}
+                不要复述任务或规则，不要解释工作方式，不要使用工具，不要读取或修改文件。
+                """;
             var start = new ProcessStartInfo
             {
                 FileName = cli,
@@ -48,9 +58,11 @@ public sealed class CodexCliOAuthAssistantService
             }
             start.ArgumentList.Add(prompt);
 
-            using var process = Process.Start(start) ?? throw new InvalidOperationException("无法启动 Codex CLI");
+            process = Process.Start(start) ?? throw new InvalidOperationException("无法启动 Codex CLI");
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(TimeSpan.FromSeconds(Math.Clamp(settings.TimeoutSeconds, 20, 300)));
+            // Subscription-backed Codex has startup, scheduling and full-response latency. It has no
+            // streaming channel in this integration, so a short API-style timeout is misleading.
+            timeout.CancelAfter(TimeSpan.FromSeconds(300));
             // Read both redirected streams immediately; otherwise a verbose CLI progress stream can
             // fill its pipe and block before the process exits.
             var stdoutTask = process.StandardOutput.ReadToEndAsync(timeout.Token);
@@ -69,10 +81,16 @@ public sealed class CodexCliOAuthAssistantService
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new TimeoutException("Codex 响应超时，请稍后重试或在 AI 设置中提高超时时间。");
+            try
+            {
+                if (process is { HasExited: false }) process.Kill(entireProcessTree: true);
+            }
+            catch { /* a timed-out CLI must not keep running in the background */ }
+            throw new TimeoutException("Codex 在 5 分钟内未返回结果，已停止本次请求。请检查 Codex 网络状态或缩短上下文后重试。");
         }
         finally
         {
+            process?.Dispose();
             try { if (File.Exists(temp)) File.Delete(temp); } catch { /* temporary output cleanup only */ }
         }
     }

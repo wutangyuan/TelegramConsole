@@ -628,8 +628,9 @@
                     <Grid Margin="10">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
+                            <RowDefinition x:Name="AiAutoReplyPanelRow" Height="260" MinHeight="120" />
+                            <RowDefinition x:Name="AiPanelSplitterRow" Height="8" />
+                            <RowDefinition Height="*" MinHeight="180" />
                         </Grid.RowDefinitions>
                         <Border Background="#F8FAFC" BorderBrush="#D9E2EC" BorderThickness="1" CornerRadius="8" Padding="14">
                             <Grid>
@@ -643,10 +644,14 @@
                                 <Button Grid.Column="1" Content="前往管理中心设置" Click="AiOpenSettings_Click" VerticalAlignment="Center" MinWidth="150" />
                             </Grid>
                         </Border>
-                        <Border Grid.Row="1" Margin="0,10,0,0" Background="#F8FAFC" BorderBrush="#D9E2EC" BorderThickness="1" CornerRadius="8" Padding="12">
+                        <Border x:Name="AiAutoReplyPanel" Grid.Row="1" Margin="0,10,0,0" Background="#F8FAFC" BorderBrush="#D9E2EC" BorderThickness="1" CornerRadius="8" Padding="12">
                             <Grid>
                                 <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="120" /></Grid.RowDefinitions>
-                                <TextBlock Text="AI 自动群回复（仅指定成员）" FontWeight="SemiBold" Foreground="#0F172A" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                    <TextBlock Text="AI 自动群回复（仅指定成员）" FontWeight="SemiBold" Foreground="#0F172A" />
+                                    <ToggleButton x:Name="AiAutoReplyPanelToggle" Grid.Column="1" Content="收起配置" Checked="AiAutoReplyPanelToggle_Checked" Unchecked="AiAutoReplyPanelToggle_Unchecked" />
+                                </Grid>
                                 <WrapPanel Grid.Row="1" Margin="0,8,0,6">
                                     <TextBlock Text="群聊" VerticalAlignment="Center" />
                                     <ComboBox x:Name="AiAutoReplyChatBox" Width="210" Margin="6,0,10,0" DisplayMemberPath="DisplayName" local:SearchableComboBoxBehavior.IsEnabled="True" />
@@ -676,10 +681,27 @@
                                 </ListView>
                             </Grid>
                         </Border>
-                        <Grid Grid.Row="2" Margin="0,10,0,0">
-                            <Grid.RowDefinitions><RowDefinition Height="42" /><RowDefinition Height="*" /></Grid.RowDefinitions>
-                            <StackPanel Orientation="Horizontal"><Button Content="生成当前会话摘要" Click="GenerateAiSummary_Click" Style="{StaticResource PrimaryButtonStyle}" /><TextBlock Margin="12,0,0,0" VerticalAlignment="Center" Foreground="#64748B" Text="请先在左侧选择会话。" /></StackPanel>
-                            <TextBox x:Name="AiResultBox" Grid.Row="1" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Background="#F8FAFC" />
+                        <GridSplitter x:Name="AiPanelSplitter" Grid.Row="2" Height="8" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                      Background="#D9E2EC" ResizeDirection="Rows" ResizeBehavior="PreviousAndNext" />
+                        <Grid Grid.Row="3" Margin="0,10,0,0">
+                            <Grid.RowDefinitions><RowDefinition Height="42" /><RowDefinition Height="*" /><RowDefinition Height="72" /></Grid.RowDefinitions>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                                <Button Content="生成当前会话摘要" Click="GenerateAiSummary_Click" Style="{StaticResource PrimaryButtonStyle}" />
+                                <TextBlock Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" Foreground="#64748B" Text="基于左侧当前选中会话的已加载消息进行问答；仅本地显示，不发送 Telegram。" TextTrimming="CharacterEllipsis" />
+                                <Button x:Name="AiAutoReplyQuickToggle" Grid.Column="2" Content="收起上方配置" Click="ToggleAiAutoReplyPanel_Click" />
+                            </Grid>
+                            <TextBox x:Name="AiResultBox" Grid.Row="1" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Padding="12" Background="#F8FAFC" />
+                            <Border Grid.Row="2" Margin="0,8,0,0" Padding="10" Background="#F8FAFC" BorderBrush="#D9E2EC" BorderThickness="1" CornerRadius="6">
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="118" /></Grid.ColumnDefinitions>
+                                    <TextBox x:Name="AiQuestionBox" MinHeight="48" Padding="10,8" AcceptsReturn="True" TextWrapping="Wrap"
+                                             PreviewKeyDown="AiQuestionBox_KeyDown" TextChanged="AiQuestionBox_TextChanged"
+                                             VerticalContentAlignment="Top" VerticalScrollBarVisibility="Auto" ToolTip="输入问题后按 Enter 询问；Alt+Enter 换行。回答仅显示在本地。" />
+                                    <Button x:Name="AskAiButton" Grid.Column="1" MinHeight="48" Content="询问 AI" Click="AskAiAboutConversation_Click"
+                                            Style="{StaticResource PrimaryButtonStyle}" Margin="8,0,0,0" IsEnabled="False" />
+                                </Grid>
+                            </Border>
                         </Grid>
                     </Grid>
                 </TabItem>

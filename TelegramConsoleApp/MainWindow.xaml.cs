@@ -26,6 +26,8 @@ public partial class MainWindow : Window
     private readonly IAiAssistantService _aiAssistant;
     private readonly SemaphoreSlim _aiAutoReplyGate = new(1, 1);
     private readonly HashSet<string> _handledAiAutoReplyMessages = [];
+    private readonly Dictionary<(string ChatKind, long ChatId), List<AiConversationTurn>> _aiConversations = [];
+    private bool _aiQuestionBusy;
     private AccountProfile? _activeAccount;
     private System.Windows.Forms.NotifyIcon? _trayIcon;
     private System.Windows.Forms.ToolStripMenuItem? _trayAccountItem;
@@ -56,6 +58,8 @@ public partial class MainWindow : Window
     private int _exceptionQueryLimit = 10;
     private GridLength _expandedDialogWidth = new(320);
     private ChatPresentationMode _chatPresentationMode;
+
+    private sealed record AiConversationTurn(string Question, string Answer);
 
     public long AccountUserId => _activeAccount?.UserId ?? 0;
     public string WorkspaceDisplayName => _activeAccount?.LocalName is { Length: > 0 } localName
@@ -683,9 +687,132 @@ public partial class MainWindow : Window
             var history = await _telegram.LoadHistoryAsync(dialog, Math.Clamp(settings.ContextMessageLimit, 5, 100));
             AiResultBox.Text = "AI 正在生成摘要…";
             var result = await _aiAssistant.SummarizeAsync(settings, dialog, history);
-            AiResultBox.Text = result.Text;
+            var conversation = GetAiConversation(dialog);
+            conversation.Add(new AiConversationTurn("请汇总当前会话。", result.Text));
+            AiResultBox.Text = BuildAiConversationTranscript(conversation);
+            AiResultBox.ScrollToEnd();
             SetStatus("AI 会话摘要已生成；结果未发送到 Telegram");
         });
+
+    private async void AskAiAboutConversation_Click(object sender, RoutedEventArgs e) =>
+        await RunUiAsync(AskAiAboutConversationAsync);
+
+    private async void AiQuestionBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (key != Key.Enter) return;
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Alt))
+        {
+            e.Handled = true;
+            InsertLineBreak(AiQuestionBox);
+            return;
+        }
+
+        e.Handled = true;
+        if (string.IsNullOrWhiteSpace(AiQuestionBox.Text) || _aiQuestionBusy) return;
+        await RunUiAsync(AskAiAboutConversationAsync);
+    }
+
+    private void AiQuestionBox_TextChanged(object sender, TextChangedEventArgs e) => UpdateAiQuestionButton();
+
+    private void UpdateAiQuestionButton()
+    {
+        if (AskAiButton is null) return;
+        AskAiButton.IsEnabled = !_aiQuestionBusy && !string.IsNullOrWhiteSpace(AiQuestionBox.Text);
+    }
+
+    private async Task AskAiAboutConversationAsync()
+    {
+        if (_activeAccount is null) throw new InvalidOperationException("请先登录当前 Telegram 账户");
+        if (!IsAccountAiEnabled()) throw new InvalidOperationException("当前账号未启用 AI 功能，请在管理中心的账号列表中开启");
+        if (DialogsList.SelectedItem is not DialogItem dialog) throw new InvalidOperationException("请先在左侧选择需要提问的会话");
+        var question = AiQuestionBox.Text.Trim();
+        if (question.Length == 0) throw new InvalidOperationException("请输入要询问当前会话的问题");
+
+        _aiQuestionBusy = true;
+        AiQuestionBox.Clear();
+        UpdateAiQuestionButton();
+        var conversation = GetAiConversation(dialog);
+        var previousTranscript = BuildAiConversationTranscript(conversation);
+        AiResultBox.Text = AppendAiTranscript(previousTranscript, $"我：{question}\n\nAI：正在回答…");
+        AiResultBox.ScrollToEnd();
+        try
+        {
+            var settings = _store.Load().AiAssistant;
+            var history = await _telegram.LoadHistoryAsync(dialog, Math.Clamp(settings.ContextMessageLimit, 5, 100));
+            var aiMemory = IsAiAnalysisRequest(question) ? string.Empty : previousTranscript;
+            var result = await _aiAssistant.AskAboutConversationAsync(settings, dialog, history, question, aiMemory);
+            conversation.Add(new AiConversationTurn(question, result.Text));
+            AiResultBox.Text = BuildAiConversationTranscript(conversation);
+            AiResultBox.ScrollToEnd();
+            SetStatus("AI 已回答当前会话问题；结果未发送到 Telegram");
+        }
+        finally
+        {
+            _aiQuestionBusy = false;
+            UpdateAiQuestionButton();
+        }
+    }
+
+    private static string AppendAiTranscript(string? current, string entry) =>
+        string.IsNullOrWhiteSpace(current) ? entry : $"{current.TrimEnd()}\n\n────────────────────\n\n{entry}";
+
+    private List<AiConversationTurn> GetAiConversation(DialogItem dialog)
+    {
+        var key = (dialog.Kind ?? string.Empty, dialog.Id);
+        if (!_aiConversations.TryGetValue(key, out var conversation))
+        {
+            conversation = [];
+            _aiConversations[key] = conversation;
+        }
+        return conversation;
+    }
+
+    private static string BuildAiConversationTranscript(IEnumerable<AiConversationTurn> conversation) =>
+        string.Join("\n\n────────────────────\n\n", conversation.TakeLast(8)
+            .Select(x => $"我：{TrimAiContext(x.Question, 600)}\n\nAI：{TrimAiContext(x.Answer, 1200)}"));
+
+    private static string TrimAiContext(string text, int maximum) =>
+        text.Length <= maximum ? text : text[..maximum] + "…";
+
+    private static bool IsAiAnalysisRequest(string question) =>
+        question.Contains("汇总", StringComparison.OrdinalIgnoreCase) ||
+        question.Contains("总结", StringComparison.OrdinalIgnoreCase) ||
+        question.Contains("概括", StringComparison.OrdinalIgnoreCase) ||
+        question.Contains("分析", StringComparison.OrdinalIgnoreCase) ||
+        question.Contains("最近", StringComparison.OrdinalIgnoreCase);
+
+    private void ShowAiConversation(DialogItem dialog)
+    {
+        if (AiResultBox is null || _aiQuestionBusy) return;
+        AiResultBox.Text = BuildAiConversationTranscript(GetAiConversation(dialog));
+        AiResultBox.ScrollToEnd();
+    }
+
+    private void ToggleAiAutoReplyPanel_Click(object sender, RoutedEventArgs e) =>
+        AiAutoReplyPanelToggle.IsChecked = !(AiAutoReplyPanelToggle.IsChecked ?? false);
+
+    private void AiAutoReplyPanelToggle_Checked(object sender, RoutedEventArgs e)
+    {
+        AiAutoReplyPanel.Visibility = Visibility.Collapsed;
+        AiAutoReplyPanelRow.MinHeight = 0;
+        AiAutoReplyPanelRow.Height = new GridLength(0);
+        AiPanelSplitterRow.Height = new GridLength(0);
+        AiPanelSplitter.Visibility = Visibility.Collapsed;
+        AiAutoReplyPanelToggle.Content = "展开配置";
+        AiAutoReplyQuickToggle.Content = "展开上方配置";
+    }
+
+    private void AiAutoReplyPanelToggle_Unchecked(object sender, RoutedEventArgs e)
+    {
+        AiAutoReplyPanel.Visibility = Visibility.Visible;
+        AiAutoReplyPanelRow.Height = new GridLength(260);
+        AiAutoReplyPanelRow.MinHeight = 120;
+        AiPanelSplitterRow.Height = new GridLength(8);
+        AiPanelSplitter.Visibility = Visibility.Visible;
+        AiAutoReplyPanelToggle.Content = "收起配置";
+        AiAutoReplyQuickToggle.Content = "收起上方配置";
+    }
 
     private async void SaveAiAutoReplyRule_Click(object sender, RoutedEventArgs e) => await RunUiAsync(() =>
     {
@@ -962,6 +1089,7 @@ public partial class MainWindow : Window
                 var availableReactions = await _telegram.LoadAvailableReactionsAsync(dialog);
                 _chatTimeline.Clear();
                 _chatTimeline.AddRange(history.OrderBy(x => x.Time).ThenBy(x => x.MessageId));
+                ShowAiConversation(dialog);
                 if (dialog.IsGroup)
                 {
                     AiAutoReplyChatBox.SelectedItem = _allDialogs.FirstOrDefault(x => x.Id == dialog.Id && x.Kind == dialog.Kind);

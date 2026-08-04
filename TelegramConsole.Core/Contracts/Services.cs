@@ -35,6 +35,14 @@ public interface IAiAssistantService
         IReadOnlyList<ChatLine> messages,
         CancellationToken cancellationToken = default);
 
+    Task<AiTextResult> AskAboutConversationAsync(
+        AiAssistantSettings settings,
+        DialogItem dialog,
+        IReadOnlyList<ChatLine> messages,
+        string question,
+        string previousConversation,
+        CancellationToken cancellationToken = default);
+
     Task<AiTextResult> DraftReplyAsync(
         AiAssistantSettings settings,
         DialogItem dialog,
