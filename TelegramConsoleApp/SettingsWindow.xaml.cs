@@ -1,4 +1,6 @@
+using System.IO;
 using System.Net.Sockets;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -250,7 +252,11 @@ public partial class SettingsWindow : Window
         }
         catch (Exception ex)
         {
-            AiStatusText.Text = UserMessageFormatter.From(ex);
+            // AI providers (especially Codex CLI) can return upper-case provider error
+            // identifiers such as ERROR. Do not route those through the Telegram RPC
+            // formatter, otherwise a Codex failure is incorrectly shown as a Telegram
+            // operation rejection and hides the actionable provider detail.
+            AiStatusText.Text = FormatAiTestError(ex);
             System.Windows.MessageBox.Show(this, AiStatusText.Text, "AI 连接测试失败", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         finally
@@ -258,6 +264,20 @@ public partial class SettingsWindow : Window
             AiTestButton.IsEnabled = true;
             AiTestButton.Content = original;
         }
+    }
+
+    private static string FormatAiTestError(Exception exception)
+    {
+        var current = exception;
+        while (current is AggregateException { InnerExceptions.Count: 1 } aggregate)
+            current = aggregate.InnerExceptions[0];
+        while (current.InnerException is not null &&
+               current.GetType().Name is "TargetInvocationException" or "TypeInitializationException")
+            current = current.InnerException;
+
+        return string.IsNullOrWhiteSpace(current.Message)
+            ? "AI 连接测试失败，请查看运行日志后重试。"
+            : current.Message;
     }
 
     private (string Host, int Port) ValidateSocks5()
@@ -303,6 +323,7 @@ public partial class SettingsWindow : Window
         AiProviderBox.SelectedIndex = settings.UseCodexCliOAuth || string.Equals(settings.Provider, "CodexCliOAuth", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
         AiEndpointBox.Text = settings.Endpoint;
         AiModelBox.Text = settings.Model;
+        LoadCodexModelChoices(settings.Model);
         AiApiKeyBox.Password = "";
         AiContextLimitBox.Text = Math.Clamp(settings.ContextMessageLimit, 5, 100).ToString();
         AiStatusText.Text = string.IsNullOrWhiteSpace(settings.ApiKey)
@@ -317,7 +338,9 @@ public partial class SettingsWindow : Window
         var enabled = AiEnabledBox.IsChecked == true;
         var useCodexCliOAuth = (AiProviderBox.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString() == "CodexCliOAuth";
         var endpoint = AiEndpointBox.Text.Trim();
-        var model = AiModelBox.Text.Trim();
+        var model = useCodexCliOAuth
+            ? ((AiCodexModelBox.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "").Trim()
+            : AiModelBox.Text.Trim();
         if (enabled && !useCodexCliOAuth && (endpoint.Length == 0 || model.Length == 0))
             throw new InvalidOperationException("启用 AI 前，请填写接口地址和模型名称");
         return new AiAssistantSettings
@@ -341,10 +364,57 @@ public partial class SettingsWindow : Window
         var codex = (AiProviderBox.SelectedItem as System.Windows.Controls.ComboBoxItem)?.Tag?.ToString() == "CodexCliOAuth";
         AiEndpointBox.IsEnabled = !codex;
         AiApiKeyBox.IsEnabled = !codex;
+        AiModelBox.Visibility = codex ? Visibility.Collapsed : Visibility.Visible;
+        AiCodexModelBox.Visibility = codex ? Visibility.Visible : Visibility.Collapsed;
         AiCodexLoginButton.Visibility = codex ? Visibility.Visible : Visibility.Collapsed;
         AiApiKeyLabel.Text = codex ? "本机登录" : "API Key";
         AiHintText.Text = codex
             ? "此方式复用本机 Codex CLI 的 ChatGPT/Codex 登录；本应用不会读取或保存 OAuth Token。点击“登录 ChatGPT/Codex”完成设备授权后测试。仅支持运行了 Codex CLI 的桌面主机。"
             : "向导可预填本地 Ollama 或 OpenAI 兼容服务。保存后，各账户的会话摘要和 AI 回复草稿都会使用此连接；AI 不会自动发送 Telegram 消息。";
+    }
+
+    private void LoadCodexModelChoices(string selectedModel)
+    {
+        AiCodexModelBox.Items.Clear();
+        AiCodexModelBox.Items.Add(new ComboBoxItem { Content = "使用 Codex 默认模型", Tag = "" });
+
+        try
+        {
+            var cache = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex", "models_cache.json");
+            if (File.Exists(cache))
+            {
+                using var document = JsonDocument.Parse(File.ReadAllText(cache));
+                if (document.RootElement.TryGetProperty("models", out var models))
+                    foreach (var model in models.EnumerateArray())
+                    {
+                        if (!model.TryGetProperty("slug", out var slugProperty)) continue;
+                        var slug = slugProperty.GetString()?.Trim();
+                        if (string.IsNullOrWhiteSpace(slug)) continue;
+                        var display = model.TryGetProperty("display_name", out var nameProperty)
+                            ? nameProperty.GetString()?.Trim()
+                            : null;
+                        AiCodexModelBox.Items.Add(new ComboBoxItem
+                        {
+                            Content = string.IsNullOrWhiteSpace(display) ? slug : $"{display} ({slug})",
+                            Tag = slug
+                        });
+                    }
+            }
+        }
+        catch
+        {
+            // The cache is managed by Codex; fall back to its default model if unreadable.
+        }
+
+        for (var i = 0; i < AiCodexModelBox.Items.Count; i++)
+        {
+            if (AiCodexModelBox.Items[i] is ComboBoxItem { Tag: string tag } &&
+                string.Equals(tag, selectedModel, StringComparison.OrdinalIgnoreCase))
+            {
+                AiCodexModelBox.SelectedIndex = i;
+                return;
+            }
+        }
+        AiCodexModelBox.SelectedIndex = 0;
     }
 }

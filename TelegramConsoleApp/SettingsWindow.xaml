@@ -140,6 +140,8 @@
                 <TextBox x:Name="AiEndpointBox" Grid.Row="2" Grid.Column="1" ToolTip="例如 http://127.0.0.1:11434/v1 或 https://api.openai.com/v1" />
                 <TextBlock Grid.Row="3" Text="模型名称" VerticalAlignment="Center" />
                 <TextBox x:Name="AiModelBox" Grid.Row="3" Grid.Column="1" />
+                <ComboBox x:Name="AiCodexModelBox" Grid.Row="3" Grid.Column="1" Visibility="Collapsed"
+                          />
                 <TextBlock x:Name="AiApiKeyLabel" Grid.Row="4" Text="API Key" VerticalAlignment="Center" />
                 <PasswordBox x:Name="AiApiKeyBox" Grid.Row="4" Grid.Column="1" ToolTip="留空表示保持当前已保存的 Key；本地 Ollama 通常可留空" />
                 <TextBlock Grid.Row="5" Text="上下文消息数" VerticalAlignment="Center" />
