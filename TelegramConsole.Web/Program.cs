@@ -115,6 +115,19 @@ app.MapGet("/health/ready", (AccountRuntimeManager manager) =>
 });
 
 var api = app.MapGroup("/api");
+api.MapGet("/settings/language", (ISettingsStore store) =>
+{
+    var language = NormalizeLanguagePreference(store.Load().Language);
+    return Results.Ok(new { Language = language });
+});
+api.MapPut("/settings/language", (LanguageSettingsInput request, ISettingsStore store) =>
+{
+    var language = NormalizeLanguagePreference(request.Language);
+    var settings = store.Load();
+    settings.Language = language;
+    store.SaveGlobalSettings(settings);
+    return Results.NoContent();
+});
 api.MapGet("/settings/email", (AccountRuntimeManager manager) =>
 {
     var email = manager.GetEmailSettings();
@@ -420,6 +433,14 @@ static bool FixedTimeEquals(string actualValue, string expectedValue)
     return actual.Length == expected.Length && CryptographicOperations.FixedTimeEquals(actual, expected);
 }
 
+static string NormalizeLanguagePreference(string? language) =>
+    language?.Trim() switch
+    {
+        "zh-CN" or "zh" or "ZH-CN" or "ZH" => "zh-CN",
+        "en-US" or "en" or "EN-US" or "EN" => "en-US",
+        _ => ""
+    };
+
 static async Task WriteProblem(HttpContext context, int status, string detail)
 {
     if (context.Response.HasStarted) return;
@@ -429,6 +450,7 @@ static async Task WriteProblem(HttpContext context, int status, string detail)
 
 internal sealed record LoginInput(string Value);
 internal sealed record AdminLoginInput(string Username, string Password, bool RememberMe);
+internal sealed record LanguageSettingsInput(string? Language);
 internal sealed record RecordIdsInput(IReadOnlyList<long> Ids);
 internal sealed record EmailSettingsInput(
     string SmtpHost, int SmtpPort, bool EnableSsl, string UserName,

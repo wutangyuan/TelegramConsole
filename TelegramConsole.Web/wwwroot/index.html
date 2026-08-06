@@ -140,6 +140,14 @@
       <section id="settingsPage" class="page">
         <div class="page-title"><div><h1>系统设置</h1><p>统一配置 Web 后台使用的邮件发送服务。</p></div></div>
         <div class="settings-grid">
+          <form id="languageSettingsForm" class="panel settings-card">
+            <div class="panel-head"><div><h2>界面语言</h2><p>默认跟随当前浏览器/系统语言；手动选择后会作为全局偏好保存，并立即应用。</p></div></div>
+            <div class="settings-form">
+              <label>语言偏好<select id="languagePreference"><option value="">跟随系统</option><option value="zh-CN">简体中文</option><option value="en-US">English</option></select></label>
+              <div id="languagePreferenceHint" class="setting-status">正在读取语言配置…</div>
+              <div class="settings-actions"><button type="submit" class="primary">保存并切换语言</button></div>
+            </div>
+          </form>
           <form id="emailSettingsForm" class="panel settings-card">
             <div class="panel-head"><div><h2>邮件 SMTP</h2><p>异常通知、定时任务确认和自动化邮件共用此发送账户。</p></div></div>
             <div class="settings-form">
